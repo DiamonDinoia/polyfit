@@ -152,7 +152,6 @@ template <typename T> constexpr size_t get_alignment(const T *ptr) noexcept {
     return static_cast<size_t>(1) << detail::countr_zero(address);
 }
 
-// – your range‑count helper (unchanged)
 template <std::size_t Start, std::size_t Stop, std::size_t Inc>
 inline constexpr std::size_t compute_range_count = (Start < Stop ? ((Stop - Start + Inc - 1) / Inc) : 0);
 
@@ -163,7 +162,6 @@ constexpr void unroll_loop_impl(F &&f, std::index_sequence<Is...>) {
     (f(std::integral_constant<std::size_t, Start + Is * Inc>{}), ...);
 }
 
-// – your user‑facing function, same name as before
 template <std::size_t Start, std::size_t Stop, std::size_t Inc = 1, typename F> constexpr void unroll_loop(F &&f) {
     constexpr std::size_t Count = compute_range_count<Start, Stop, Inc>;
     unroll_loop_impl<Start, Inc>(std::forward<F>(f), std::make_index_sequence<Count>{});

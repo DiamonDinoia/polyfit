@@ -12,7 +12,7 @@ else()
     message(WARNING "Compiler does NOT support C++20; using default C++ standard")
 endif()
 
-# 1. List your source files
+# 1. List source files
 set(SOURCES
         runtime_1D_fixed.cpp
         runtime_1D_eps.cpp

@@ -18,7 +18,7 @@ constexpr std::mt19937::result_type kSeed = 42;
 static std::mt19937               gen{kSeed};
 static std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
-// sum of cosines analytic function (same as in your tests)
+// sum of cosines analytic function
 template <typename Array, typename OutPut = Array>
 constexpr auto sumCos(const Array &x) {
     double s = 0.0;

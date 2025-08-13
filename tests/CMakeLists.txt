@@ -97,9 +97,6 @@ function(add_polyfit_benchmark NAME SRC)
     # not a CTest test by default
 endfunction()
 
-# -----------------------------------------------------------------------------
-# Add your tests & benchmarks
-# -----------------------------------------------------------------------------
 add_polyfit_test(test_horner test_horner.cpp)
 add_polyfit_benchmark(bench_horner bench_horner.cpp)
 
