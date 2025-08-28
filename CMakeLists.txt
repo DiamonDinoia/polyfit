@@ -129,7 +129,7 @@ install(FILES
 # -----------------------------------------
 # Options: tests / examples
 # -----------------------------------------
-option(MONOFIT_BUILD_TESTS "Build tests" ON)
+option(MONOFIT_BUILD_TESTS "Build tests" OFF)
 if (MONOFIT_BUILD_TESTS)
     option(MONOFIT_ENABLE_SANITIZERS "Enable sanitizers for debugging (ASan/UBSan/etc.)" ON)
     enable_testing()
