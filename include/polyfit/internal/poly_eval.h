@@ -26,7 +26,7 @@ namespace poly_eval {
  * @return The evaluated polynomial value at x.
  */
 template <std::size_t N_total = 0, typename OutputType, typename InputType>
-ALWAYS_INLINE constexpr OutputType horner(InputType x, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
+PF_ALWAYS_INLINE constexpr OutputType horner(InputType x, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
 
 /**
  * @brief Evaluate a polynomial at multiple points using SIMD-accelerated Horner's method.
@@ -49,7 +49,7 @@ ALWAYS_INLINE constexpr OutputType horner(InputType x, const OutputType *c_ptr, 
  */
 template <std::size_t N_monomials = 0, bool pts_aligned = false, bool out_aligned = false, int UNROLL = 0,
           typename InputType, typename OutputType, typename MapFunc>
-ALWAYS_INLINE constexpr void horner(
+PF_ALWAYS_INLINE constexpr void horner(
     const InputType *pts, OutputType *out, std::size_t num_points, const OutputType *monomials,
     std::size_t monomials_size, MapFunc map_func = [](auto v) { return v; }) noexcept;
 
@@ -73,7 +73,7 @@ ALWAYS_INLINE constexpr void horner(
  */
 template <std::size_t M_total = 0, std::size_t N_total = 0, bool scaling = false, typename OutputType,
           typename InputType>
-ALWAYS_INLINE constexpr void horner_many(InputType x, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
+PF_ALWAYS_INLINE constexpr void horner_many(InputType x, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
                                          std::size_t N = 0, const InputType *low = nullptr,
                                          const InputType *hi = nullptr) noexcept;
 
@@ -94,7 +94,7 @@ ALWAYS_INLINE constexpr void horner_many(InputType x, const OutputType *coeffs, 
  * @param N Number of coefficients (used if N_total == 0).
  */
 template <std::size_t M_total = 0, std::size_t N_total = 0, std::size_t simd_width = 0, typename Out, typename In>
-ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, std::size_t M = 0,
+PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, std::size_t M = 0,
                                                std::size_t N = 0) noexcept;
 
 /**
@@ -110,7 +110,7 @@ ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *o
  * @return Evaluated polynomial value(s).
  */
 template <std::size_t DegCT = 0, bool SIMD = true, typename OutT, typename InVec, typename Mdspan>
-ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt);
+PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt);
 
 //------------------------------------------------------------------------------
 // detail namespace
@@ -119,13 +119,13 @@ namespace detail {
 
 // helper to invoke coeffs(idx[0],…,idx[D‑1], d) in C++17
 template <std::size_t D, typename MdspanType, std::size_t... Is>
-ALWAYS_INLINE constexpr auto call_coeffs_impl(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
+PF_ALWAYS_INLINE constexpr auto call_coeffs_impl(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
                                               std::index_sequence<Is...>, std::size_t d) noexcept {
     return coeffs(idx[Is]..., d);
 }
 
 template <std::size_t D, typename MdspanType>
-ALWAYS_INLINE constexpr auto call_coeffs(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
+PF_ALWAYS_INLINE constexpr auto call_coeffs(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
                                          std::size_t d) noexcept {
     return call_coeffs_impl<D, MdspanType>(coeffs, idx, std::make_index_sequence<D>{}, d);
 }
@@ -136,7 +136,7 @@ ALWAYS_INLINE constexpr auto call_coeffs(const MdspanType &coeffs, const std::ar
 
 template <std::size_t Level, std::size_t Dim, std::size_t DegCT, bool SIMD, typename OutT, typename InVec,
           typename Mdspan>
-ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coeffs, std::array<std::size_t, Dim> &idx,
+PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coeffs, std::array<std::size_t, Dim> &idx,
                                             const int deg_rt) {
     if constexpr (!SIMD) {
         constexpr std::size_t axis = Dim - Level; // current axis
@@ -222,7 +222,7 @@ namespace poly_eval {
 //------------------------------------------------------------------------------
 
 template <std::size_t N_total, typename OutputType, typename InputType>
-ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c_ptr,
+PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c_ptr,
                                           const std::size_t c_size) noexcept {
     if constexpr (N_total != 0) {
         // Compile-time unrolled Horner on reversed array
@@ -248,12 +248,12 @@ ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c
 
 template <std::size_t N_monomials, bool pts_aligned, bool out_aligned, int UNROLL, typename InputType,
           typename OutputType, typename MapFunc>
-ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::size_t num_points,
+PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::size_t num_points,
                                     const OutputType *monomials, std::size_t monomials_size,
                                     const MapFunc map_func) noexcept {
-    C23STATIC constexpr auto simd_size = xsimd::batch<InputType>::size;
-    C23STATIC constexpr auto OuterUnrollFactor = UNROLL > 0 ? UNROLL : 32 / sizeof(OutputType);
-    C23STATIC constexpr auto block = simd_size * OuterUnrollFactor;
+    PF_C23STATIC constexpr auto simd_size = xsimd::batch<InputType>::size;
+    PF_C23STATIC constexpr auto OuterUnrollFactor = UNROLL > 0 ? UNROLL : 32 / sizeof(OutputType);
+    PF_C23STATIC constexpr auto block = simd_size * OuterUnrollFactor;
 
     using pts_mode = std::conditional_t<pts_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
     using out_mode = std::conditional_t<out_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
@@ -296,7 +296,7 @@ ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::
     }
 
     // Remainder
-    ASSUME((num_points - trunc) < block);
+    PF_ASSUME((num_points - trunc) < block);
     for (std::size_t idx = trunc; idx < num_points; ++idx) {
         out[idx] = horner<N_monomials>(map_func(pts[idx]), monomials, monomials_size);
     }
@@ -307,7 +307,7 @@ ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::
 //------------------------------------------------------------------------------
 
 template <std::size_t M_total, std::size_t N_total, bool scaling, typename OutputType, typename InputType>
-ALWAYS_INLINE constexpr void horner_many(const InputType x, const OutputType *coeffs, OutputType *out,
+PF_ALWAYS_INLINE constexpr void horner_many(const InputType x, const OutputType *coeffs, OutputType *out,
                                          const std::size_t M, const std::size_t N, const InputType *low,
                                          const InputType *hi) noexcept {
     const std::size_t m_lim = M_total ? M_total : M;
@@ -332,7 +332,7 @@ ALWAYS_INLINE constexpr void horner_many(const InputType x, const OutputType *co
 //------------------------------------------------------------------------------
 
 template <std::size_t M_total, std::size_t N_total, std::size_t simd_width, typename Out, typename In>
-ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, const std::size_t M,
+PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, const std::size_t M,
                                                const std::size_t N) noexcept {
     constexpr bool has_Mt = (M_total != 0);
     constexpr bool has_Nt = (N_total != 0);
@@ -452,7 +452,7 @@ ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *o
 //------------------------------------------------------------------------------
 
 template <std::size_t DegCT, bool SIMD, typename OutT, typename InVec, typename Mdspan>
-ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt) {
+PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
     return detail::horner_nd_impl<Dim, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);

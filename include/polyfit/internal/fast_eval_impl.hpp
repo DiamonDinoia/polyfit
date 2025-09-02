@@ -17,8 +17,8 @@ namespace poly_eval {
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <std::size_t CurrentN, typename>
-C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const int n, const InputType a,
-                                                                          const InputType b, const InputType *pts)
+PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const int n, const InputType a,
+                                                                            const InputType b, const InputType *pts)
     : n_terms(n), low(InputType(1) / (b - a)), hi(b + a) {
     // if constexpr (N_compile_time == 0) {
     //     assert(n_terms > 0 && "Polynomial degree must be positive");
@@ -29,8 +29,8 @@ C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <std::size_t CurrentN, typename>
-C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const InputType a, const InputType b,
-                                                                          const InputType *pts)
+PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const InputType a, const InputType b,
+                                                                            const InputType *pts)
     : n_terms(static_cast<int>(CurrentN)), low(InputType(1) / (b - a)), hi(b + a) {
     assert(n_terms > 0 && "Polynomial degree must be positive (template N > 0)");
     initialize_monomials(F, pts);
@@ -38,7 +38,7 @@ C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <bool>
-typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType constexpr ALWAYS_INLINE
+typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType constexpr PF_ALWAYS_INLINE
 FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(const InputType pt) const noexcept {
     const auto xi = map_from_domain(pt);
     return horner<N_compile_time>(xi, monomials.data(), monomials.size()); // Pass data pointer and size
@@ -47,8 +47,8 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(const InputType p
 // Batch evaluation implementation using SIMD and unrolling
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <int OuterUnrollFactor, bool pts_aligned, bool out_aligned>
-ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::horner_polyeval(
-    const InputType *RESTRICT pts, OutputType *RESTRICT out, std::size_t num_points) const noexcept {
+PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::horner_polyeval(
+    const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept {
     static_assert(OuterUnrollFactor >= 0 && (OuterUnrollFactor & (OuterUnrollFactor - 1)) == 0,
                   "OuterUnrollFactor must be a power of two greater than zero.");
     return horner<N_compile_time, pts_aligned, out_aligned, OuterUnrollFactor>(
@@ -57,14 +57,14 @@ ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>:
 
 // MUST be defined in a c++ source file
 // This is a workaround for the compiler to not the inline the function passed to it.
-template <typename F, typename... Args> NO_INLINE static auto noinline(F &&f, Args &&...args) {
+template <typename F, typename... Args> PF_NO_INLINE static auto noinline(F &&f, Args &&...args) {
     return std::forward<F>(f)(std::forward<Args>(args)...);
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <bool pts_aligned, bool out_aligned>
-ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(
-    const InputType * RESTRICT pts, OutputType * RESTRICT out, std::size_t num_points) const noexcept {
+PF_ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(
+    const InputType * PF_RESTRICT pts, OutputType * PF_RESTRICT out, std::size_t num_points) const noexcept {
     // find out the alignment of pts and out
     // constexpr auto simd_size = xsimd::batch<InputType>::size;
     constexpr auto alignment = xsimd::batch<OutputType>::arch_type::alignment();
@@ -109,7 +109,7 @@ ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_time>:
         constexpr std::size_t scalar_unroll = (alignment - min_align) / sizeof(InputType);
 
         // print alignment;
-        ASSUME(unaligned_points < scalar_unroll); // tells the compiler that this loop is at most alignment
+        PF_ASSUME(unaligned_points < scalar_unroll); // tells the compiler that this loop is at most alignment
         // process scalar until we reach the first aligned point
         for (std::size_t i = 0; i < unaligned_points; ++i) {
             out[i] = operator()(pts[i]);
@@ -120,21 +120,21 @@ ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_time>:
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-C20CONSTEXPR const Buffer<typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType, N_compile_time> &
+PF_C20CONSTEXPR const Buffer<typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType, N_compile_time> &
 FuncEval<Func, N_compile_time, Iters_compile_time>::coeffs() const noexcept {
     return monomials;
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <class T>
-ALWAYS_INLINE constexpr T
+PF_ALWAYS_INLINE constexpr T
 FuncEval<Func, N_compile_time, Iters_compile_time>::map_to_domain(const T T_arg) const noexcept {
     return static_cast<T>(0.5 * (T_arg / low + hi));
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <class T>
-ALWAYS_INLINE constexpr T
+PF_ALWAYS_INLINE constexpr T
 FuncEval<Func, N_compile_time, Iters_compile_time>::map_from_domain(const T T_arg) const noexcept {
     if constexpr (std::is_arithmetic_v<T>) {
         return static_cast<T>(std::fma(2.0, T_arg, -T(hi)) * low);
@@ -143,8 +143,8 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::map_from_domain(const T T_ar
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initialize_monomials(Func F,
-                                                                                           const InputType *pts) {
+PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initialize_monomials(Func F,
+                                                                                              const InputType *pts) {
     // 1) allocate
     Buffer<InputType, N_compile_time> grid{};
     if constexpr (N_compile_time == 0)
@@ -174,7 +174,7 @@ C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initialize
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-C20CONSTEXPR void
+PF_C20CONSTEXPR void
 FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputType, N_compile_time> &x_cheb_,
                                                            const Buffer<OutputType, N_compile_time> &y_cheb_) {
 
@@ -226,6 +226,42 @@ template <typename... EvalTypes> FuncEvalMany<EvalTypes...>::FuncEvalMany(const 
     /* Copy coefficients and pad */
     copy_coeffs<0>(evals...);
     zero_pad_coeffs();
+}
+
+template <typename... EvalTypes>
+FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
+    : coeff_store_(other.coeff_store_),
+      coeffs_{coeff_store_.data(), other.coeffs_.extents()},
+      low_(other.low_), hi_(other.hi_), deg_max_(other.deg_max_) {}
+
+template <typename... EvalTypes>
+auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
+    if (this != &other) {
+        coeff_store_ = other.coeff_store_;
+        low_ = other.low_;
+        hi_ = other.hi_;
+        deg_max_ = other.deg_max_;
+        coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
+    }
+    return *this;
+}
+
+template <typename... EvalTypes>
+FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
+    : coeff_store_(std::move(other.coeff_store_)),
+      coeffs_{coeff_store_.data(), other.coeffs_.extents()},
+      low_(std::move(other.low_)), hi_(std::move(other.hi_)), deg_max_(other.deg_max_) {}
+
+template <typename... EvalTypes>
+auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
+    if (this != &other) {
+        coeff_store_ = std::move(other.coeff_store_);
+        low_ = std::move(other.low_);
+        hi_ = std::move(other.hi_);
+        deg_max_ = other.deg_max_;
+        coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
+    }
+    return *this;
 }
 
 // ------------------------------ size / degree --------------------------
@@ -357,6 +393,44 @@ constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, int n, const InputType
     : func_{f}, degree_{n}, coeffs_flat_(storage_required(n)), coeffs_md_{coeffs_flat_.data(), make_ext(n)} {
     compute_scaling(a, b);
     initialize(n);
+}
+
+template <class Func, std::size_t N_compile>
+FuncEvalND<Func, N_compile>::FuncEvalND(const FuncEvalND &other)
+    : func_(other.func_), degree_(other.degree_), low_(other.low_), hi_(other.hi_),
+      coeffs_flat_(other.coeffs_flat_),
+      coeffs_md_{coeffs_flat_.data(), other.coeffs_md_.extents()} {}
+
+template <class Func, std::size_t N_compile>
+auto FuncEvalND<Func, N_compile>::operator=(const FuncEvalND &other) -> FuncEvalND & {
+    if (this != &other) {
+        func_ = other.func_;
+        degree_ = other.degree_;
+        low_ = other.low_;
+        hi_ = other.hi_;
+        coeffs_flat_ = other.coeffs_flat_;
+        coeffs_md_ = mdspan_t{coeffs_flat_.data(), other.coeffs_md_.extents()};
+    }
+    return *this;
+}
+
+template <class Func, std::size_t N_compile>
+FuncEvalND<Func, N_compile>::FuncEvalND(FuncEvalND &&other) noexcept
+    : func_(std::move(other.func_)), degree_(other.degree_), low_(std::move(other.low_)), hi_(std::move(other.hi_)),
+      coeffs_flat_(std::move(other.coeffs_flat_)),
+      coeffs_md_{coeffs_flat_.data(), other.coeffs_md_.extents()} {}
+
+template <class Func, std::size_t N_compile>
+auto FuncEvalND<Func, N_compile>::operator=(FuncEvalND &&other) noexcept -> FuncEvalND & {
+    if (this != &other) {
+        func_ = std::move(other.func_);
+        degree_ = other.degree_;
+        low_ = std::move(other.low_);
+        hi_ = std::move(other.hi_);
+        coeffs_flat_ = std::move(other.coeffs_flat_);
+        coeffs_md_ = mdspan_t{coeffs_flat_.data(), other.coeffs_md_.extents()};
+    }
+    return *this;
 }
 
 // Evaluate via Horner's method
@@ -522,9 +596,9 @@ constexpr void FuncEvalND<Func, N_compile>::for_each_index(const std::array<int,
 // -----------------------------------------------------------------------------
 // Compile-time degree (1D or ND)
 template <std::size_t N_compile_time, std::size_t Iters_compile_time, class Func>
-C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                 typename function_traits<Func>::arg0_type b,
-                                 const typename function_traits<Func>::arg0_type *pts) {
+PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
+                                   typename function_traits<Func>::arg0_type b,
+                                   const typename function_traits<Func>::arg0_type *pts) {
     using InputType = typename function_traits<Func>::arg0_type;
     if constexpr (has_tuple_size_v<std::remove_cvref_t<InputType>>) {
         // ND
@@ -538,9 +612,9 @@ C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_ty
 // Runtime degree (1D or ND)
 template <std::size_t Iters_compile_time, class Func, typename IntType,
           std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>>, int>>
-C20CONSTEXPR auto make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
-                                 typename function_traits<Func>::arg0_type b,
-                                 const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts) {
+PF_C20CONSTEXPR auto make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
+                                   typename function_traits<Func>::arg0_type b,
+                                   const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts) {
     using InputType = typename function_traits<Func>::arg0_type;
     using RawInputType = std::remove_cvref_t<InputType>;
 
@@ -555,16 +629,16 @@ C20CONSTEXPR auto make_func_eval(Func F, IntType n, typename function_traits<Fun
 
 template <std::size_t N_compile_time, class Func,
           std::enable_if_t<has_tuple_size_v<std::remove_cvref_t<typename function_traits<Func>::arg0_type>>, int>>
-C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                 typename function_traits<Func>::arg0_type b) {
+PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
+                                   typename function_traits<Func>::arg0_type b) {
     return FuncEvalND<Func, N_compile_time>(F, a, b);
 }
 
 // Runtime error tolerance (1D or ND)
 template <std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters_compile_time, class Func,
           typename FloatType, std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int>>
-C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
-                                 typename function_traits<Func>::arg0_type b) {
+PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
+                                   typename function_traits<Func>::arg0_type b) {
     using RawInputType = std::remove_cvref_t<typename function_traits<Func>::arg0_type>;
     using evaluator_t =
         std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, 0>, FuncEval<Func, 0, Iters_compile_time>>;
@@ -591,8 +665,8 @@ C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits
 
 template <std::size_t N_compile_time, std::size_t Iters_compile_time, typename Func,
           std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>>, int>>
-C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
-                                 typename function_traits<Func *>::arg0_type b) {
+PF_C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
+                                   typename function_traits<Func *>::arg0_type b) {
     using InputType = typename function_traits<Func *>::arg0_type;
     if constexpr (has_tuple_size_v<std::remove_cvref_t<InputType>>) {
         // ND
@@ -643,7 +717,7 @@ constexpr auto make_func_eval(Func F) {
 #endif
 
 template <typename... EvalTypes>
-C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept {
+PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept {
     return FuncEvalMany<std::decay_t<EvalTypes>...>(std::forward<EvalTypes>(evals)...);
 }
 

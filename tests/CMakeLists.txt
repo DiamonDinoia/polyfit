@@ -111,4 +111,5 @@ add_polyfit_test(test_ND test_ND.cpp)
 add_polyfit_benchmark(bench_ND bench_ND.cpp)
 
 add_polyfit_test(test_general test_general.cpp)
+add_polyfit_test(test_copy_move test_copy_move.cpp)
 enable_testing()

@@ -104,7 +104,7 @@ template <typename T> struct value_type_or_identity<T, std::void_t<typename T::v
 
 namespace poly_eval::detail {
 
-template <typename T> constexpr ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
+template <typename T> constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
     // Fused multiply-add: a * b + c
     if constexpr (std::is_floating_point_v<T>) {
         // Use std::fma for floating-point types
@@ -113,7 +113,7 @@ template <typename T> constexpr ALWAYS_INLINE T fma(const T &a, const T &b, cons
     return xsimd::fma(a, b, c);
 }
 
-template <typename T, typename U> constexpr ALWAYS_INLINE T fma(const T &a, const U &b, const T &c) noexcept {
+template <typename T, typename U> constexpr PF_ALWAYS_INLINE T fma(const T &a, const U &b, const T &c) noexcept {
     // Fused multiply-add: a * b + c
     return T{fma(real(a), b, real(c)), fma(imag(a), b, imag(c))};
 }
@@ -249,7 +249,7 @@ constexpr double cos(const double x) noexcept {
 
 // stand-alone Bjorck–Pereyra divided‐difference
 template <std::size_t N, class X, class Y>
-C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<Y, N> &y) {
+PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<Y, N> &y) {
     const std::size_t n = (N == 0 ? x.size() : N);
     Buffer<Y, N> a = y;
     for (std::size_t k = 0; k + 1 < n; ++k) {
@@ -262,7 +262,7 @@ C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<Y, 
 
 // stand-alone Newton→monomial conversion
 template <std::size_t N, class X, class Y>
-C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
+PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
     int n = static_cast<int>(alpha.size());
     Buffer<Y, N * 2> c{0};
     if constexpr (N == 0) {
@@ -343,7 +343,7 @@ constexpr auto make_static_extents(std::index_sequence<Is...>) {
     return stdex::extents<std::size_t, ((void)Is, N_compile)..., DimOut>{};
 }
 
-template <std::size_t M = 0, typename T> C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) {
+template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) {
     // we'll store each “point” in a Buffer<T,M>
     Buffer<T, M> points{};
     if constexpr (M == 0) {
@@ -384,7 +384,7 @@ template <std::size_t M = 0, typename T> C20CONSTEXPR auto linspace(const T &sta
     }
 }
 
-template <typename T> C20CONSTEXPR double relative_error(const T &approx, const T &actual) {
+template <typename T> PF_C20CONSTEXPR double relative_error(const T &approx, const T &actual) {
     if constexpr (has_tuple_size_v<T>) {
         double err = 0.0;
         for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
@@ -396,7 +396,7 @@ template <typename T> C20CONSTEXPR double relative_error(const T &approx, const 
     }
 }
 
-template <typename T> C20CONSTEXPR double relative_l2_norm(const T &approx, const T &actual) {
+template <typename T> PF_C20CONSTEXPR double relative_l2_norm(const T &approx, const T &actual) {
     double num = 0.0, denom = 0.0;
     if constexpr (has_tuple_size<T>()) {
         for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
