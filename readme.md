@@ -56,6 +56,8 @@ target_link_libraries(my_app PRIVATE polyfit::polyfit)
 
 The core of the library is the `poly_eval::make_func_eval` factory function, which creates a callable polynomial object that approximates a given function.
 
+Full API reference: [docs/API.md](docs/API.md)
+
 ### 1D Function Approximation (Runtime)
 
 Create an approximation for a scalar function $f: \mathbb{R} \to \mathbb{R}$ by specifying either a fixed degree or an error tolerance at runtime.
@@ -209,3 +211,18 @@ cmake -S . -B build
 # Build and run the examples
 cmake --build build --target run_examples
 ```
+
+## Notes on Coefficients and Mapping
+
+- Coefficient order for Horner’s method is reversed: pass `[c_N, …, c_0]` to the low-level 1D APIs.
+- Evaluators internally map the user domain `[a,b]` to the Chebyshev domain for sampling and back for evaluation.
+
+## Testing Across C++ Standards
+
+- The test suite builds and runs for C++17 and C++20.
+- Enable tests and build:
+  - `cmake -S . -B build -DMONOFIT_BUILD_TESTS=ON`
+  - `cmake --build build`
+  - `ctest --test-dir build --output-on-failure`
+- Per-standard test targets are generated (e.g., `test_horner_cxx17`, `test_horner_cxx20`).
+- Benchmarks follow the same pattern (e.g., `bench_horner_cxx17`, `bench_horner_cxx20`).

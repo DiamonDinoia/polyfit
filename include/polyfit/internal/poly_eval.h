@@ -2,10 +2,10 @@
 
 #include "macros.h"
 #include "utils.h"
+#include "simd_utils.h"
 
 #include <cassert>
 #include <cstddef>
-#include <xsimd/xsimd.hpp>
 
 //------------------------------------------------------------------------------
 // Forward Declarations (Public API)
@@ -26,7 +26,7 @@ namespace poly_eval {
  * @return The evaluated polynomial value at x.
  */
 template <std::size_t N_total = 0, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr OutputType horner(InputType x, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
+PF_ALWAYS_INLINE constexpr OutputType horner(InputType xin, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
 
 /**
  * @brief Evaluate a polynomial at multiple points using SIMD-accelerated Horner's method.
@@ -73,9 +73,9 @@ PF_ALWAYS_INLINE constexpr void horner(
  */
 template <std::size_t M_total = 0, std::size_t N_total = 0, bool scaling = false, typename OutputType,
           typename InputType>
-PF_ALWAYS_INLINE constexpr void horner_many(InputType x, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
+PF_ALWAYS_INLINE constexpr void horner_many(InputType xin, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
                                          std::size_t N = 0, const InputType *low = nullptr,
-                                         const InputType *hi = nullptr) noexcept;
+                                         const InputType *high = nullptr) noexcept;
 
 /**
  * @brief Evaluate multiple polynomials at multiple points (transposed layout).
@@ -94,7 +94,7 @@ PF_ALWAYS_INLINE constexpr void horner_many(InputType x, const OutputType *coeff
  * @param N Number of coefficients (used if N_total == 0).
  */
 template <std::size_t M_total = 0, std::size_t N_total = 0, std::size_t simd_width = 0, typename Out, typename In>
-PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, std::size_t M = 0,
+PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, std::size_t M = 0,
                                                std::size_t N = 0) noexcept;
 
 /**
@@ -141,7 +141,7 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coe
     if constexpr (!SIMD) {
         constexpr std::size_t axis = Dim - Level; // current axis
         constexpr std::size_t OUT = std::tuple_size_v<OutT>;
-        const int deg = DegCT ? int(DegCT) : deg_rt;
+        const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
 
         OutT res{}; // zero-init
 
@@ -153,12 +153,10 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coe
             if constexpr (Level > 1) {
                 inner = horner_nd_impl<Level - 1, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
             } else {
-                //  last spatial level → read the coefficient vector
+                //  last spatial level → read the coefficient vector (C++17-compatible)
                 detail::unroll_loop<OUT>([&](const auto i) {
                     constexpr auto d = decltype(i)::value;
-                    inner[d] = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                        return coeffs(idx[Is]..., d); // Dim indices + output
-                    }(std::make_index_sequence<Dim>{});
+                    inner[d] = detail::call_coeffs<Dim>(coeffs, idx, d);
                 });
             }
 
@@ -307,22 +305,22 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
 //------------------------------------------------------------------------------
 
 template <std::size_t M_total, std::size_t N_total, bool scaling, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr void horner_many(const InputType x, const OutputType *coeffs, OutputType *out,
+PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputType *coeffs, OutputType *out,
                                          const std::size_t M, const std::size_t N, const InputType *low,
-                                         const InputType *hi) noexcept {
+                                         const InputType *high) noexcept {
     const std::size_t m_lim = M_total ? M_total : M;
     const std::size_t n_lim = N_total ? N_total : N;
 
     if constexpr (M_total != 0) {
         detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
             constexpr auto m = decltype(I)::value;
-            const auto xm = scaling ? (InputType{2} * x - hi[m]) * low[m] : x;
-            out[m] = horner<N_total>(xm, coeffs + m * n_lim, n_lim);
+            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
+            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
         });
     } else {
         for (std::size_t m = 0; m < m_lim; ++m) {
-            const auto xm = scaling ? (InputType{2} * x - hi[m]) * low[m] : x;
-            out[m] = horner<N_total>(xm, coeffs + m * n_lim, n_lim);
+            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
+            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
         }
     }
 }
@@ -332,7 +330,7 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType x, const OutputType 
 //------------------------------------------------------------------------------
 
 template <std::size_t M_total, std::size_t N_total, std::size_t simd_width, typename Out, typename In>
-PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out *out, const std::size_t M,
+PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, const std::size_t M,
                                                const std::size_t N) noexcept {
     constexpr bool has_Mt = (M_total != 0);
     constexpr bool has_Nt = (N_total != 0);
@@ -352,15 +350,15 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out
             detail::unroll_loop<C>([&]([[maybe_unused]] const auto I) {
                 constexpr auto ci = decltype(I)::value;
                 constexpr auto base = ci * simd_width;
-                xvec[ci] = batch_in::load_unaligned(x + base);
-                acc[ci] = batch_out::load_unaligned(c + base);
+                    xvec[ci] = batch_in::load_unaligned(xin + base);
+                    acc[ci] = batch_out::load_unaligned(coeffs + base);
             });
 
             if constexpr (has_Nt) {
                 detail::unroll_loop<0, N_total>([&]([[maybe_unused]] const auto I) {
                     constexpr auto k = decltype(I)::value;
                     if constexpr (k > 0) {
-                        const auto col = c + k * stride;
+                        const auto col = coeffs + (k * stride);
                         detail::unroll_loop<C>([&]([[maybe_unused]] const auto J) {
                             constexpr auto ci = decltype(J)::value;
                             constexpr auto base = ci * simd_width;
@@ -371,7 +369,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out
                 });
             } else {
                 for (std::size_t k = 1; k < n_lim; ++k) {
-                    const auto col = c + k * stride;
+                    const auto col = coeffs + (k * stride);
                     detail::unroll_loop<C>([&]([[maybe_unused]] const auto I) {
                         constexpr auto ci = decltype(I)::value;
                         constexpr auto base = ci * simd_width;
@@ -393,11 +391,11 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out
 
             for (std::size_t ci = 0; ci < chunks; ++ci) {
                 const auto base = ci * simd_width;
-                xvec[ci] = batch_in::load_unaligned(x + base);
-                acc[ci] = batch_out::load_unaligned(c + base);
+                xvec[ci] = batch_in::load_unaligned(xin + base);
+                acc[ci] = batch_out::load_unaligned(coeffs + base);
             }
             for (std::size_t k = 1; k < n_lim; ++k) {
-                const auto col = c + k * stride;
+                const auto col = coeffs + (k * stride);
                 for (std::size_t ci = 0; ci < chunks; ++ci) {
                     const auto base = ci * simd_width;
                     batch_out ck = batch_out::load_unaligned(col + base);
@@ -414,35 +412,39 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *x, const Out *c, Out
         if constexpr (has_Mt) {
             detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
                 constexpr auto i = decltype(I)::value;
-                out[i] = c[i];
+                out[i] = coeffs[i];
             });
         } else {
-            for (std::size_t i = 0; i < m_lim; ++i)
-                out[i] = c[i];
+            for (std::size_t i = 0; i < m_lim; ++i) {
+                out[i] = coeffs[i];
+            }
         }
 
         const auto step = [&](const std::size_t k) noexcept {
-            const auto col = c + k * stride;
+            const auto col = coeffs + (k * stride);
             if constexpr (has_Mt) {
                 detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
                     constexpr auto i = decltype(I)::value;
-                    out[i] = detail::fma(out[i], x[i], col[i]);
+                    out[i] = detail::fma(out[i], xin[i], col[i]);
                 });
             } else {
-                for (std::size_t i = 0; i < m_lim; ++i)
-                    out[i] = detail::fma(out[i], x[i], col[i]);
+                for (std::size_t i = 0; i < m_lim; ++i) {
+                    out[i] = detail::fma(out[i], xin[i], col[i]);
+                }
             }
         };
 
         if constexpr (has_Nt) {
             detail::unroll_loop<0, N_total>([&]([[maybe_unused]] const auto I) {
                 constexpr auto k = decltype(I)::value;
-                if constexpr (k > 0)
+                if constexpr (k > 0) {
                     step(k);
+                }
             });
         } else {
-            for (std::size_t k = 1; k < n_lim; ++k)
+            for (std::size_t k = 1; k < n_lim; ++k) {
                 step(k);
+            }
         }
     }
 }

@@ -52,6 +52,15 @@ CPMAddPackage(
         "MDSPAN_ENABLE_INSTALL ON"
 )
 
+CPMAddPackage(
+        NAME poet
+        GITHUB_REPOSITORY DiamonDinoia/poet
+        GIT_TAG main
+        OPTIONS
+        "POET_BUILD_TESTS OFF"
+        "BUILD_TESTING OFF"
+)
+
 # mdspan usually exports std::mdspan; if only mdspan::mdspan exists, create a compat alias.
 if (NOT TARGET std::mdspan AND TARGET mdspan::mdspan)
     add_library(std::mdspan INTERFACE IMPORTED)
@@ -78,7 +87,7 @@ target_include_directories(polyfit INTERFACE
 # Only link deps in the BUILD interface; leave INSTALL interface empty.
 # We'll re-attach deps for consumers inside polyfitConfig.cmake via find_dependency(...)
 target_link_libraries(polyfit INTERFACE
-        $<BUILD_INTERFACE:xsimd;std::mdspan>
+        $<BUILD_INTERFACE:xsimd;std::mdspan;poet::poet>
 )
 
 # -----------------------------------------

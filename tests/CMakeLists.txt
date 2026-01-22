@@ -4,9 +4,7 @@ project(polyfit_tests LANGUAGES C CXX)
 # -----------------------------------------------------------------------------
 # Basic config
 # -----------------------------------------------------------------------------
-set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Enable LTO if supported
 include(CheckIPOSupported)
@@ -31,16 +29,6 @@ CPMAddPackage(
         "BUILD_GMOCK OFF"
 )
 
-CPMAddPackage(
-        NAME benchmark
-        GITHUB_REPOSITORY google/benchmark
-        VERSION 1.9.4
-        OPTIONS
-        "BENCHMARK_ENABLE_TESTING OFF"
-        "BENCHMARK_ENABLE_INSTALL OFF"
-        "BENCHMARK_ENABLE_GTEST_TESTS OFF"
-        "BENCHMARK_ENABLE_LTO ON"
-)
 
 CPMAddPackage(
         nanobench
@@ -54,28 +42,40 @@ CPMAddPackage(
 option(MONOFIT_ENABLE_SANITIZERS "Enable Address/UB sanitizers" ON)
 
 # -----------------------------------------------------------------------------
-# Helper to add a unit‐test target
+# Helpers to add unit-test targets for multiple C++ standards
 # -----------------------------------------------------------------------------
-function(add_polyfit_test NAME SRC)
-    add_executable(${NAME} ${SRC})
-    target_link_libraries(${NAME}
+# Standards to test/build (C++17 and C++20). C++23 can be added later once mdspan handling is unified.
+set(POLYFIT_TEST_STANDARDS 17 20)
+
+function(add_polyfit_test_for_std BASENAME SRC STD)
+    set(TGT "${BASENAME}_cxx${STD}")
+    add_executable(${TGT} ${SRC})
+    target_link_libraries(${TGT}
             PRIVATE polyfit::polyfit gtest_main
     )
-    target_compile_features(${NAME} PRIVATE cxx_std_20)
-
+    # Per-target standard selection
+    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD ${STD})
+    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD_REQUIRED ON)
+    set_property(TARGET ${TGT} PROPERTY CXX_EXTENSIONS OFF)
 
     # common warnings & optimizations
-    target_compile_options(${NAME} PRIVATE
+    target_compile_options(${TGT} PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -O3 -march=native -ffast-math>
             $<$<CXX_COMPILER_ID:MSVC>:/W4 /O2 /arch:AVX2 /fp:fast>
     )
 
     if (MONOFIT_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(${NAME} PRIVATE -fsanitize=address,undefined)
-        target_link_libraries(${NAME} PRIVATE -fsanitize=address,undefined)
+        target_compile_options(${TGT} PRIVATE -fsanitize=address,undefined)
+        target_link_libraries(${TGT} PRIVATE -fsanitize=address,undefined)
     endif ()
 
-    add_test(NAME ${NAME} COMMAND ${NAME})
+    add_test(NAME ${TGT} COMMAND ${TGT})
+endfunction()
+
+function(add_polyfit_test_matrix NAME SRC)
+    foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
+        add_polyfit_test_for_std(${NAME} ${SRC} ${STD})
+    endforeach()
 endfunction()
 
 # -----------------------------------------------------------------------------
@@ -88,7 +88,10 @@ function(add_polyfit_benchmark NAME SRC)
             polyfit::polyfit
             nanobench::nanobench
     )
-    target_compile_features(${NAME} PRIVATE cxx_std_20)
+    # Default to C++20 for the base target
+    set_property(TARGET ${NAME} PROPERTY CXX_STANDARD 20)
+    set_property(TARGET ${NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
+    set_property(TARGET ${NAME} PROPERTY CXX_EXTENSIONS OFF)
 
     target_compile_options(${NAME} PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang>:-O3 -march=native -ffast-math>
@@ -97,19 +100,48 @@ function(add_polyfit_benchmark NAME SRC)
     # not a CTest test by default
 endfunction()
 
-add_polyfit_test(test_horner test_horner.cpp)
-add_polyfit_benchmark(bench_horner bench_horner.cpp)
+# Benchmarks matrix across standards (where supported)
+function(add_polyfit_benchmark_for_std BASENAME SRC STD)
+    set(TGT "${BASENAME}_cxx${STD}")
+    add_executable(${TGT} ${SRC})
+    target_link_libraries(${TGT}
+            PRIVATE
+            polyfit::polyfit
+            nanobench::nanobench
+    )
+    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD ${STD})
+    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD_REQUIRED ON)
+    set_property(TARGET ${TGT} PROPERTY CXX_EXTENSIONS OFF)
+    target_compile_options(${TGT} PRIVATE
+            $<$<CXX_COMPILER_ID:GNU,Clang>:-O3 -march=native -ffast-math>
+            $<$<CXX_COMPILER_ID:MSVC>:/O2 /arch:AVX2>
+    )
+endfunction()
 
-add_polyfit_test(test1D test_1D.cpp)
-add_polyfit_benchmark(bench1D bench_1D.cpp)
+function(add_polyfit_benchmark_matrix NAME SRC)
+    foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
+        add_polyfit_benchmark_for_std(${NAME} ${SRC} ${STD})
+    endforeach()
+endfunction()
+
+add_polyfit_test_matrix(test_horner test_horner.cpp)
+add_polyfit_benchmark_matrix(bench_horner bench_horner.cpp)
+add_polyfit_benchmark_matrix(bench_unroll_sweep bench_unroll_sweep.cpp)
+
+add_polyfit_test_matrix(test1D test_1D.cpp)
+add_polyfit_benchmark_matrix(bench1D bench_1D.cpp)
 
 
-add_polyfit_test(testMany test_many.cpp)
-add_polyfit_benchmark(benchMany bench_many.cpp)
+add_polyfit_test_matrix(testMany test_many.cpp)
+add_polyfit_benchmark_matrix(benchMany bench_many.cpp)
 
-add_polyfit_test(test_ND test_ND.cpp)
-add_polyfit_benchmark(bench_ND bench_ND.cpp)
+add_polyfit_test_matrix(test_ND test_ND.cpp)
+add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
 
-add_polyfit_test(test_general test_general.cpp)
-add_polyfit_test(test_copy_move test_copy_move.cpp)
+add_polyfit_test_matrix(test_general test_general.cpp)
+add_polyfit_test_matrix(test_copy_move test_copy_move.cpp)
+add_polyfit_test_matrix(test_scaling_alignment test_scaling_alignment.cpp)
+add_polyfit_test_matrix(test_utils_bjorck_newton test_utils_bjorck_newton.cpp)
+add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)
+add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.cpp)
 enable_testing()

@@ -13,7 +13,7 @@
 // ankerl::nanobench::templates::markdown().
 // -----------------------------------------------------------------------------
 
-#define ANKERL_NANOBENCH_IMPLEMENT
+ 
 #include "polyfit/fast_eval.hpp"
 #include <nanobench.h>
 

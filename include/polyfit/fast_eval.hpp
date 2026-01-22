@@ -15,18 +15,44 @@ namespace stdex = std::experimental;
 #include "internal/macros.h"
 #include "internal/poly_eval.h"
 
+//
+// Public API overview:
+// - make_func_eval: factory producing FuncEval / FuncEvalND evaluators.
+// - Prefer compile-time overloads when performance matters (use template N).
+// - Adaptive overloads accept an error tolerance and search for a suitable degree.
+// - ND (multi-dimensional) functions expect tuple-like / std::array inputs/outputs.
+// - See docs/API.md and include/polyfit/internal/macros.h for implementation-only macro docs.
+//
+// Notes on template parameters:
+// - N_compile_time: if >0, degree is fixed at compile time (faster evaluator).
+// - Iters_compile_time: number of refinement passes performed after initial fit.
+// - The public headers keep implementation details in include/polyfit/internal.
+ 
 namespace poly_eval {
 
 // Forward declarations
 template <typename T> struct function_traits;
-template <typename T, typename> struct is_tuple_like;
-template <typename T> struct is_func_eval;
 template <typename... EvalTypes> class FuncEvalMany;
 
 // -----------------------------------------------------------------------------
 // FuncEval: monomial least-squares fit using Chebyshev sampling
 // (Runtime or Fixed-Size Compile-Time Storage, but fitting is runtime)
 // -----------------------------------------------------------------------------
+/**
+ * @brief Evaluator for a single polynomial fit of a callable.
+ *
+ * Performs a (least-squares) polynomial approximation of the provided callable
+ * over the domain [a,b] using Chebyshev sampling. The implementation stores
+ * coefficients in monomial order and provides fast evaluation (Horner) paths
+ * including a bulk SIMD-friendly evaluation overload.
+ *
+ * Template parameters:
+ * @tparam Func Callable type (function, lambda, function pointer, functor).
+ * @tparam N_compile_time If non-zero, the degree is fixed at compile-time
+ *                        which may enable additional optimizations.
+ * @tparam Iters_compile_time Number of refinement iterations performed after
+ *                            the initial fit (defaults to 1).
+ */
 template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_time = 1> class FuncEval {
   public:
     using InputType = typename function_traits<Func>::arg0_type;
@@ -35,9 +61,26 @@ template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_
     static constexpr std::size_t kDegreeCompileTime = N_compile_time;
     static constexpr std::size_t kItersCompileTime = Iters_compile_time;
 
+    /**
+     * @brief Construct a compile-time degree evaluator.
+     *
+     * @param F Callable to approximate.
+     * @param a Domain low endpoint.
+     * @param b Domain high endpoint.
+     * @param pts Optional pointer to evaluation points used for fitting.
+     */
     template <std::size_t CurrentN = N_compile_time, typename = std::enable_if_t<CurrentN != 0>>
     PF_C20CONSTEXPR FuncEval(Func F, InputType a, InputType b, const InputType *pts = nullptr);
 
+    /**
+     * @brief Construct a runtime-degree evaluator.
+     *
+     * @param F Callable to approximate.
+     * @param n Requested polynomial degree (runtime).
+     * @param a Domain low endpoint.
+     * @param b Domain high endpoint.
+     * @param pts Optional pointer to evaluation points used for fitting.
+     */
     template <std::size_t CurrentN = N_compile_time, typename = std::enable_if_t<CurrentN == 0>>
     PF_C20CONSTEXPR FuncEval(Func F, int n, InputType a, InputType b, const InputType *pts = nullptr);
 
@@ -46,15 +89,38 @@ template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_
     FuncEval(FuncEval &&) noexcept = default;
     FuncEval &operator=(FuncEval &&) noexcept = default;
 
+    /**
+     * @brief Evaluate the fitted polynomial at a single input point.
+     *
+     * @param pt Input value in the original domain [a,b].
+     * @return OutputType Approximated value of the callable at `pt`.
+     */
     template <bool = false> constexpr OutputType operator()(InputType pt) const noexcept;
 
+    /**
+     * @brief Bulk evaluation of multiple input points.
+     *
+     * This overload writes `num_points` outputs to `out` for the `pts`
+     * array. `pts_aligned` and `out_aligned` hint alignment for SIMD paths.
+     *
+     * @tparam pts_aligned True if `pts` is SIMD-aligned.
+     * @tparam out_aligned True if `out` is SIMD-aligned.
+     * @param pts Pointer to input values.
+     * @param out Pointer to output buffer (must have room for `num_points`).
+     * @param num_points Number of points to evaluate.
+     */
     template <bool pts_aligned = false, bool out_aligned = false>
     constexpr void operator()(const InputType *pts, OutputType *out, std::size_t num_points) const noexcept;
 
+    /**
+     * @brief Access the fitted coefficients in monomial order.
+     *
+     * The returned `Buffer` contains coefficients ordered from the constant
+     * term up to the highest-degree term used by this evaluator.
+     */
     PF_C20CONSTEXPR const Buffer<OutputType, N_compile_time> &coeffs() const noexcept;
 
   private:
-    int n_terms;
     InputType low, hi;
     Buffer<OutputType, N_compile_time> monomials;
 
@@ -77,6 +143,20 @@ template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_
 //======================================================================
 //  FuncEvalMany – evaluates several FuncEval’s with SIMD-friendly layout
 //======================================================================
+/**
+ * @brief Container evaluating multiple polynomial evaluators in a SIMD-friendly layout.
+ *
+ * `FuncEvalMany` packs coefficients for several `FuncEval` instances into a
+ * layout amenable to vectorized evaluation. Use this to evaluate multiple
+ * polynomials for the same input(s) efficiently.
+ *
+ * Template parameters:
+ * @tparam EvalTypes List of `FuncEval<...>` types to pack together.
+ *
+ * Notes:
+ * - `kF` is the number of polynomials and `kF_pad` is the padded storage width.
+ * - The class exposes scalar and bulk evaluation overloads.
+ */
 template <typename... EvalTypes> class FuncEvalMany {
     static_assert(sizeof...(EvalTypes) > 0, "At least one FuncEval type is required");
 
@@ -121,7 +201,7 @@ template <typename... EvalTypes> class FuncEvalMany {
 
   private:
     /* Helper routines */
-    template <std::size_t I, typename FE, typename... Rest> void copy_coeffs(const FE &fe, const Rest &...rest);
+    template <std::size_t I, typename FE, typename... Rest> void copy_coeffs(const FE &eval, const Rest &...rest);
 
     void zero_pad_coeffs();
     std::array<OutputType, kF> extract_real(const std::array<OutputType, kF_pad> &full) const noexcept;
@@ -138,9 +218,20 @@ template <typename... EvalTypes> class FuncEvalMany {
     std::array<InputType, kF_pad> hi_{};
 
     // Runtime max degree (≡ deg_max_ctime_ unless CT value is 0)
-    std::size_t deg_max_ = deg_max_ctime_;
 };
 
+/**
+ * @brief Multi-dimensional polynomial evaluator.
+ *
+ * `FuncEvalND` extends `FuncEval` style fitting/evaluation to functions whose
+ * input is a tuple/array (multi-dimensional). The evaluator stores a flat
+ * coefficient buffer and exposes `operator()` that maps tuple inputs to
+ * vector outputs.
+ *
+ * Template parameters:
+ * @tparam Func Callable type accepting a tuple-like input.
+ * @tparam N_compile If non-zero, the per-dimension degree is fixed at compile time.
+ */
 template <class Func, std::size_t N_compile = 0> class FuncEvalND {
   public:
     using Input0 = typename function_traits<Func>::arg0_type;
@@ -173,8 +264,6 @@ template <class Func, std::size_t N_compile = 0> class FuncEvalND {
   private:
     static constexpr std::size_t coeff_count = detail::storage_required<Scalar, N_compile, dim_, outDim_>();
 
-    Func func_;
-    int degree_;
     InputType low_{}, hi_{};
     alignas(xsimd::best_arch::alignment())
         AlignedBuffer<Scalar, coeff_count, xsimd::best_arch::alignment()> coeffs_flat_;
@@ -189,7 +278,7 @@ template <class Func, std::size_t N_compile = 0> class FuncEvalND {
     template <std::size_t... Is> static extents_t make_ext(int n, std::index_sequence<Is...>) noexcept;
     static constexpr std::size_t storage_required(int n) noexcept;
 
-    constexpr void initialize(int n);
+    constexpr void initialize(int n, Func f);
     [[nodiscard]] constexpr InputType map_to_domain(const InputType &t) const noexcept;
     [[nodiscard]] constexpr InputType map_from_domain(const InputType &x) const noexcept;
     constexpr void compute_scaling(const InputType &a, const InputType &b) noexcept;
@@ -200,12 +289,35 @@ template <class Func, std::size_t N_compile = 0> class FuncEvalND {
 };
 
 // Compile-time degree (1D or ND)
+/**
+ * @brief Factory creating a `FuncEval` or `FuncEvalND` with compile-time degree.
+ *
+ * This overload fixes the polynomial degree at compile-time (if `N_compile_time > 0`).
+ * @tparam N_compile_time Compile-time degree (0 means runtime degree elsewhere).
+ * @tparam Iters_compile_time Number of refinement iterations.
+ * @param F Callable to approximate.
+ * @param a Domain low endpoint.
+ * @param b Domain high endpoint.
+ * @param pts Optional pointer to evaluation points used for fitting.
+ */
 template <std::size_t N_compile_time, std::size_t Iters_compile_time = 1, class Func>
 PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
                                    typename function_traits<Func>::arg0_type b,
                                    const typename function_traits<Func>::arg0_type *pts = nullptr);
 
 // Runtime degree (1D or ND, any integral type)
+/**
+ * @brief Factory creating a runtime-degree `FuncEval`/`FuncEvalND`.
+ *
+ * @tparam Iters_compile_time Number of refinement iterations.
+ * @tparam Func Callable type.
+ * @tparam IntType Integral type used for `n`.
+ * @param F Callable to approximate.
+ * @param n Requested polynomial degree (runtime).
+ * @param a Domain low endpoint.
+ * @param b Domain high endpoint.
+ * @param pts Optional pointer to evaluation points used for fitting.
+ */
 template <std::size_t Iters_compile_time = 1, class Func, typename IntType,
           std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>>, int> = 0>
 PF_C20CONSTEXPR auto
@@ -214,6 +326,13 @@ make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
                const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts = nullptr);
 
 // Runtime error tolerance (1D or ND, any floating-point type)
+/**
+ * @brief Factory selecting degree by an error tolerance.
+ *
+ * The function will attempt degrees up to `MaxN_val` and evaluate using
+ * `NumEvalPoints_val` points, returning an evaluator meeting `eps` accuracy
+ * where found.
+ */
 template <std::size_t MaxN_val = 32, std::size_t NumEvalPoints_val = 100, std::size_t Iters_compile_time = 1,
           class Func, typename FloatType,
           std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int> = 0>
@@ -241,6 +360,12 @@ template <double eps_val, auto a, auto b, std::size_t MaxN_val = 32, std::size_t
 constexpr auto make_func_eval(Func F);
 #endif
 
+/**
+ * @brief Pack multiple evaluators into a SIMD-friendly `FuncEvalMany`.
+ *
+ * @param evals Evaluator instances to pack.
+ * @return FuncEvalMany<EvalTypes...> Packed evaluator object.
+ */
 template <typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept;
 } // namespace poly_eval

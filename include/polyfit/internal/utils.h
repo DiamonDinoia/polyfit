@@ -7,6 +7,14 @@
 #include <functional>
 #include <utility>
 #include <xsimd/xsimd.hpp>
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <tuple>
+#include <type_traits>
+#include <complex>
 
 #include "macros.h"
 
@@ -25,10 +33,6 @@ template <class Func, std::size_t, std::size_t> class FuncEval;
 template <typename T, std::size_t N_compile_time_val>
 using Buffer = std::conditional_t<N_compile_time_val == 0, std::vector<T>, std::array<T, N_compile_time_val>>;
 
-template <typename T, std::size_t N_compile_time_val, std::size_t alignment>
-using AlignedBuffer = std::conditional_t < N_compile_time_val == 0 &&
-                      N_compile_time_val<16384, std::vector<T, xsimd::aligned_allocator<T, alignment>>,
-                                         std::array<T, N_compile_time_val>>;
 
 // -----------------------------------------------------------------------------
 // function_traits: Helper to deduce input and output types from a callable
@@ -104,19 +108,6 @@ template <typename T> struct value_type_or_identity<T, std::void_t<typename T::v
 
 namespace poly_eval::detail {
 
-template <typename T> constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
-    // Fused multiply-add: a * b + c
-    if constexpr (std::is_floating_point_v<T>) {
-        // Use std::fma for floating-point types
-        return std::fma(a, b, c);
-    }
-    return xsimd::fma(a, b, c);
-}
-
-template <typename T, typename U> constexpr PF_ALWAYS_INLINE T fma(const T &a, const U &b, const T &c) noexcept {
-    // Fused multiply-add: a * b + c
-    return T{fma(real(a), b, real(c)), fma(imag(a), b, imag(c))};
-}
 
 // std::countr_zero returns the number of trailing zero bits.
 // If an address is N-byte aligned, its N lowest bits must be zero.
@@ -131,8 +122,9 @@ template <typename T> constexpr auto countr_zero(T x) noexcept {
 #else
     // constexpr portable fallback
     constexpr int w = std::numeric_limits<T>::digits;
-    if (x == 0)
+    if (x == 0) {
         return w;
+    }
     int n = 0;
     while ((x & T{1}) == T{0}) {
         x >>= 1;
@@ -143,7 +135,7 @@ template <typename T> constexpr auto countr_zero(T x) noexcept {
 }
 
 template <typename T> constexpr size_t get_alignment(const T *ptr) noexcept {
-    const auto address = reinterpret_cast<uintptr_t>(ptr);
+    const auto address = reinterpret_cast<std::uintptr_t>(ptr);
     if (address == 0) {
         // A null pointer (or an address of 0) doesn't have a meaningful alignment
         // in the context of data access.
@@ -155,14 +147,15 @@ template <typename T> constexpr size_t get_alignment(const T *ptr) noexcept {
 template <std::size_t Start, std::size_t Stop, std::size_t Inc>
 inline constexpr std::size_t compute_range_count = (Start < Stop ? ((Stop - Start + Inc - 1) / Inc) : 0);
 
-// – the unroll implementation that feeds you integral_constant<I>
+/* – the unroll implementation that feeds you integral_constant<I>
+   Portable index_sequence-based implementation (no external deps). */
 template <std::size_t Start, std::size_t Inc, typename F, std::size_t... Is>
 constexpr void unroll_loop_impl(F &&f, std::index_sequence<Is...>) {
-    // Calls f(std::integral_constant<std::size_t, Start + Is*Inc>{}) for each Is
     (f(std::integral_constant<std::size_t, Start + Is * Inc>{}), ...);
 }
 
-template <std::size_t Start, std::size_t Stop, std::size_t Inc = 1, typename F> constexpr void unroll_loop(F &&f) {
+template <std::size_t Start, std::size_t Stop, std::size_t Inc = 1, typename F>
+constexpr void unroll_loop(F &&f) {
     constexpr std::size_t Count = compute_range_count<Start, Stop, Inc>;
     unroll_loop_impl<Start, Inc>(std::forward<F>(f), std::make_index_sequence<Count>{});
 }
@@ -177,8 +170,9 @@ constexpr double cos(const double x) noexcept {
     constexpr double PIO2_LO = 6.12323399573676603587e-17;
     constexpr double INV_PIO2 = 6.36619772367581382433e-01;
 
-    if (!std::isfinite(x))
+    if (!std::isfinite(x)) {
         return std::numeric_limits<double>::quiet_NaN();
+    }
 
     /* argument reduction: x = n·π/2 + y, |y| ≤ π/4 */
 
@@ -253,7 +247,7 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
     const std::size_t n = (N == 0 ? x.size() : N);
     Buffer<Y, N> a = y;
     for (std::size_t k = 0; k + 1 < n; ++k) {
-        for (std::size_t i = n - 1; i >= k + 1; --i) {
+        for (std::size_t i = n - 1; i > k; --i) {
             a[i] = (a[i] - a[i - 1]) / static_cast<Y>(x[i] - x[i - k - 1]);
         }
     }
@@ -272,16 +266,18 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
     std::size_t deg = 0;
     for (int i = n - 1; i >= 0; --i) {
         ++deg;
-        if constexpr (N == 0)
+        if constexpr (N == 0) {
             c.push_back(Y(0));
-        for (int j = static_cast<int>(deg); j >= 1; --j) {
-            c[j] = c[j - 1] - nodes[i] * c[j];
         }
-        c[0] = -nodes[i] * c[0] + alpha[i];
+        for (int j = static_cast<int>(deg); j >= 1; --j) {
+            c[j] = c[j - 1] - (nodes[i] * c[j]);
+        }
+        c[0] = (-nodes[i] * c[0]) + alpha[i];
     }
     if constexpr (N == 0) {
-        if (static_cast<int>(c.size()) > n)
+        if (static_cast<int>(c.size()) > n) {
             c.resize(n);
+        }
         return c;
     }
     Buffer<Y, N> result{};
@@ -289,7 +285,7 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
     return result;
 }
 
-template <class T, std::size_t N = 1> constexpr uint8_t min_simd_width() {
+template <class T, std::size_t N = 1> constexpr std::uint8_t min_simd_width() {
     if constexpr (std::is_void_v<xsimd::make_sized_batch_t<T, N>>) {
         return min_simd_width<T, N * 2>();
     } else {
@@ -306,9 +302,9 @@ template <class T, std::size_t Upper, std::size_t Width> constexpr std::size_t o
 }
 
 template <class T, std::size_t N> constexpr std::size_t optimal_simd_width() {
-    constexpr uint8_t arch_max = xsimd::batch<T>::size;
-    constexpr uint8_t upper = (N < arch_max) ? N : arch_max;
-    constexpr uint8_t start = min_simd_width<T>();
+    constexpr std::uint8_t arch_max = xsimd::batch<T>::size;
+    constexpr std::uint8_t upper = (N < arch_max) ? N : arch_max;
+    constexpr std::uint8_t start = min_simd_width<T>();
     if constexpr (start > upper) {
         // N is smaller than the smallest SIMD batch → scalar
         return start;
@@ -353,32 +349,36 @@ template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &
     // scalar case
     if constexpr (std::is_arithmetic_v<T>) {
         if (num_points <= 1) {
-            if (num_points == 1)
+            if (num_points == 1) {
                 points[0] = start;
+            }
             return points;
         }
         T step = (end - start) / T(num_points - 1);
         for (int i = 0; i < num_points; ++i) {
-            points[i] = start + T(i) * step;
+            points[i] = start + (T(i) * step);
         }
         return points;
     }
     // array case: T must be std::array<Scalar,D>
     else {
-        constexpr size_t D = std::tuple_size_v<T>;
+        constexpr size_t D = std::tuple_size_v<std::remove_cvref_t<T>>;
         if (num_points <= 1) {
-            if (num_points == 1)
+            if (num_points == 1) {
                 points[0] = start;
+            }
             return points;
         }
         using Scalar = std::remove_cv_t<decltype(start[0])>;
-        T step;
-        for (size_t i = 0; i < D; ++i)
+        T step{};
+        for (size_t i = 0; i < D; ++i) {
             step[i] = (end[i] - start[i]) / Scalar(num_points - 1);
+        }
 
         for (int k = 0; k < num_points; ++k) {
-            for (size_t i = 0; i < D; ++i)
-                points[k][i] = start[i] + Scalar(k) * step[i];
+            for (size_t i = 0; i < D; ++i) {
+                points[k][i] = start[i] + (Scalar(k) * step[i]);
+            }
         }
         return points;
     }
@@ -387,7 +387,7 @@ template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &
 template <typename T> PF_C20CONSTEXPR double relative_error(const T &approx, const T &actual) {
     if constexpr (has_tuple_size_v<T>) {
         double err = 0.0;
-        for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
+        for (std::size_t i = 0; i < std::tuple_size_v<std::remove_cvref_t<T>>; ++i) {
             err = std::max(std::abs(1.0 - approx[i] / actual[i]), err);
         }
         return err;
@@ -397,9 +397,10 @@ template <typename T> PF_C20CONSTEXPR double relative_error(const T &approx, con
 }
 
 template <typename T> PF_C20CONSTEXPR double relative_l2_norm(const T &approx, const T &actual) {
-    double num = 0.0, denom = 0.0;
-    if constexpr (has_tuple_size<T>()) {
-        for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
+    double num = 0.0;
+    double denom = 0.0;
+    if constexpr (has_tuple_size_v<T>) {
+        for (std::size_t i = 0; i < std::tuple_size_v<std::remove_cvref_t<T>>; ++i) {
             num += std::norm(approx[i] - actual[i]);
             denom += std::norm(actual[i]);
         }

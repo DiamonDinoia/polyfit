@@ -8,6 +8,7 @@
 #include "macros.h"
 #include "poly_eval.h"
 #include "utils.h"
+#include "helpers.h"
 
 namespace poly_eval {
 
@@ -19,11 +20,8 @@ template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time
 template <std::size_t CurrentN, typename>
 PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const int n, const InputType a,
                                                                             const InputType b, const InputType *pts)
-    : n_terms(n), low(InputType(1) / (b - a)), hi(b + a) {
-    // if constexpr (N_compile_time == 0) {
-    //     assert(n_terms > 0 && "Polynomial degree must be positive");
-    // }
-    monomials.resize(n_terms);
+    : low(InputType(1) / (b - a)), hi(b + a) {
+    monomials.resize(static_cast<std::size_t>(n));
     initialize_monomials(F, pts);
 }
 
@@ -31,8 +29,8 @@ template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time
 template <std::size_t CurrentN, typename>
 PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const InputType a, const InputType b,
                                                                             const InputType *pts)
-    : n_terms(static_cast<int>(CurrentN)), low(InputType(1) / (b - a)), hi(b + a) {
-    assert(n_terms > 0 && "Polynomial degree must be positive (template N > 0)");
+    : low(InputType(1) / (b - a)), hi(b + a) {
+    static_assert(CurrentN > 0, "Polynomial degree must be positive (template N > 0)");
     initialize_monomials(F, pts);
 }
 
@@ -45,6 +43,7 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(const InputType p
 }
 
 // Batch evaluation implementation using SIMD and unrolling
+PF_FAST_EVAL_BEGIN
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <int OuterUnrollFactor, bool pts_aligned, bool out_aligned>
 PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::horner_polyeval(
@@ -54,6 +53,7 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_tim
     return horner<N_compile_time, pts_aligned, out_aligned, OuterUnrollFactor>(
         pts, out, num_points, monomials.data(), monomials.size(), [this](const auto v) { return map_from_domain(v); });
 }
+PF_FAST_EVAL_END
 
 // MUST be defined in a c++ source file
 // This is a workaround for the compiler to not the inline the function passed to it.
@@ -61,6 +61,7 @@ template <typename F, typename... Args> PF_NO_INLINE static auto noinline(F &&f,
     return std::forward<F>(f)(std::forward<Args>(args)...);
 }
 
+PF_FAST_EVAL_BEGIN
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <bool pts_aligned, bool out_aligned>
 PF_ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(
@@ -68,7 +69,11 @@ PF_ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_tim
     // find out the alignment of pts and out
     // constexpr auto simd_size = xsimd::batch<InputType>::size;
     constexpr auto alignment = xsimd::batch<OutputType>::arch_type::alignment();
-    constexpr auto unroll_factor = 0;
+#ifdef PF_OUTER_UNROLL
+    PF_C23STATIC constexpr auto unroll_factor = PF_OUTER_UNROLL;
+#else
+    PF_C23STATIC constexpr auto unroll_factor = 0;
+#endif
 
     // const auto monomial_ptr = monomials.data();
     // const auto monomial_size = monomials.size();
@@ -118,6 +123,7 @@ PF_ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_tim
                                                           num_points - unaligned_points);
     }
 }
+PF_FAST_EVAL_END
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 PF_C20CONSTEXPR const Buffer<typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType, N_compile_time> &
@@ -129,17 +135,14 @@ template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time
 template <class T>
 PF_ALWAYS_INLINE constexpr T
 FuncEval<Func, N_compile_time, Iters_compile_time>::map_to_domain(const T T_arg) const noexcept {
-    return static_cast<T>(0.5 * (T_arg / low + hi));
+    return polyfit::internal::helpers::map_to_domain_scalar(T_arg, low, hi);
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template <class T>
 PF_ALWAYS_INLINE constexpr T
 FuncEval<Func, N_compile_time, Iters_compile_time>::map_from_domain(const T T_arg) const noexcept {
-    if constexpr (std::is_arithmetic_v<T>) {
-        return static_cast<T>(std::fma(2.0, T_arg, -T(hi)) * low);
-    }
-    return static_cast<T>(xsimd::fms(T(2.0), T_arg, T(hi)) * low);
+    return polyfit::internal::helpers::map_from_domain_scalar(T_arg, low, hi);
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
@@ -148,17 +151,18 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
     // 1) allocate
     Buffer<InputType, N_compile_time> grid{};
     if constexpr (N_compile_time == 0)
-        grid.resize(n_terms);
+        grid.resize(monomials.size());
 
     Buffer<OutputType, N_compile_time> samples{};
     if constexpr (N_compile_time == 0)
-        samples.resize(n_terms);
+        samples.resize(monomials.size());
 
     // 2) fill
-    for (auto k = 0; k < n_terms; ++k) {
+    const auto n_terms = static_cast<int>(monomials.size());
+    for (int k = 0; k < n_terms; ++k) {
         grid[k] = pts ? pts[k] : InputType(detail::cos((2.0 * InputType(k) + 1.0) * M_PI / (2.0 * n_terms)));
     }
-    for (auto i = 0; i < n_terms; ++i) {
+    for (int i = 0; i < n_terms; ++i) {
         samples[i] = F(map_to_domain(grid[i]));
     }
 
@@ -182,8 +186,9 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
         // residuals
         Buffer<OutputType, N_compile_time> r_cheb;
         if constexpr (N_compile_time == 0) {
-            r_cheb.resize(n_terms);
+            r_cheb.resize(monomials.size());
         }
+        const auto n_terms = static_cast<int>(monomials.size());
         std::reverse(monomials.begin(), monomials.end());
         for (int i = 0; i < n_terms; ++i) {
             auto xi = x_cheb_[i];
@@ -216,9 +221,9 @@ template <typename... EvalTypes> FuncEvalMany<EvalTypes...>::FuncEvalMany(const 
 
     /* Degree‑dependent storage */
     if constexpr (deg_max_ctime_ == 0) {
-        deg_max_ = std::max({evals.n_terms...});
-        coeff_store_.assign(kF_pad * deg_max_, OutputType{});
-        coeffs_ = decltype(coeffs_){coeff_store_.data(), deg_max_, kF_pad};
+        const std::size_t deg_max = std::max({std::size_t(evals.monomials.size())...});
+        coeff_store_.assign(kF_pad * deg_max, OutputType{});
+        coeffs_ = decltype(coeffs_){coeff_store_.data(), deg_max, kF_pad};
     } else {
         coeffs_ = decltype(coeffs_){coeff_store_.data(), deg_max_ctime_, kF_pad};
     }
@@ -230,9 +235,8 @@ template <typename... EvalTypes> FuncEvalMany<EvalTypes...>::FuncEvalMany(const 
 
 template <typename... EvalTypes>
 FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
-    : coeff_store_(other.coeff_store_),
-      coeffs_{coeff_store_.data(), other.coeffs_.extents()},
-      low_(other.low_), hi_(other.hi_), deg_max_(other.deg_max_) {}
+        : coeff_store_(other.coeff_store_), coeffs_{coeff_store_.data(), other.coeffs_.extents()}, low_(other.low_),
+            hi_(other.hi_) {}
 
 template <typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
@@ -240,7 +244,6 @@ auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEva
         coeff_store_ = other.coeff_store_;
         low_ = other.low_;
         hi_ = other.hi_;
-        deg_max_ = other.deg_max_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -248,9 +251,8 @@ auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEva
 
 template <typename... EvalTypes>
 FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
-    : coeff_store_(std::move(other.coeff_store_)),
-      coeffs_{coeff_store_.data(), other.coeffs_.extents()},
-      low_(std::move(other.low_)), hi_(std::move(other.hi_)), deg_max_(other.deg_max_) {}
+        : coeff_store_(std::move(other.coeff_store_)), coeffs_{coeff_store_.data(), other.coeffs_.extents()},
+            low_(std::move(other.low_)), hi_(std::move(other.hi_)) {}
 
 template <typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
@@ -258,7 +260,6 @@ auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> Fun
         coeff_store_ = std::move(other.coeff_store_);
         low_ = std::move(other.low_);
         hi_ = std::move(other.hi_);
-        deg_max_ = other.deg_max_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -268,10 +269,11 @@ auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> Fun
 
 template <typename... EvalTypes> std::size_t FuncEvalMany<EvalTypes...>::size() const noexcept { return kF; }
 
-template <typename... EvalTypes> std::size_t FuncEvalMany<EvalTypes...>::degree() const noexcept { return deg_max_; }
+template <typename... EvalTypes> std::size_t FuncEvalMany<EvalTypes...>::degree() const noexcept { return coeffs_.extent(0); }
 
 // ------------------------------ scalar eval ----------------------------
 
+PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
 std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
 FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept {
@@ -281,16 +283,18 @@ FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept {
 
     std::array<OutputType, kF_pad> res{};
     horner_transposed<kF_pad, deg_max_ctime_, vector_width>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                            deg_max_);
+                                                            static_cast<std::size_t>(coeffs_.extent(0)));
 
     if constexpr (kF == kF_pad) {
         return res; // no padding
     }
     return extract_real(res);
 }
+PF_FAST_EVAL_END
 
 // ------------------------------ array eval -----------------------------
 
+PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
 std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
 FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept {
@@ -300,12 +304,14 @@ FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) cons
 
     std::array<OutputType, kF_pad> res{};
     horner_transposed<kF_pad, deg_max_ctime_, vector_width>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                            deg_max_);
+                                                            static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
+PF_FAST_EVAL_END
 
 // ------------------------------ bulk eval ------------------------------
 
+PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
 void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
                                             std::size_t num_points) const noexcept {
@@ -319,6 +325,7 @@ void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
         detail::unroll_loop<M>([&](const auto I) { out_m(i, decltype(I)::value) = vals[decltype(I)::value]; });
     }
 }
+PF_FAST_EVAL_END
 
 // ------------------------------ variadic convenience -------------------
 
@@ -346,10 +353,10 @@ FuncEvalMany<EvalTypes...>::operator()(const std::tuple<Ts...> &tup) const noexc
 
 template <typename... EvalTypes>
 template <std::size_t I, typename FE, typename... Rest>
-void FuncEvalMany<EvalTypes...>::copy_coeffs(const FE &fe, const Rest &...rest) {
-    for (auto k = 0; k < fe.n_terms; ++k)
-        coeffs_(k, I) = fe.monomials[k];
-    for (auto k = std::size_t(fe.n_terms); k < deg_max_; ++k)
+void FuncEvalMany<EvalTypes...>::copy_coeffs(const FE &eval, const Rest &...rest) {
+    for (std::size_t k = 0; k < eval.monomials.size(); ++k)
+        coeffs_(k, I) = eval.monomials[k];
+    for (std::size_t k = eval.monomials.size(); k < coeffs_.extent(0); ++k)
         coeffs_(k, I) = OutputType{};
     if constexpr (I + 1 < kF)
         copy_coeffs<I + 1>(rest...);
@@ -359,7 +366,7 @@ void FuncEvalMany<EvalTypes...>::copy_coeffs(const FE &fe, const Rest &...rest) 
 
 template <typename... EvalTypes> void FuncEvalMany<EvalTypes...>::zero_pad_coeffs() {
     for (std::size_t j = kF; j < kF_pad; ++j)
-        for (std::size_t k = 0; k < deg_max_; ++k)
+        for (std::size_t k = 0; k < coeffs_.extent(0); ++k)
             coeffs_(k, j) = OutputType{};
 }
 
@@ -381,31 +388,28 @@ FuncEvalMany<EvalTypes...>::extract_real(const std::array<OutputType, kF_pad> &f
 template <class Func, std::size_t N_compile>
 template <std::size_t C, typename>
 constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, const InputType &a, const InputType &b)
-    : func_{f}, degree_{static_cast<int>(N_compile)}, coeffs_flat_(), coeffs_md_{coeffs_flat_.data(), extents_t{}} {
+    : coeffs_flat_(), coeffs_md_{coeffs_flat_.data(), extents_t{}} {
     compute_scaling(a, b);
-    initialize(static_cast<int>(N_compile));
+    initialize(static_cast<int>(N_compile), f);
 }
 
 // Constructor for dynamic degree
 template <class Func, std::size_t N_compile>
 template <std::size_t C, typename>
 constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, int n, const InputType &a, const InputType &b)
-    : func_{f}, degree_{n}, coeffs_flat_(storage_required(n)), coeffs_md_{coeffs_flat_.data(), make_ext(n)} {
+    : coeffs_flat_(storage_required(n)), coeffs_md_{coeffs_flat_.data(), make_ext(n)} {
     compute_scaling(a, b);
-    initialize(n);
+    initialize(n, f);
 }
 
 template <class Func, std::size_t N_compile>
 FuncEvalND<Func, N_compile>::FuncEvalND(const FuncEvalND &other)
-    : func_(other.func_), degree_(other.degree_), low_(other.low_), hi_(other.hi_),
-      coeffs_flat_(other.coeffs_flat_),
-      coeffs_md_{coeffs_flat_.data(), other.coeffs_md_.extents()} {}
+    : low_(other.low_), hi_(other.hi_), coeffs_flat_(other.coeffs_flat_), coeffs_md_{coeffs_flat_.data(),
+                                             other.coeffs_md_.extents()} {}
 
 template <class Func, std::size_t N_compile>
 auto FuncEvalND<Func, N_compile>::operator=(const FuncEvalND &other) -> FuncEvalND & {
     if (this != &other) {
-        func_ = other.func_;
-        degree_ = other.degree_;
         low_ = other.low_;
         hi_ = other.hi_;
         coeffs_flat_ = other.coeffs_flat_;
@@ -416,15 +420,12 @@ auto FuncEvalND<Func, N_compile>::operator=(const FuncEvalND &other) -> FuncEval
 
 template <class Func, std::size_t N_compile>
 FuncEvalND<Func, N_compile>::FuncEvalND(FuncEvalND &&other) noexcept
-    : func_(std::move(other.func_)), degree_(other.degree_), low_(std::move(other.low_)), hi_(std::move(other.hi_)),
-      coeffs_flat_(std::move(other.coeffs_flat_)),
+    : low_(std::move(other.low_)), hi_(std::move(other.hi_)), coeffs_flat_(std::move(other.coeffs_flat_)),
       coeffs_md_{coeffs_flat_.data(), other.coeffs_md_.extents()} {}
 
 template <class Func, std::size_t N_compile>
 auto FuncEvalND<Func, N_compile>::operator=(FuncEvalND &&other) noexcept -> FuncEvalND & {
     if (this != &other) {
-        func_ = std::move(other.func_);
-        degree_ = other.degree_;
         low_ = std::move(other.low_);
         hi_ = std::move(other.hi_);
         coeffs_flat_ = std::move(other.coeffs_flat_);
@@ -434,12 +435,15 @@ auto FuncEvalND<Func, N_compile>::operator=(FuncEvalND &&other) noexcept -> Func
 }
 
 // Evaluate via Horner's method
+PF_FAST_EVAL_BEGIN
 template <class Func, std::size_t N_compile>
 template <bool SIMD>
 typename FuncEvalND<Func, N_compile>::OutputType constexpr FuncEvalND<Func, N_compile>::operator()(
     const InputType & x) const {
-    return poly_eval::horner<N_compile, SIMD, OutputType>(map_from_domain(x), coeffs_md_, degree_);
+    const int deg_rt = (N_compile ? static_cast<int>(N_compile) : static_cast<int>(coeffs_md_.extent(0)));
+    return poly_eval::horner<N_compile, SIMD, OutputType>(map_from_domain(x), coeffs_md_, deg_rt);
 }
+PF_FAST_EVAL_END
 
 // coeff_impl
 template <class Func, std::size_t N_compile>
@@ -476,8 +480,7 @@ constexpr std::size_t FuncEvalND<Func, N_compile>::storage_required(const int n)
     auto mapping = typename mdspan_t::mapping_type{ext};
     return mapping.required_span_size();
 }
-
-template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_compile>::initialize(int n) {
+template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_compile>::initialize(int n, Func f) {
     Buffer<Scalar, N_compile> nodes{};
     if constexpr (!N_compile)
         nodes.resize(n);
@@ -492,7 +495,7 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
         InputType x_dom{};
         for (std::size_t d = 0; d < dim_; ++d)
             x_dom[d] = nodes[idx[d]];
-        OutputType y = func_(map_to_domain(x_dom));
+        OutputType y = f(map_to_domain(x_dom));
         for (std::size_t k = 0; k < outDim_; ++k)
             coeff(idx, k) = y[k];
     });
@@ -552,27 +555,18 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
 template <class Func, std::size_t N_compile>
 [[nodiscard]] constexpr typename FuncEvalND<Func, N_compile>::InputType
 FuncEvalND<Func, N_compile>::map_to_domain(const InputType &t) const noexcept {
-    InputType out{};
-    for (std::size_t d = 0; d < dim_; ++d)
-        out[d] = Scalar(0.5) * (t[d] / low_[d] + hi_[d]);
-    return out;
+    return polyfit::internal::helpers::map_to_domain_array<Scalar, dim_>(t, low_, hi_);
 }
 
 template <class Func, std::size_t N_compile>
 [[nodiscard]] constexpr typename FuncEvalND<Func, N_compile>::InputType
 FuncEvalND<Func, N_compile>::map_from_domain(const InputType &x) const noexcept {
-    InputType out{};
-    for (std::size_t d = 0; d < dim_; ++d)
-        out[d] = (Scalar(2) * x[d] - hi_[d]) * low_[d];
-    return out;
+    return polyfit::internal::helpers::map_from_domain_array<Scalar, dim_>(x, low_, hi_);
 }
 
 template <class Func, std::size_t N_compile>
 constexpr void FuncEvalND<Func, N_compile>::compute_scaling(const InputType &a, const InputType &b) noexcept {
-    for (std::size_t d = 0; d < dim_; ++d) {
-        low_[d] = Scalar(1) / (b[d] - a[d]);
-        hi_[d] = b[d] + a[d];
-    }
+    polyfit::internal::helpers::compute_scaling_array<Scalar, dim_>(a, b, low_, hi_);
 }
 
 template <class Func, std::size_t N_compile>
