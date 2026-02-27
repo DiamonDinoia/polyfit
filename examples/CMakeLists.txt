@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(polyfit_examples VERSION 1.0.0 LANGUAGES CXX)
 
+include(PolyfitWarnings)
+include(PolyfitSanitizers)
+include(PolyfitStaticAnalysis)
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-std=c++20" COMPILER_SUPPORTS_CXX20)
 if (COMPILER_SUPPORTS_CXX20)
@@ -30,6 +34,16 @@ foreach(src IN LISTS SOURCES)
     get_filename_component(name ${src} NAME_WE)
     add_executable(${name} ${src})
     target_link_libraries(${name} PRIVATE polyfit::polyfit)
+    if (POLYFIT_STRICT_WARNINGS)
+        polyfit_enable_warnings(${name})
+    endif ()
+    polyfit_enable_sanitizers(${name})
+    polyfit_configure_static_analysis(${name})
+    if (POLYFIT_ENABLE_NATIVE_TUNING)
+        target_compile_options(${name} PRIVATE
+                $<$<CXX_COMPILER_ID:GNU,Clang>:-march=native>
+        )
+    endif ()
     list(APPEND EXAMPLE_TARGETS ${name})
 endforeach()
 

@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }} (${{ matrix.toolchain }} ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        include:
+          - os: ubuntu-24.04
+            toolchain: gcc
+          - os: ubuntu-24.04
+            toolchain: llvm
+          - os: macos-14
+            toolchain: apple-clang
+          - os: windows-2022
+            toolchain: msvc
+            multi_config: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup C++ toolchain
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: ${{ matrix.toolchain }}
+          cmake: true
+          ninja: true
+          cache-tools: true
+          vcvarsall: ${{ runner.os == 'Windows' }}
+
+      - name: Configure
+        if: ${{ !matrix.multi_config }}
+        shell: bash
+        run: |
+          SANITIZERS=OFF
+          if [ "$RUNNER_OS" = "Linux" ] && [ "${{ matrix.build_type }}" = "Debug" ]; then
+            SANITIZERS=ON
+          fi
+          cmake -S . -B build/${{ matrix.build_type }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DPOLYFIT_BUILD_TESTS=ON \
+            -DPOLYFIT_BUILD_EXAMPLES=ON \
+            -DPOLYFIT_STRICT_WARNINGS=ON \
+            -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
+            -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS}
+
+      - name: Build
+        if: ${{ !matrix.multi_config }}
+        run: cmake --build build/${{ matrix.build_type }}
+
+      - name: Test
+        if: ${{ !matrix.multi_config }}
+        run: ctest --output-on-failure --test-dir build/${{ matrix.build_type }}
+
+      - name: Configure (multi-config)
+        if: matrix.multi_config
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -A x64 `
+            -DPOLYFIT_BUILD_TESTS=ON `
+            -DPOLYFIT_BUILD_EXAMPLES=ON `
+            -DPOLYFIT_STRICT_WARNINGS=ON `
+            -DPOLYFIT_WARNINGS_AS_ERRORS=ON `
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF
+
+      - name: Build (multi-config)
+        if: matrix.multi_config
+        shell: pwsh
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Test (multi-config)
+        if: matrix.multi_config
+        shell: pwsh
+        run: ctest --output-on-failure --test-dir build -C ${{ matrix.build_type }}
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.toolchain }}-logs
+          path: |
+            build/**/Testing/**/*.log
+            build/**/Testing/**/*.xml
+          if-no-files-found: ignore
+
+  analysis:
+    name: Static Analysis
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy cppcheck ninja-build
+
+      - name: Configure analysis
+        run: |
+          cmake -S . -B build/analyze \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYFIT_BUILD_TESTS=ON \
+            -DPOLYFIT_BUILD_EXAMPLES=OFF \
+            -DPOLYFIT_STRICT_WARNINGS=ON \
+            -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DPOLYFIT_ENABLE_CLANG_TIDY=ON \
+            -DPOLYFIT_ENABLE_CPPCHECK=ON
+
+      - name: Build (analysis)
+        run: cmake --build build/analyze
+
+      - name: Test (analysis)
+        run: ctest --output-on-failure --test-dir build/analyze
+
+      - name: Upload analysis logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-logs
+          path: |
+            build/analyze/**/Testing/**/*.log
+            build/analyze/**/*.txt
+          if-no-files-found: ignore
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup C++ toolchain
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: gcc-13
+          cmake: true
+          ninja: true
+          cache-tools: true
+
+      - name: Install coverage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Configure (coverage)
+        run: |
+          cmake -S . -B build/coverage \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPOLYFIT_BUILD_TESTS=ON \
+            -DPOLYFIT_BUILD_EXAMPLES=OFF \
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DPOLYFIT_ENABLE_COVERAGE=ON
+
+      - name: Build coverage target
+        run: cmake --build build/coverage --target coverage
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            build/coverage/coverage.info
+            build/coverage/coverage.filtered.info
+            build/coverage/coverage/**
+            build/coverage/coverage-report.html
+          if-no-files-found: warn

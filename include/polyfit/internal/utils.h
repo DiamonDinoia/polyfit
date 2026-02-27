@@ -180,9 +180,9 @@ constexpr double cos(const double x) noexcept {
     const int n = static_cast<int>(fn + (fn >= 0.0 ? 0.5 : -0.5));
     const int q = n & 3; // quadrant 0‥3
     const auto y = [n, x] {
-        double y = std::fma(-n, PIO2_HI, x);
-        y = std::fma(-n, PIO2_LO, y);
-        return y;
+        double reduced = std::fma(-n, PIO2_HI, x);
+        reduced = std::fma(-n, PIO2_LO, reduced);
+        return reduced;
     }();
     /* cos & sin minimax polynomials as lambdas with embedded coeffs */
     constexpr auto cos_poly = [](const double yy) constexpr {
@@ -342,8 +342,13 @@ constexpr auto make_static_extents(std::index_sequence<Is...>) {
 template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) {
     // we'll store each “point” in a Buffer<T,M>
     Buffer<T, M> points{};
+    if (num_points <= 0) {
+        return points;
+    }
+
+    const auto count = static_cast<std::size_t>(num_points);
     if constexpr (M == 0) {
-        points.resize(num_points);
+        points.resize(count);
     }
 
     // scalar case
@@ -354,15 +359,15 @@ template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &
             }
             return points;
         }
-        T step = (end - start) / T(num_points - 1);
-        for (int i = 0; i < num_points; ++i) {
-            points[i] = start + (T(i) * step);
+        const T step = (end - start) / static_cast<T>(count - 1);
+        for (std::size_t i = 0; i < count; ++i) {
+            points[i] = start + (static_cast<T>(i) * step);
         }
         return points;
     }
     // array case: T must be std::array<Scalar,D>
     else {
-        constexpr size_t D = std::tuple_size_v<std::remove_cvref_t<T>>;
+        constexpr std::size_t D = std::tuple_size_v<std::remove_cvref_t<T>>;
         if (num_points <= 1) {
             if (num_points == 1) {
                 points[0] = start;
@@ -371,13 +376,13 @@ template <std::size_t M = 0, typename T> PF_C20CONSTEXPR auto linspace(const T &
         }
         using Scalar = std::remove_cv_t<decltype(start[0])>;
         T step{};
-        for (size_t i = 0; i < D; ++i) {
-            step[i] = (end[i] - start[i]) / Scalar(num_points - 1);
+        for (std::size_t i = 0; i < D; ++i) {
+            step[i] = (end[i] - start[i]) / static_cast<Scalar>(count - 1);
         }
 
-        for (int k = 0; k < num_points; ++k) {
-            for (size_t i = 0; i < D; ++i) {
-                points[k][i] = start[i] + (Scalar(k) * step[i]);
+        for (std::size_t k = 0; k < count; ++k) {
+            for (std::size_t i = 0; i < D; ++i) {
+                points[k][i] = start[i] + (static_cast<Scalar>(k) * step[i]);
             }
         }
         return points;

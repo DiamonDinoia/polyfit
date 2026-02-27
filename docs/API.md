@@ -59,7 +59,7 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 ## Running Tests and Benchmarks
 
 - Configure with tests enabled:
-  - `cmake -S . -B build -DMONOFIT_BUILD_TESTS=ON`
+  - `cmake -S . -B build -DPOLYFIT_BUILD_TESTS=ON`
 - Build and run tests (creates both C++17 and C++20 variants):
   - `cmake --build build`
   - `ctest --test-dir build --output-on-failure`
@@ -101,4 +101,3 @@ Padding and SIMD notes:
   the implementation pads coefficients to the next vector width (`kF_pad`).
 - Use the bulk `operator()(const InputType *x, OutputType *out, std::size_t)`
   overload to drive efficient vectorized evaluation across many points.
-

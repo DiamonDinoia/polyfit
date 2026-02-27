@@ -221,7 +221,7 @@ cmake --build build --target run_examples
 
 - The test suite builds and runs for C++17 and C++20.
 - Enable tests and build:
-  - `cmake -S . -B build -DMONOFIT_BUILD_TESTS=ON`
+  - `cmake -S . -B build -DPOLYFIT_BUILD_TESTS=ON`
   - `cmake --build build`
   - `ctest --test-dir build --output-on-failure`
 - Per-standard test targets are generated (e.g., `test_horner_cxx17`, `test_horner_cxx20`).

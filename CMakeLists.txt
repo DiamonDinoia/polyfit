@@ -6,6 +6,37 @@ project(polyfit
         LANGUAGES CXX
 )
 
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(CTest)
+
+# Backward-compatible aliases for legacy option names.
+if (DEFINED MONOFIT_BUILD_TESTS AND NOT DEFINED POLYFIT_BUILD_TESTS)
+    message(DEPRECATION "MONOFIT_BUILD_TESTS is deprecated; use POLYFIT_BUILD_TESTS")
+    set(POLYFIT_BUILD_TESTS "${MONOFIT_BUILD_TESTS}" CACHE BOOL "Build tests" FORCE)
+endif ()
+if (DEFINED MONOFIT_BUILD_EXAMPLES AND NOT DEFINED POLYFIT_BUILD_EXAMPLES)
+    message(DEPRECATION "MONOFIT_BUILD_EXAMPLES is deprecated; use POLYFIT_BUILD_EXAMPLES")
+    set(POLYFIT_BUILD_EXAMPLES "${MONOFIT_BUILD_EXAMPLES}" CACHE BOOL "Build examples" FORCE)
+endif ()
+if (DEFINED MONOFIT_ENABLE_SANITIZERS AND NOT DEFINED POLYFIT_ENABLE_SANITIZERS)
+    message(DEPRECATION "MONOFIT_ENABLE_SANITIZERS is deprecated; use POLYFIT_ENABLE_SANITIZERS")
+    set(POLYFIT_ENABLE_SANITIZERS "${MONOFIT_ENABLE_SANITIZERS}" CACHE BOOL "Enable sanitizers" FORCE)
+endif ()
+
+if (NOT DEFINED POLYFIT_BUILD_TESTS)
+    set(POLYFIT_BUILD_TESTS "${BUILD_TESTING}")
+endif ()
+
+option(POLYFIT_BUILD_TESTS "Build tests" "${POLYFIT_BUILD_TESTS}")
+option(POLYFIT_BUILD_EXAMPLES "Build examples" ON)
+option(POLYFIT_STRICT_WARNINGS "Enable strict warning profile for project targets" ON)
+option(POLYFIT_ENABLE_NATIVE_TUNING "Enable -march=native tuning for benchmark/example targets" OFF)
+option(POLYFIT_ENABLE_COVERAGE "Enable coverage instrumentation for project/test targets" OFF)
+
+include(PolyfitWarnings)
+include(PolyfitSanitizers)
+include(PolyfitStaticAnalysis)
+
 # -----------------------------------------
 # CPM (CMake Package Manager) bootstrap
 # -----------------------------------------
@@ -90,6 +121,17 @@ target_link_libraries(polyfit INTERFACE
         $<BUILD_INTERFACE:xsimd;std::mdspan;poet::poet>
 )
 
+# Keep third-party headers as SYSTEM for consumers so strict warning profiles
+# apply to project code rather than dependency internals.
+foreach(_dep_target IN ITEMS xsimd std::mdspan poet::poet)
+    if (TARGET ${_dep_target})
+        get_target_property(_dep_includes ${_dep_target} INTERFACE_INCLUDE_DIRECTORIES)
+        if (_dep_includes)
+            target_include_directories(polyfit SYSTEM INTERFACE "${_dep_includes}")
+        endif ()
+    endif ()
+endforeach ()
+
 # -----------------------------------------
 # Install (headers + targets + package config)
 # -----------------------------------------
@@ -138,14 +180,11 @@ install(FILES
 # -----------------------------------------
 # Options: tests / examples
 # -----------------------------------------
-option(MONOFIT_BUILD_TESTS "Build tests" OFF)
-if (MONOFIT_BUILD_TESTS)
-    option(MONOFIT_ENABLE_SANITIZERS "Enable sanitizers for debugging (ASan/UBSan/etc.)" ON)
+if (POLYFIT_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif ()
 
-option(MONOFIT_BUILD_EXAMPLES "Build examples" ON)
-if (MONOFIT_BUILD_EXAMPLES)
+if (POLYFIT_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif ()
