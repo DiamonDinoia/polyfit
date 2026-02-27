@@ -4,6 +4,8 @@
 #include "utils.h"
 #include "simd_utils.h"
 
+#include <poet/poet.hpp>
+
 #include <cassert>
 #include <cstddef>
 
@@ -154,14 +156,14 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coe
                 inner = horner_nd_impl<Level - 1, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
             } else {
                 //  last spatial level → read the coefficient vector (C++17-compatible)
-                detail::unroll_loop<OUT>([&](const auto i) {
+                poet::static_for<static_cast<std::intmax_t>(OUT)>([&](const auto i) {
                     constexpr auto d = decltype(i)::value;
                     inner[d] = detail::call_coeffs<Dim>(coeffs, idx, d);
                 });
             }
 
             /* ---------- Horner accumulate along this axis ---------- */
-            detail::unroll_loop<OUT>([&](const auto i) {
+            poet::static_for<static_cast<std::intmax_t>(OUT)>([&](const auto i) {
                 constexpr auto d = decltype(i)::value;
                 res[d] = std::fma(res[d], x[axis], inner[d]);
             });
@@ -183,20 +185,20 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coe
         if constexpr (Level > 1) {
             inner = horner_nd_impl<Level - 1, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
         } else {
-            detail::unroll_loop<OUT>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<static_cast<std::intmax_t>(OUT)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto d = decltype(I)::value;
                 inner[d] = call_coeffs<Dim>(coeffs, idx, d);
             });
         }
 
-        detail::unroll_loop<0, OUT, /*Inc=*/batch::size>([&]([[maybe_unused]] const auto I) {
+        poet::static_for<0, static_cast<std::intmax_t>(OUT), static_cast<std::intmax_t>(batch::size)>([&]([[maybe_unused]] const auto I) {
             constexpr auto d = decltype(I)::value;
             if constexpr (d + batch::size <= OUT) {
                 auto in = batch::load_aligned(inner.data() + d);
                 auto r = batch::load_aligned(res.data() + d);
                 detail::fma(r, x_vec, in).store_aligned(res.data() + d);
             } else {
-                detail::unroll_loop<d, OUT>([&]([[maybe_unused]] const auto J) {
+                poet::static_for<static_cast<std::intmax_t>(d), static_cast<std::intmax_t>(OUT)>([&]([[maybe_unused]] const auto J) {
                     constexpr auto last = decltype(J)::value;
                     res[last] = detail::fma(res[last], typename OutT::value_type(x[axis]), inner[last]);
                 });
@@ -225,7 +227,7 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
     if constexpr (N_total != 0) {
         // Compile-time unrolled Horner on reversed array
         OutputType acc = c_ptr[0];
-        detail::unroll_loop<1, N_total>([&]([[maybe_unused]] const auto I) {
+        poet::static_for<1, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
             constexpr auto k = decltype(I)::value;
             acc = detail::fma(acc, x, c_ptr[k]);
         });
@@ -262,7 +264,7 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         xsimd::batch<OutputType> acc_batches[OuterUnrollFactor];
 
         // Load and init with highest-degree term
-        detail::unroll_loop<OuterUnrollFactor>([&]([[maybe_unused]] const auto I) {
+        poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
             constexpr auto j = decltype(I)::value;
             pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
             acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
@@ -270,16 +272,16 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
 
         // Horner steps
         if constexpr (N_monomials != 0) {
-            detail::unroll_loop<1, N_monomials>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<1, static_cast<std::intmax_t>(N_monomials)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto k = decltype(I)::value;
-                detail::unroll_loop<OuterUnrollFactor>([&]([[maybe_unused]] const auto J) {
+                poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto J) {
                     constexpr auto j = decltype(J)::value;
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
             });
         } else {
             for (std::size_t k = 1; k < monomials_size; ++k) {
-                detail::unroll_loop<OuterUnrollFactor>([&]([[maybe_unused]] const auto I) {
+                poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
                     constexpr auto j = decltype(I)::value;
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
@@ -287,7 +289,7 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         }
 
         // Store results
-        detail::unroll_loop<OuterUnrollFactor>([&]([[maybe_unused]] const auto I) {
+        poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
             constexpr auto j = decltype(I)::value;
             acc_batches[j].store(out + i + j * simd_size, out_mode{});
         });
@@ -312,7 +314,7 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputTyp
     const std::size_t n_lim = N_total ? N_total : N;
 
     if constexpr (M_total != 0) {
-        detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
+        poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
             constexpr auto m = decltype(I)::value;
             const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
             out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
@@ -347,7 +349,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
             std::array<batch_out, C> acc;
             std::array<batch_in, C> xvec;
 
-            detail::unroll_loop<C>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto ci = decltype(I)::value;
                 constexpr auto base = ci * simd_width;
                     xvec[ci] = batch_in::load_unaligned(xin + base);
@@ -355,11 +357,11 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
             });
 
             if constexpr (has_Nt) {
-                detail::unroll_loop<0, N_total>([&]([[maybe_unused]] const auto I) {
+                poet::static_for<0, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
                     constexpr auto k = decltype(I)::value;
                     if constexpr (k > 0) {
                         const auto col = coeffs + (k * stride);
-                        detail::unroll_loop<C>([&]([[maybe_unused]] const auto J) {
+                        poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto J) {
                             constexpr auto ci = decltype(J)::value;
                             constexpr auto base = ci * simd_width;
                             batch_out ck = batch_out::load_unaligned(col + base);
@@ -370,7 +372,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
             } else {
                 for (std::size_t k = 1; k < n_lim; ++k) {
                     const auto col = coeffs + (k * stride);
-                    detail::unroll_loop<C>([&]([[maybe_unused]] const auto I) {
+                    poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
                         constexpr auto ci = decltype(I)::value;
                         constexpr auto base = ci * simd_width;
                         batch_out ck = batch_out::load_unaligned(col + base);
@@ -379,7 +381,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
                 }
             }
 
-            detail::unroll_loop<C>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto ci = decltype(I)::value;
                 constexpr auto base = ci * simd_width;
                 acc[ci].store_unaligned(out + base);
@@ -410,7 +412,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
     } else {
         // Scalar path
         if constexpr (has_Mt) {
-            detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto i = decltype(I)::value;
                 out[i] = coeffs[i];
             });
@@ -423,7 +425,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         const auto step = [&](const std::size_t k) noexcept {
             const auto col = coeffs + (k * stride);
             if constexpr (has_Mt) {
-                detail::unroll_loop<M_total>([&]([[maybe_unused]] const auto I) {
+                poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
                     constexpr auto i = decltype(I)::value;
                     out[i] = detail::fma(out[i], xin[i], col[i]);
                 });
@@ -435,7 +437,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         };
 
         if constexpr (has_Nt) {
-            detail::unroll_loop<0, N_total>([&]([[maybe_unused]] const auto I) {
+            poet::static_for<0, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
                 constexpr auto k = decltype(I)::value;
                 if constexpr (k > 0) {
                     step(k);

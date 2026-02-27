@@ -36,7 +36,7 @@ int main() {
     bench.epochs(50);
 
     // 1D: scalar and SIMD runtime for degrees 8,16,24,32
-    std::vector<int> degs1d = {8, 16, 24, 32};
+    std::vector<size_t> degs1d = {8, 16, 24, 32};
     for (auto deg : degs1d) {
         // Scalar Horner runtime
         bench.context("FMAs", std::to_string(deg))
@@ -70,7 +70,7 @@ int main() {
     }
 
     // horner_many runtime for various (M, Deg)
-    std::vector<int> Ms = {4, 8, 12, 16};
+    std::vector<size_t> Ms = {4, 8, 12, 16};
     for (auto deg : degs1d) {
         for (auto M : Ms) {
             bench.context("FMAs", std::to_string(M * deg))
@@ -90,7 +90,7 @@ int main() {
     }
 
     // 2D ND Horner runtime for degrees 4,8,16,24
-    std::vector<int> degs2d = {4, 8, 16, 24};
+    std::vector<size_t> degs2d = {4, 8, 16, 24};
     for (auto deg : degs2d) {
         bench.context("FMAs", std::to_string(deg * deg * 2))
             .batch(1)
@@ -104,13 +104,13 @@ int main() {
                                                                                                        deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, deg));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }
 
     // 3D ND Horner runtime for degrees 4,8,16
-    std::vector<int> degs3d = {4, 8, 16};
+    std::vector<size_t> degs3d = {4, 8, 16};
     for (auto deg : degs3d) {
         bench.context("FMAs", std::to_string(deg * deg * deg * 3))
             .batch(1)
@@ -124,15 +124,15 @@ int main() {
                          coeffs.data(), deg, deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, deg));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }
 
     // 4D ND Horner runtime for degrees 4,8
-    std::vector<int> degs4d = {4, 8};
+    std::vector<size_t> degs4d = {4, 8};
     for (auto deg : degs4d) {
-        bench.context("FMAs", std::to_string(static_cast<int>(std::pow(deg, 4) * 4)))
+        bench.context("FMAs", std::to_string(static_cast<size_t>(std::pow(deg, 4) * 4)))
             .batch(1)
             .run("Dim=4, Deg=" + std::to_string(deg) + ", SIMD=No, ND4D",
                  [&] {
@@ -145,7 +145,7 @@ int main() {
                          coeffs.data(), deg, deg, deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng), dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, deg));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }

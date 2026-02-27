@@ -16,6 +16,8 @@
 
 #include "polyfit/fast_eval.hpp"
 
+#include <poet/poet.hpp>
+
 using std::size_t;
 
 // templated tolerance ~100× machine epsilon
@@ -136,19 +138,19 @@ TYPED_TEST_SUITE(HornerTyped, FloatingTypes);
 // ND Horner sweeps
 TYPED_TEST(HornerTyped, ND_Dim1_Deg2to32) {
     using T = TypeParam;
-    poly_eval::detail::unroll_loop<2, 32>([](auto D) { run_nd_horner<T, 1, decltype(D)::value>(); });
+    poet::static_for<2, 32>([](auto D) { run_nd_horner<T, 1, decltype(D)::value>(); });
 }
 TYPED_TEST(HornerTyped, ND_Dim2_Deg2to16) {
     using T = TypeParam;
-    poly_eval::detail::unroll_loop<2, 16>([](auto D) { run_nd_horner<T, 2, decltype(D)::value>(); });
+    poet::static_for<2, 16>([](auto D) { run_nd_horner<T, 2, decltype(D)::value>(); });
 }
 TYPED_TEST(HornerTyped, ND_Dim3_Deg2to8) {
     using T = TypeParam;
-    poly_eval::detail::unroll_loop<2, 8>([](auto D) { run_nd_horner<T, 3, decltype(D)::value>(); });
+    poet::static_for<2, 8>([](auto D) { run_nd_horner<T, 3, decltype(D)::value>(); });
 }
 TYPED_TEST(HornerTyped, ND_Dim4_Deg2to4) {
     using T = TypeParam;
-    poly_eval::detail::unroll_loop<2, 4>([](auto D) { run_nd_horner<T, 4, decltype(D)::value>(); });
+    poet::static_for<2, 4>([](auto D) { run_nd_horner<T, 4, decltype(D)::value>(); });
 }
 
 // Scalar Horner

@@ -16,7 +16,7 @@ static auto float_func = [](const float x) { return std::cos(x); };
 static auto complex_func = [](const double x) { return std::complex<double>(x * x, std::sin(x)); };
 
 // Number of random test points
-static constexpr int kNumRandomTests = 100;
+static constexpr std::size_t kNumRandomTests = 100;
 
 // Helper to batch-evaluate and compare
 template <typename T>
@@ -37,7 +37,7 @@ TEST(PolyEval, RuntimeDegreeDoubleRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
     }
@@ -60,7 +60,7 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<float> dist(a, b);
     std::vector<float> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), float_func(xs[i])), eps);
     }
@@ -91,7 +91,7 @@ TEST(PolyEval, CompileTimeDegreeDoubleRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
     }
@@ -113,7 +113,7 @@ TEST(PolyEval, ErrorDrivenRuntimeEpsRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
     }
@@ -133,7 +133,7 @@ TEST(PolyEval, RuntimeDegreeComplexRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
@@ -154,7 +154,7 @@ TEST(PolyEval, CompileDegreeComplexRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
@@ -174,7 +174,7 @@ TEST(PolyEval, RuntimeEpsComplexRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
@@ -200,7 +200,7 @@ TEST(PolyEval, FullCompileTimeRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_NEAR(poly(xs[i]), double_constexpr_func(xs[i]), 1e-15) << "x=" << xs[i];
     }
@@ -220,7 +220,7 @@ TEST(PolyEval, FullCompileTimeEps) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         EXPECT_NEAR(poly(xs[i]), double_constexpr_func(xs[i]), eps) << "x=" << xs[i];
     }
@@ -242,7 +242,7 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
-    for (int i = 0; i < kNumRandomTests; ++i) {
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
         auto want = complex_constexpr_func(xs[i]);
         auto got = poly(xs[i]);

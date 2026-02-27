@@ -63,7 +63,7 @@ static bool dispatch(std::size_t n, const std::vector<double> &pts, ankerl::nano
     }
 }
 
-int main(int argc, char **argv) {
+int main(int /*argc*/, char ** /*argv*/) {
     // 1. generate the inputs once
     constexpr std::size_t num_points = 1024;
     std::mt19937 rng{42};

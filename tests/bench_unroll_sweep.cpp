@@ -10,7 +10,7 @@ int main() {
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
     const std::vector<int> unrolls = {1, 2, 4, 8, 16, 32};
-    const std::vector<int> degs = {8, 16, 24, 32};
+    const std::vector<std::size_t> degs = {8, 16, 24, 32};
 
     const std::size_t P = 1024;            // points per eval
     const int warmup_iters = 10;
@@ -33,7 +33,7 @@ int main() {
         int U = unrolls[ui];
         std::cout << "| " << U << " |";
         for (size_t di = 0; di < degs.size(); ++di) {
-            int deg = degs[di];
+            std::size_t deg = degs[di];
 
             // prepare coefficients
             std::vector<double> coeffs(deg);

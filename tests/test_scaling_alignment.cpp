@@ -51,7 +51,7 @@ TEST(HornerMany, ScalingTruePerPoly) {
 
 TEST(FuncEval, AlignmentVarianceBulkEval) {
     using T = double;
-    auto f = [](T x) { return std::sin(x) + T(0.25) * x; };
+    auto f = [](T x) { return std::sin(x) + 0.25 * x; };
     T a = -1.0, b = 1.0;
     auto fe = poly_eval::make_func_eval(f, 8, a, b);
 

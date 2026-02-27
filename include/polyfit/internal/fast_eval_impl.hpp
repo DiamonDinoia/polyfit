@@ -11,6 +11,8 @@
 #include "utils.h"
 #include "helpers.h"
 
+#include <poet/poet.hpp>
+
 namespace poly_eval {
 namespace detail {
 
@@ -171,11 +173,11 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
         samples.resize(monomials.size());
 
     // 2) fill
-    const auto n_terms = static_cast<int>(monomials.size());
-    for (int k = 0; k < n_terms; ++k) {
-        grid[k] = pts ? pts[k] : InputType(detail::cos((2.0 * InputType(k) + 1.0) * M_PI / (2.0 * n_terms)));
+    const auto n_terms = monomials.size();
+    for (std::size_t k = 0; k < n_terms; ++k) {
+        grid[k] = pts ? pts[k] : InputType(detail::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * double(n_terms))));
     }
-    for (int i = 0; i < n_terms; ++i) {
+    for (std::size_t i = 0; i < n_terms; ++i) {
         samples[i] = F(map_to_domain(grid[i]));
     }
 
@@ -201,9 +203,9 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
         if constexpr (N_compile_time == 0) {
             r_cheb.resize(monomials.size());
         }
-        const auto n_terms = static_cast<int>(monomials.size());
+        const auto n_terms = monomials.size();
         std::reverse(monomials.begin(), monomials.end());
-        for (int i = 0; i < n_terms; ++i) {
+        for (std::size_t i = 0; i < n_terms; ++i) {
             auto xi = x_cheb_[i];
             auto p_val = poly_eval::horner<N_compile_time>(xi, monomials.data(), monomials.size());
             r_cheb[i] = y_cheb_[i] - p_val;
@@ -335,7 +337,7 @@ void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
 
     for (std::size_t i = 0; i < num_points; ++i) {
         auto vals = operator()(x[i]);
-        detail::unroll_loop<M>([&](const auto I) { out_m(i, decltype(I)::value) = vals[decltype(I)::value]; });
+        poet::static_for<static_cast<std::intmax_t>(M)>([&](const auto I) { out_m(i, decltype(I)::value) = vals[decltype(I)::value]; });
     }
 }
 PF_FAST_EVAL_END
@@ -496,11 +498,12 @@ constexpr std::size_t FuncEvalND<Func, N_compile>::storage_required(const int n)
     return mapping.required_span_size();
 }
 template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_compile>::initialize(int n, Func f) {
+    const auto n_nodes = static_cast<std::size_t>(n);
     Buffer<Scalar, N_compile> nodes{};
     if constexpr (!N_compile)
-        nodes.resize(n);
-    for (int k = 0; k < n; ++k)
-        nodes[k] = detail::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * n));
+        nodes.resize(n_nodes);
+    for (std::size_t k = 0; k < n_nodes; ++k)
+        nodes[k] = detail::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * double(n)));
 
     std::array<int, dim_> ext_idx{};
     ext_idx.fill(n);
@@ -509,7 +512,7 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
     for_each_index<dim_>(ext_idx, [&](const std::array<int, dim_> &idx) {
         InputType x_dom{};
         for (std::size_t d = 0; d < dim_; ++d)
-            x_dom[d] = nodes[idx[d]];
+            x_dom[d] = nodes[static_cast<std::size_t>(idx[d])];
         OutputType y = f(map_to_domain(x_dom));
         for (std::size_t k = 0; k < outDim_; ++k)
             coeff(idx, k) = y[k];
@@ -518,9 +521,9 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
     // convert Newton → monomial along each axis
     Buffer<Scalar, N_compile> rhs{}, alpha{}, mono{};
     if constexpr (!N_compile) {
-        rhs.resize(n);
-        alpha.resize(n);
-        mono.resize(n);
+        rhs.resize(n_nodes);
+        alpha.resize(n_nodes);
+        mono.resize(n_nodes);
     }
 
     std::array<int, dim_> base_idx{};
@@ -529,16 +532,16 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
         inner_ext[axis] = 1;
         for_each_index<dim_>(inner_ext, [&](const std::array<int, dim_> &base) {
             for (std::size_t k = 0; k < outDim_; ++k) {
-                for (int i = 0; i < n; ++i) {
+                for (std::size_t i = 0; i < n_nodes; ++i) {
                     base_idx = base;
-                    base_idx[axis] = i;
+                    base_idx[axis] = static_cast<int>(i);
                     rhs[i] = coeff(base_idx, k);
                 }
                 alpha = detail::bjorck_pereyra<N_compile, Scalar, Scalar>(nodes, rhs);
                 mono = detail::newton_to_monomial<N_compile, Scalar, Scalar>(alpha, nodes);
-                for (int i = 0; i < n; ++i) {
+                for (std::size_t i = 0; i < n_nodes; ++i) {
                     base_idx = base;
-                    base_idx[axis] = i;
+                    base_idx[axis] = static_cast<int>(i);
                     coeff(base_idx, k) = mono[i];
                 }
             }
@@ -709,7 +712,7 @@ constexpr auto make_func_eval(Func F) {
             return max_err;
         };
         int n = 0;
-        detail::unroll_loop<2, MaxN_val>([&](const auto I) {
+        poet::static_for<2, static_cast<std::intmax_t>(MaxN_val)>([&](const auto I) {
             constexpr auto i = decltype(I)::value;
             using evaluator_t = std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, i>,
                                                    FuncEval<Func, i, Iters_compile_time>>;

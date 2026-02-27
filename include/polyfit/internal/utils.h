@@ -144,26 +144,6 @@ template <typename T> constexpr size_t get_alignment(const T *ptr) noexcept {
     return static_cast<size_t>(1) << detail::countr_zero(address);
 }
 
-template <std::size_t Start, std::size_t Stop, std::size_t Inc>
-inline constexpr std::size_t compute_range_count = (Start < Stop ? ((Stop - Start + Inc - 1) / Inc) : 0);
-
-/* – the unroll implementation that feeds you integral_constant<I>
-   Portable index_sequence-based implementation (no external deps). */
-template <std::size_t Start, std::size_t Inc, typename F, std::size_t... Is>
-constexpr void unroll_loop_impl(F &&f, std::index_sequence<Is...>) {
-    (f(std::integral_constant<std::size_t, Start + Is * Inc>{}), ...);
-}
-
-template <std::size_t Start, std::size_t Stop, std::size_t Inc = 1, typename F>
-constexpr void unroll_loop(F &&f) {
-    constexpr std::size_t Count = compute_range_count<Start, Stop, Inc>;
-    unroll_loop_impl<Start, Inc>(std::forward<F>(f), std::make_index_sequence<Count>{});
-}
-
-template <std::size_t Stop, typename F> constexpr void unroll_loop(F &&f) {
-    return unroll_loop<0, Stop, 1>(std::forward<F>(f));
-}
-
 constexpr double cos(const double x) noexcept {
     /* π/2 split (Cody-Waite) */
     constexpr double PIO2_HI = 1.57079632679489655800e+00;
@@ -257,25 +237,25 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
 // stand-alone Newton→monomial conversion
 template <std::size_t N, class X, class Y>
 PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
-    int n = static_cast<int>(alpha.size());
+    const std::size_t n = alpha.size();
     Buffer<Y, N * 2> c{0};
     if constexpr (N == 0) {
         c.reserve(n);
         c.push_back(Y(0));
     }
     std::size_t deg = 0;
-    for (int i = n - 1; i >= 0; --i) {
+    for (std::size_t ii = n; ii-- > 0;) {
         ++deg;
         if constexpr (N == 0) {
             c.push_back(Y(0));
         }
-        for (int j = static_cast<int>(deg); j >= 1; --j) {
-            c[j] = c[j - 1] - (nodes[i] * c[j]);
+        for (std::size_t j = deg; j >= 1; --j) {
+            c[j] = c[j - 1] - (nodes[ii] * c[j]);
         }
-        c[0] = (-nodes[i] * c[0]) + alpha[i];
+        c[0] = (-nodes[ii] * c[0]) + alpha[ii];
     }
     if constexpr (N == 0) {
-        if (static_cast<int>(c.size()) > n) {
+        if (c.size() > n) {
             c.resize(n);
         }
         return c;
@@ -410,8 +390,8 @@ template <typename T> PF_C20CONSTEXPR double relative_l2_norm(const T &approx, c
             denom += std::norm(actual[i]);
         }
     } else {
-        num += std::norm(approx - actual);
-        denom += std::norm(actual);
+        num += double(std::norm(approx - actual));
+        denom += double(std::norm(actual));
     }
     return std::sqrt(denom == 0.0 ? num : num / denom);
 }
