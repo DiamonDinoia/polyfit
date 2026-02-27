@@ -32,6 +32,10 @@ This document summarizes the public API of polyfit and the responsibilities of t
 
 - poly_eval::FuncEvalMany<EvalTypes...>
   - Packs several FuncEval instances for SIMD-friendly batched evaluation.
+  - All packed evaluators must use the same degree mode:
+    - all compile-time degree, or
+    - all runtime degree.
+    Mixing runtime and compile-time degree evaluators in one pack is unsupported.
 
 ## Config / macros
 

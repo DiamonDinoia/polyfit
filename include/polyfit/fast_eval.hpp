@@ -159,6 +159,11 @@ template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_
  */
 template <typename... EvalTypes> class FuncEvalMany {
     static_assert(sizeof...(EvalTypes) > 0, "At least one FuncEval type is required");
+    static constexpr bool has_runtime_degree_ = ((EvalTypes::kDegreeCompileTime == 0) || ...);
+    static constexpr bool has_compile_time_degree_ = ((EvalTypes::kDegreeCompileTime != 0) || ...);
+    static_assert(
+        !(has_runtime_degree_ && has_compile_time_degree_),
+        "Mixing runtime-degree and compile-time-degree evaluators in FuncEvalMany is not supported");
 
   public:
     /* Public type aliases */

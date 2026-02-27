@@ -41,7 +41,7 @@ function(polyfit_enable_sanitizers target)
   set(_link_options)
   foreach(_flag IN LISTS _sanitize_flags)
     list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_gnu_or_clang}>:${_flag}>)
-    list(APPEND _link_options $<$<${_gnu_or_clang}>:${_flag}>)
+    list(APPEND _link_options $<${_gnu_or_clang}:${_flag}>)
   endforeach()
 
   target_compile_options(${target} ${_scope} ${_compile_options})

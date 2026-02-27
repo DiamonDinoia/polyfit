@@ -96,6 +96,86 @@ jobs:
             build/**/Testing/**/*.xml
           if-no-files-found: ignore
 
+  valgrind:
+    name: Valgrind (${{ matrix.march }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        march: [x86-64, x86-64-v2, x86-64-v3]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup C++ toolchain
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: gcc
+          cmake: true
+          ninja: true
+          cache-tools: true
+
+      - name: Install Valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Check march support
+        id: march_support
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/march_probe.cpp <<'CPP'
+          int main() { return 0; }
+          CPP
+          if c++ -march=${{ matrix.march }} /tmp/march_probe.cpp -o /tmp/march_probe >/dev/null 2>&1; then
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure
+        if: steps.march_support.outputs.supported == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          valgrind_bin="$(command -v valgrind)"
+          cmake -S . -B build/valgrind-${{ matrix.march }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_FLAGS="-march=${{ matrix.march }}" \
+            -DPOLYFIT_BUILD_TESTS=ON \
+            -DPOLYFIT_BUILD_EXAMPLES=OFF \
+            -DPOLYFIT_STRICT_WARNINGS=OFF \
+            -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DMEMORYCHECK_COMMAND:FILEPATH="${valgrind_bin}" \
+            -DMEMORYCHECK_COMMAND_OPTIONS:STRING="--leak-check=full --show-leak-kinds=definite,possible --errors-for-leak-kinds=definite --error-exitcode=1 --track-origins=yes --undef-value-errors=yes" \
+            -DMEMORYCHECK_TYPE:STRING=Valgrind
+
+      - name: Build
+        if: steps.march_support.outputs.supported == 'true'
+        run: cmake --build build/valgrind-${{ matrix.march }} -j2
+
+      - name: Memcheck (CTest)
+        if: steps.march_support.outputs.supported == 'true'
+        run: ctest --test-dir build/valgrind-${{ matrix.march }} -T memcheck --output-on-failure -R "_cxx20$" -j2
+
+      - name: Skip unsupported march
+        if: steps.march_support.outputs.supported != 'true'
+        run: echo "Compiler does not support -march=${{ matrix.march }}; skipping Valgrind run."
+
+      - name: Upload Valgrind logs
+        if: failure() && steps.march_support.outputs.supported == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind-${{ matrix.march }}-logs
+          path: |
+            build/valgrind-${{ matrix.march }}/Testing/Temporary/**
+            build/valgrind-${{ matrix.march }}/Testing/**/MemoryChecker.*
+          if-no-files-found: ignore
+
   analysis:
     name: Static Analysis
     runs-on: ubuntu-24.04

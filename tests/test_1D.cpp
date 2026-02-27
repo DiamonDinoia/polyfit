@@ -74,6 +74,13 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     std::vector<double> ys_d(ys_f.begin(), ys_f.end());
     batch_verify<double>(float_func, xs_d, ys_d, eps);
 }
+
+TEST(PolyEval, RuntimeDegreeRejectsNonPositive) {
+    constexpr double a = -1.0;
+    constexpr double b = 1.0;
+    EXPECT_THROW((void)poly_eval::make_func_eval(double_func, 0, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::make_func_eval(double_func, -3, a, b), std::invalid_argument);
+}
 // 3. Compile-Time Degree (double, default iters)
 TEST(PolyEval, CompileTimeDegreeDoubleRandom) {
     double a = -.5, b = .5;

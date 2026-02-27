@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <xsimd/xsimd.hpp>
 
 #include "macros.h"
@@ -11,6 +12,16 @@
 #include "helpers.h"
 
 namespace poly_eval {
+namespace detail {
+
+PF_ALWAYS_INLINE int validate_positive_degree(const int n) {
+    if (n <= 0) {
+        throw std::invalid_argument("Runtime polynomial degree must be positive (n > 0)");
+    }
+    return n;
+}
+
+} // namespace detail
 
 // -----------------------------------------------------------------------------
 // FuncEval Implementation (Runtime)
@@ -21,7 +32,7 @@ template <std::size_t CurrentN, typename>
 PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const int n, const InputType a,
                                                                             const InputType b, const InputType *pts)
     : low(InputType(1) / (b - a)), hi(b + a) {
-    monomials.resize(static_cast<std::size_t>(n));
+    monomials.resize(static_cast<std::size_t>(detail::validate_positive_degree(n)));
     initialize_monomials(F, pts);
 }
 
@@ -111,10 +122,12 @@ PF_ALWAYS_INLINE void constexpr FuncEval<Func, N_compile_time, Iters_compile_tim
             ((alignment - pts_alignment) & (alignment - 1)) >> detail::countr_zero(sizeof(InputType)), num_points);
 
         constexpr std::size_t min_align = alignof(std::max_align_t); // in bytes, typically 16
-        constexpr std::size_t scalar_unroll = (alignment - min_align) / sizeof(InputType);
+        constexpr std::size_t scalar_unroll =
+            alignment > min_align ? (alignment - min_align) / sizeof(InputType) : std::size_t{0};
 
-        // print alignment;
-        PF_ASSUME(unaligned_points < scalar_unroll); // tells the compiler that this loop is at most alignment
+        if constexpr (scalar_unroll > 0) {
+            PF_ASSUME(unaligned_points < scalar_unroll); // helps bounded scalar prologue vectorization
+        }
         // process scalar until we reach the first aligned point
         for (std::size_t i = 0; i < unaligned_points; ++i) {
             out[i] = operator()(pts[i]);
@@ -397,9 +410,11 @@ constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, const InputType &a, co
 template <class Func, std::size_t N_compile>
 template <std::size_t C, typename>
 constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, int n, const InputType &a, const InputType &b)
-    : coeffs_flat_(storage_required(n)), coeffs_md_{coeffs_flat_.data(), make_ext(n)} {
+    : coeffs_flat_(storage_required(detail::validate_positive_degree(n))),
+      coeffs_md_{coeffs_flat_.data(), make_ext(detail::validate_positive_degree(n))} {
+    const auto checked_n = detail::validate_positive_degree(n);
     compute_scaling(a, b);
-    initialize(n, f);
+    initialize(checked_n, f);
 }
 
 template <class Func, std::size_t N_compile>
@@ -614,10 +629,11 @@ PF_C20CONSTEXPR auto make_func_eval(Func F, IntType n, typename function_traits<
 
     if constexpr (has_tuple_size_v<RawInputType>) {
         // ND - pass by value for tuple types to avoid reference issues
-        return FuncEvalND<Func, 0>(F, static_cast<int>(n), a, b);
+        return FuncEvalND<Func, 0>(F, detail::validate_positive_degree(static_cast<int>(n)), a, b);
     } else {
         // 1D
-        return FuncEval<Func, 0, Iters_compile_time>(F, static_cast<int>(n), a, b, pts);
+        return FuncEval<Func, 0, Iters_compile_time>(F, detail::validate_positive_degree(static_cast<int>(n)), a, b,
+                                                     pts);
     }
 }
 

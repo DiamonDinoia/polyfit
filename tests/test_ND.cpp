@@ -72,6 +72,15 @@ TEST(Eval, In3_Out4_Deg8) { RunmMonomialTest<3, 4, 8>(); }
 TEST(Eval, In4_Out3_Deg8) { RunmMonomialTest<4, 3, 8>(); }
 TEST(Eval, In4_Out4_Deg2) { RunmMonomialTest<4, 4, 4>(); }
 
+TEST(Eval, RuntimeDegreeRejectsNonPositive) {
+    using In = std::array<double, 2>;
+    using Out = std::array<double, 2>;
+    In a{-1.0, -1.0};
+    In b{1.0, 1.0};
+    EXPECT_THROW((void)poly_eval::make_func_eval(sumCos<In, Out>, 0, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::make_func_eval(sumCos<In, Out>, -2, a, b), std::invalid_argument);
+}
+
 // -----------------------------------------------------------------------------
 // Main entry point for Google Test
 // -----------------------------------------------------------------------------
