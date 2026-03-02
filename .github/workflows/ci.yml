@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 3 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +25,8 @@ jobs:
             toolchain: llvm
           - os: macos-14
             toolchain: apple-clang
+          - os: ubuntu-24.04
+            toolchain: gcc-14
           - os: windows-2022
             toolchain: msvc
             multi_config: true
@@ -160,7 +164,7 @@ jobs:
 
       - name: Memcheck (CTest)
         if: steps.march_support.outputs.supported == 'true'
-        run: ctest --test-dir build/valgrind-${{ matrix.march }} -T memcheck --output-on-failure -R "_cxx20$" -j2
+        run: ctest --test-dir build/valgrind-${{ matrix.march }} -T memcheck --output-on-failure -j2
 
       - name: Skip unsupported march
         if: steps.march_support.outputs.supported != 'true'

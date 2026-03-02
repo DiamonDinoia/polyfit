@@ -52,9 +52,13 @@
 
 #endif
 
-#if __cplusplus >= 202309L
+#if __cplusplus >= 202302L
+#define PF_C23CONSTEXPR constexpr
+#define PF_C23CONSTEVAL consteval
 #define PF_C23STATIC static
 #else
+#define PF_C23CONSTEXPR
+#define PF_C23CONSTEVAL constexpr
 #define PF_C23STATIC
 #endif
 

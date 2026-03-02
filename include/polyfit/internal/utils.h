@@ -33,6 +33,14 @@ template <class Func, std::size_t, std::size_t> class FuncEval;
 template <typename T, std::size_t N_compile_time_val>
 using Buffer = std::conditional_t<N_compile_time_val == 0, std::vector<T>, std::array<T, N_compile_time_val>>;
 
+// Create a Buffer<T,N>, resizing to runtime_size when N==0 (dynamic).
+template <typename T, std::size_t N>
+constexpr Buffer<T, N> make_buffer(std::size_t runtime_size) {
+    Buffer<T, N> buf{};
+    if constexpr (N == 0)
+        buf.resize(runtime_size);
+    return buf;
+}
 
 // -----------------------------------------------------------------------------
 // function_traits: Helper to deduce input and output types from a callable
@@ -296,7 +304,7 @@ template <class T, std::size_t N> constexpr std::size_t optimal_simd_width() {
 // --- Helper to create static extents when N_compile > 0 --------------------
 // 1) free helper: build a static extents type for N_compile > 0
 template <std::size_t N_compile, std::size_t Dim, std::size_t OutDim, std::size_t... Is>
-constexpr auto make_static_extents_impl(std::index_sequence<Is...>) {
+PF_C23CONSTEVAL auto make_static_extents_impl(std::index_sequence<Is...>) {
     // expands to extents<N_compile, N_compile, …, OutDim>
     return stdex::extents<std::size_t, ((void)Is, N_compile)..., OutDim>{};
 }
@@ -306,7 +314,7 @@ using static_extents_t = decltype(make_static_extents_impl<N_compile, Dim, OutDi
 
 // 2) free helper: compute how many entries that layout_right mdspan needs
 template <class Scalar, std::size_t N_compile, std::size_t Dim, std::size_t OutDim>
-constexpr std::size_t storage_required() {
+PF_C23CONSTEVAL std::size_t storage_required() {
     // pick the extents type directly (no const!)
     using extents_t = static_extents_t<N_compile, Dim, OutDim>;
     using mdspan_t = stdex::mdspan<Scalar, extents_t, stdex::layout_right>;
@@ -315,7 +323,7 @@ constexpr std::size_t storage_required() {
 }
 
 template <std::size_t N_compile, std::size_t DimIn, std::size_t DimOut, std::size_t... Is>
-constexpr auto make_static_extents(std::index_sequence<Is...>) {
+PF_C23CONSTEVAL auto make_static_extents(std::index_sequence<Is...>) {
     return stdex::extents<std::size_t, ((void)Is, N_compile)..., DimOut>{};
 }
 

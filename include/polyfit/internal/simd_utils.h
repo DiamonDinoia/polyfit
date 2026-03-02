@@ -10,7 +10,6 @@
 #include <type_traits>
 #include <cmath>
 #include <cstdint>
-#include <algorithm>
 
 #include "macros.h"
 

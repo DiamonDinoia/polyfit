@@ -72,16 +72,27 @@ CPMAddPackage(
         "XSIMD_BUILD_BENCHMARKS OFF"
 )
 
-CPMAddPackage(
-        NAME mdspan
-        GITHUB_REPOSITORY kokkos/mdspan
-        GIT_TAG mdspan-0.6.0
-        OPTIONS
-        "MDSPAN_ENABLE_TESTS OFF"
-        "MDSPAN_ENABLE_EXAMPLES OFF"
-        # Typically ON by default, but make it explicit:
-        "MDSPAN_ENABLE_INSTALL ON"
-)
+# Only download kokkos/mdspan when the compiler lacks native std::mdspan.
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("
+    #include <version>
+    #if !defined(__cpp_lib_mdspan) || __cpp_lib_mdspan < 202207L
+    #error no native mdspan
+    #endif
+    int main() {}
+" POLYFIT_HAS_NATIVE_MDSPAN)
+
+if (NOT POLYFIT_HAS_NATIVE_MDSPAN)
+    CPMAddPackage(
+            NAME mdspan
+            GITHUB_REPOSITORY kokkos/mdspan
+            GIT_TAG mdspan-0.6.0
+            OPTIONS
+            "MDSPAN_ENABLE_TESTS OFF"
+            "MDSPAN_ENABLE_EXAMPLES OFF"
+            "MDSPAN_ENABLE_INSTALL ON"
+    )
+endif ()
 
 CPMAddPackage(
         NAME poet
@@ -92,10 +103,15 @@ CPMAddPackage(
         "BUILD_TESTING OFF"
 )
 
-# mdspan usually exports std::mdspan; if only mdspan::mdspan exists, create a compat alias.
-if (NOT TARGET std::mdspan AND TARGET mdspan::mdspan)
-    add_library(std::mdspan INTERFACE IMPORTED)
-    target_link_libraries(std::mdspan INTERFACE mdspan::mdspan)
+# When using the kokkos CPM package: create std::mdspan alias if needed.
+# When using native mdspan: create a no-op std::mdspan target so link lines stay uniform.
+if (NOT TARGET std::mdspan)
+    if (TARGET mdspan::mdspan)
+        add_library(std::mdspan INTERFACE IMPORTED)
+        target_link_libraries(std::mdspan INTERFACE mdspan::mdspan)
+    else ()
+        add_library(std::mdspan INTERFACE IMPORTED)
+    endif ()
 endif ()
 
 # -----------------------------------------

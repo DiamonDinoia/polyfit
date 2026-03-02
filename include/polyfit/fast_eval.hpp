@@ -184,15 +184,15 @@ template <typename... EvalTypes> class FuncEvalMany {
     static constexpr std::size_t deg_max_ctime_ = std::max({EvalTypes::kDegreeCompileTime...});
 
     /* Construction */
-    explicit FuncEvalMany(const EvalTypes &...evals);
-    FuncEvalMany(const FuncEvalMany &other);
-    FuncEvalMany &operator=(const FuncEvalMany &other);
-    FuncEvalMany(FuncEvalMany &&other) noexcept;
-    FuncEvalMany &operator=(FuncEvalMany &&other) noexcept;
+    explicit PF_C20CONSTEXPR FuncEvalMany(const EvalTypes &...evals);
+    PF_C20CONSTEXPR FuncEvalMany(const FuncEvalMany &other);
+    PF_C20CONSTEXPR FuncEvalMany &operator=(const FuncEvalMany &other);
+    PF_C20CONSTEXPR FuncEvalMany(FuncEvalMany &&other) noexcept;
+    PF_C20CONSTEXPR FuncEvalMany &operator=(FuncEvalMany &&other) noexcept;
 
     /* Introspection */
-    [[nodiscard]] std::size_t size() const noexcept;
-    [[nodiscard]] std::size_t degree() const noexcept;
+    [[nodiscard]] constexpr std::size_t size() const noexcept;
+    [[nodiscard]] constexpr std::size_t degree() const noexcept;
 
     /* Evaluation – scalar or per‑poly inputs */
     std::array<OutputType, kF> operator()(InputType x) const noexcept;
@@ -206,10 +206,10 @@ template <typename... EvalTypes> class FuncEvalMany {
 
   private:
     /* Helper routines */
-    template <std::size_t I, typename FE, typename... Rest> void copy_coeffs(const FE &eval, const Rest &...rest);
+    template <std::size_t I, typename FE, typename... Rest> PF_C20CONSTEXPR void copy_coeffs(const FE &eval, const Rest &...rest);
 
-    void zero_pad_coeffs();
-    std::array<OutputType, kF> extract_real(const std::array<OutputType, kF_pad> &full) const noexcept;
+    PF_C20CONSTEXPR void zero_pad_coeffs();
+    constexpr std::array<OutputType, kF> extract_real(const std::array<OutputType, kF_pad> &full) const noexcept;
 
     /* Storage ---------------------------------------------------------- */
     static constexpr std::size_t dyn = stdex::dynamic_extent;
@@ -284,6 +284,8 @@ template <class Func, std::size_t N_compile = 0> class FuncEvalND {
     static constexpr std::size_t storage_required(int n) noexcept;
 
     constexpr void initialize(int n, Func f);
+    constexpr void convert_newton_to_monomial_axes(int n, const Buffer<Scalar, N_compile> &nodes);
+    constexpr void reverse_coefficients_axes(int n);
     [[nodiscard]] constexpr InputType map_to_domain(const InputType &t) const noexcept;
     [[nodiscard]] constexpr InputType map_from_domain(const InputType &x) const noexcept;
     constexpr void compute_scaling(const InputType &a, const InputType &b) noexcept;
@@ -306,7 +308,7 @@ template <class Func, std::size_t N_compile = 0> class FuncEvalND {
  * @param pts Optional pointer to evaluation points used for fitting.
  */
 template <std::size_t N_compile_time, std::size_t Iters_compile_time = 1, class Func>
-PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
+[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
                                    typename function_traits<Func>::arg0_type b,
                                    const typename function_traits<Func>::arg0_type *pts = nullptr);
 
@@ -325,7 +327,7 @@ PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0
  */
 template <std::size_t Iters_compile_time = 1, class Func, typename IntType,
           std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>>, int> = 0>
-PF_C20CONSTEXPR auto
+[[nodiscard]] PF_C20CONSTEXPR auto
 make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
                typename function_traits<Func>::arg0_type b,
                const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts = nullptr);
@@ -341,28 +343,28 @@ make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
 template <std::size_t MaxN_val = 32, std::size_t NumEvalPoints_val = 100, std::size_t Iters_compile_time = 1,
           class Func, typename FloatType,
           std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int> = 0>
-PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
+[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
                                    typename function_traits<Func>::arg0_type b);
 
 template <std::size_t N_compile_time, class Func,
           std::enable_if_t<has_tuple_size_v<std::remove_cvref_t<typename function_traits<Func>::arg0_type>>, int> = 0>
-PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
+[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
                                    typename function_traits<Func>::arg0_type b);
 
 template <std::size_t N_compile_time, std::size_t Iters_compile_time = 0, typename Func,
           std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>>, int> = 0>
-PF_C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
+[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
                                    typename function_traits<Func *>::arg0_type b);
 #if __cplusplus >= 202002L
 
-template <std::size_t N_compile_time, auto a, auto b, class Func> constexpr auto make_func_eval(Func F) {
+template <std::size_t N_compile_time, auto a, auto b, class Func> [[nodiscard]] constexpr auto make_func_eval(Func F) {
     // Forward to the appropriate constructor
     return FuncEvalND<Func, N_compile_time>(F, a, b);
 }
 
 template <double eps_val, auto a, auto b, std::size_t MaxN_val = 32, std::size_t NumEvalPoints_val = 100,
           std::size_t Iters_compile_time = 1, class Func>
-constexpr auto make_func_eval(Func F);
+[[nodiscard]] constexpr auto make_func_eval(Func F);
 #endif
 
 /**
@@ -372,7 +374,7 @@ constexpr auto make_func_eval(Func F);
  * @return FuncEvalMany<EvalTypes...> Packed evaluator object.
  */
 template <typename... EvalTypes>
-PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept;
+[[nodiscard]] PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept;
 } // namespace poly_eval
 
 // Include implementations

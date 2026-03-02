@@ -1,6 +1,5 @@
 // Helper utilities for internal use (domain mapping, scaling)
-#ifndef POLYFIT_INTERNAL_HELPERS_H
-#define POLYFIT_INTERNAL_HELPERS_H
+#pragma once
 
 #include <array>
 #include <type_traits>
@@ -59,5 +58,3 @@ compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
 }
 
 } // namespace polyfit::internal::helpers
-
-#endif // POLYFIT_INTERNAL_HELPERS_H

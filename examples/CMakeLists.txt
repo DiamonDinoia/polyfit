@@ -23,6 +23,7 @@ set(SOURCES
         compiletime_1D_fixed.cpp
         runtime_ND_fixed.cpp
         runtime_ND_eps.cpp
+        many_polys_example.cpp
 )
 if (COMPILER_SUPPORTS_CXX20)
     list(APPEND SOURCES compiletime_1D_eps.cpp)

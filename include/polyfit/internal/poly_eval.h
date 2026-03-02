@@ -387,6 +387,8 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
                 acc[ci].store_unaligned(out + base);
             });
         } else {
+            // Runtime-M SIMD path: heap allocation here is a known trade-off.
+            // The compile-time path above uses stack-allocated std::array instead.
             const std::size_t chunks = m_lim / simd_width;
             std::vector<batch_out> acc(chunks);
             std::vector<batch_in> xvec(chunks);

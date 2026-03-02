@@ -186,8 +186,9 @@ TEST(PolyEval, RuntimeEpsComplexRandom) {
     poly(xs.data(), ys.data(), xs.size());
     batch_verify<std::complex<double>>(complex_func, xs, ys, 1e-6);
 }
-#if __cplusplus >= 202002L
+#if __cplusplus >= 202002L && __cplusplus < 202302L
 // Pure arithmetic constexpr function for C++20 tests
+// (Disabled under C++23: static_for with mutable captures is not constant-expression-valid)
 constexpr auto double_constexpr_func = [](const double x) constexpr { return 2.0 * x * x * x - 3.0 * x + 1.0; };
 constexpr auto complex_constexpr_func = [](const double x) constexpr { return std::complex<double>(x * x, x + x); };
 // 5. Full Compile-Time Fitting and Evaluation (constexpr fixed-degree API)

@@ -10,18 +10,6 @@ include(PolyfitWarnings)
 include(PolyfitSanitizers)
 include(PolyfitStaticAnalysis)
 
-option(POLYFIT_ENABLE_TEST_IPO "Enable LTO/IPO for tests and benchmarks" OFF)
-if (POLYFIT_ENABLE_TEST_IPO)
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
-    if (LTO_SUPPORTED)
-        message(STATUS "LTO supported; enabling interprocedural optimization")
-        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-    else ()
-        message(WARNING "LTO not supported: ${LTO_ERROR}")
-    endif ()
-endif ()
-
 # -----------------------------------------------------------------------------
 # Fetch GoogleTest & Benchmark
 # -----------------------------------------------------------------------------
@@ -62,8 +50,23 @@ endfunction()
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
 # -----------------------------------------------------------------------------
-# Standards to test/build (C++17 and C++20). C++23 can be added later once mdspan handling is unified.
-set(POLYFIT_TEST_STANDARDS 17 20)
+# Standards to test/build: start at C++17 and add every later standard the compiler supports.
+# C++23 and beyond additionally require native std::mdspan (checked in root CMakeLists.txt).
+set(POLYFIT_TEST_STANDARDS 17)
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-std=c++20" _POLYFIT_CXX20)
+if (_POLYFIT_CXX20)
+    list(APPEND POLYFIT_TEST_STANDARDS 20)
+endif ()
+if (POLYFIT_HAS_NATIVE_MDSPAN)
+    foreach(_std IN ITEMS 23 26)
+        check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
+        if (_POLYFIT_CXX${_std})
+            list(APPEND POLYFIT_TEST_STANDARDS ${_std})
+        endif ()
+    endforeach()
+endif ()
+message(STATUS "Polyfit test standards: ${POLYFIT_TEST_STANDARDS}")
 
 function(add_polyfit_test_for_std BASENAME SRC STD)
     set(TGT "${BASENAME}_cxx${STD}")
@@ -161,6 +164,7 @@ add_polyfit_test_matrix(test_scaling_alignment test_scaling_alignment.cpp)
 add_polyfit_test_matrix(test_utils_bjorck_newton test_utils_bjorck_newton.cpp)
 add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)
 add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.cpp)
+add_polyfit_test_matrix(test_edge_cases test_edge_cases.cpp)
 
 if (POLYFIT_ENABLE_COVERAGE)
     find_program(LCOV_EXECUTABLE lcov)
