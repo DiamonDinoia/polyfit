@@ -133,49 +133,55 @@ PF_ALWAYS_INLINE constexpr auto call_coeffs(const MdspanType &coeffs, const std:
 }
 
 //------------------------------------------------------------------------------
-// detail::horner_nd_impl
+// detail::horner_nd_impl — tag-dispatched scalar / SIMD overloads
 //------------------------------------------------------------------------------
 
-template <std::size_t Level, std::size_t Dim, std::size_t DegCT, bool SIMD, typename OutT, typename InVec,
-          typename Mdspan>
-PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coeffs, std::array<std::size_t, Dim> &idx,
-                                            const int deg_rt) {
-    if constexpr (!SIMD) {
-        constexpr std::size_t axis = Dim - Level; // current axis
-        constexpr std::size_t OUT = std::tuple_size_v<OutT>;
-        const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
+struct scalar_t {};
+struct simd_t {};
 
-        OutT res{}; // zero-init
-
-        /* ---------- descend k = 0 … deg-1 (highest → lowest power) ---------- */
-        for (int k = 0; k < deg; ++k) {
-            idx[axis] = static_cast<std::size_t>(k);
-
-            OutT inner{};
-            if constexpr (Level > 1) {
-                inner = horner_nd_impl<Level - 1, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
-            } else {
-                //  last spatial level → read the coefficient vector (C++17-compatible)
-                poet::static_for<static_cast<std::intmax_t>(OUT)>([&](const auto i) {
-                    constexpr auto d = decltype(i)::value;
-                    inner[d] = detail::call_coeffs<Dim>(coeffs, idx, d);
-                });
-            }
-
-            /* ---------- Horner accumulate along this axis ---------- */
-            poet::static_for<static_cast<std::intmax_t>(OUT)>([&](const auto i) {
-                constexpr auto d = decltype(i)::value;
-                res[d] = std::fma(res[d], x[axis], inner[d]);
-            });
-        }
-        return res;
-    }
+// Scalar overload — fully constexpr (no xsimd types)
+template <std::size_t Level, std::size_t Dim, std::size_t DegCT,
+          typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT
+horner_nd_impl(scalar_t, const InVec &x, const Mdspan &coeffs,
+               std::array<std::size_t, Dim> &idx, int deg_rt) {
     constexpr std::size_t axis = Dim - Level;
-    constexpr std::size_t OUT = std::tuple_size_v<OutT>;
+    constexpr std::size_t OUT  = std::tuple_size_v<OutT>;
     const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
 
-    using batch =
-        xsimd::make_sized_batch_t<typename OutT::value_type, optimal_simd_width<typename OutT::value_type, OUT>()>;
+    OutT res{};
+
+    for (int k = 0; k < deg; ++k) {
+        idx[axis] = static_cast<std::size_t>(k);
+
+        OutT inner{};
+        if constexpr (Level > 1) {
+            inner = horner_nd_impl<Level - 1, Dim, DegCT, OutT>(scalar_t{}, x, coeffs, idx, deg_rt);
+        } else {
+            poet::static_for<OUT>([&](auto i) {
+                inner[i] = detail::call_coeffs<Dim>(coeffs, idx, i);
+            });
+        }
+
+        poet::static_for<OUT>([&](auto i) {
+            res[i] = std::fma(res[i], x[axis], inner[i]);
+        });
+    }
+    return res;
+}
+
+// SIMD overload — uses xsimd batch operations
+template <std::size_t Level, std::size_t Dim, std::size_t DegCT,
+          typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE OutT
+horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs,
+               std::array<std::size_t, Dim> &idx, int deg_rt) {
+    constexpr std::size_t axis = Dim - Level;
+    constexpr std::size_t OUT  = std::tuple_size_v<OutT>;
+    const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
+
+    using Scalar = typename OutT::value_type;
+    using batch  = xsimd::make_sized_batch_t<Scalar, optimal_simd_width<Scalar, OUT>()>;
     alignas(batch::arch_type::alignment()) OutT res{0};
     const batch x_vec(x[axis]);
 
@@ -183,24 +189,23 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(const InVec &x, const Mdspan &coe
         idx[axis] = static_cast<std::size_t>(k);
         alignas(batch::arch_type::alignment()) OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
+            inner = horner_nd_impl<Level - 1, Dim, DegCT, OutT>(simd_t{}, x, coeffs, idx, deg_rt);
         } else {
-            poet::static_for<static_cast<std::intmax_t>(OUT)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto d = decltype(I)::value;
-                inner[d] = call_coeffs<Dim>(coeffs, idx, d);
+            poet::static_for<OUT>([&](auto i) {
+                inner[i] = call_coeffs<Dim>(coeffs, idx, i);
             });
         }
 
-        poet::static_for<0, static_cast<std::intmax_t>(OUT), static_cast<std::intmax_t>(batch::size)>([&]([[maybe_unused]] const auto I) {
-            constexpr auto d = decltype(I)::value;
-            if constexpr (d + batch::size <= OUT) {
-                auto in = batch::load_aligned(inner.data() + d);
-                auto r = batch::load_aligned(res.data() + d);
-                detail::fma(r, x_vec, in).store_aligned(res.data() + d);
+        poet::static_for<0, OUT,
+                         batch::size>([&](auto i) {
+            if constexpr (i + batch::size <= OUT) {
+                detail::fma(batch::load_aligned(res.data()   + i),
+                            x_vec,
+                            batch::load_aligned(inner.data() + i))
+                    .store_aligned(res.data() + i);
             } else {
-                poet::static_for<static_cast<std::intmax_t>(d), static_cast<std::intmax_t>(OUT)>([&]([[maybe_unused]] const auto J) {
-                    constexpr auto last = decltype(J)::value;
-                    res[last] = detail::fma(res[last], typename OutT::value_type(x[axis]), inner[last]);
+                poet::static_for<i, OUT>([&](auto j) {
+                    res[j] = detail::fma(res[j], Scalar(x[axis]), inner[j]);
                 });
             }
         });
@@ -227,9 +232,8 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
     if constexpr (N_total != 0) {
         // Compile-time unrolled Horner on reversed array
         OutputType acc = c_ptr[0];
-        poet::static_for<1, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
-            constexpr auto k = decltype(I)::value;
-            acc = detail::fma(acc, x, c_ptr[k]);
+        poet::static_for<1, N_total>([&](auto i) {
+            acc = detail::fma(acc, x, c_ptr[i]);
         });
         return acc;
     } else {
@@ -264,33 +268,28 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         xsimd::batch<OutputType> acc_batches[OuterUnrollFactor];
 
         // Load and init with highest-degree term
-        poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
-            constexpr auto j = decltype(I)::value;
+        poet::static_for<OuterUnrollFactor>([&](auto j) {
             pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
             acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
         });
 
         // Horner steps
         if constexpr (N_monomials != 0) {
-            poet::static_for<1, static_cast<std::intmax_t>(N_monomials)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto k = decltype(I)::value;
-                poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto J) {
-                    constexpr auto j = decltype(J)::value;
+            poet::static_for<1, N_monomials>([&](auto k) {
+                poet::static_for<OuterUnrollFactor>([&](auto j) {
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
             });
         } else {
             for (std::size_t k = 1; k < monomials_size; ++k) {
-                poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
-                    constexpr auto j = decltype(I)::value;
+                poet::static_for<OuterUnrollFactor>([&](auto j) {
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
             }
         }
 
         // Store results
-        poet::static_for<static_cast<std::intmax_t>(OuterUnrollFactor)>([&]([[maybe_unused]] const auto I) {
-            constexpr auto j = decltype(I)::value;
+        poet::static_for<OuterUnrollFactor>([&](auto j) {
             acc_batches[j].store(out + i + j * simd_size, out_mode{});
         });
     }
@@ -314,8 +313,7 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputTyp
     const std::size_t n_lim = N_total ? N_total : N;
 
     if constexpr (M_total != 0) {
-        poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
-            constexpr auto m = decltype(I)::value;
+        poet::static_for<M_total>([&](auto m) {
             const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
             out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
         });
@@ -349,31 +347,25 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
             std::array<batch_out, C> acc;
             std::array<batch_in, C> xvec;
 
-            poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto ci = decltype(I)::value;
+            poet::static_for<C>([&](auto ci) {
                 constexpr auto base = ci * simd_width;
-                    xvec[ci] = batch_in::load_unaligned(xin + base);
-                    acc[ci] = batch_out::load_unaligned(coeffs + base);
+                xvec[ci] = batch_in::load_unaligned(xin + base);
+                acc[ci] = batch_out::load_unaligned(coeffs + base);
             });
 
             if constexpr (has_Nt) {
-                poet::static_for<0, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
-                    constexpr auto k = decltype(I)::value;
-                    if constexpr (k > 0) {
-                        const auto col = coeffs + (k * stride);
-                        poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto J) {
-                            constexpr auto ci = decltype(J)::value;
-                            constexpr auto base = ci * simd_width;
-                            batch_out ck = batch_out::load_unaligned(col + base);
-                            acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
-                        });
-                    }
+                poet::static_for<1, N_total>([&](auto k) {
+                    const auto col = coeffs + (k * stride);
+                    poet::static_for<C>([&](auto ci) {
+                        constexpr auto base = ci * simd_width;
+                        batch_out ck = batch_out::load_unaligned(col + base);
+                        acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
+                    });
                 });
             } else {
                 for (std::size_t k = 1; k < n_lim; ++k) {
                     const auto col = coeffs + (k * stride);
-                    poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
-                        constexpr auto ci = decltype(I)::value;
+                    poet::static_for<C>([&](auto ci) {
                         constexpr auto base = ci * simd_width;
                         batch_out ck = batch_out::load_unaligned(col + base);
                         acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
@@ -381,8 +373,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
                 }
             }
 
-            poet::static_for<static_cast<std::intmax_t>(C)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto ci = decltype(I)::value;
+            poet::static_for<C>([&](auto ci) {
                 constexpr auto base = ci * simd_width;
                 acc[ci].store_unaligned(out + base);
             });
@@ -414,8 +405,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
     } else {
         // Scalar path
         if constexpr (has_Mt) {
-            poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto i = decltype(I)::value;
+            poet::static_for<M_total>([&](auto i) {
                 out[i] = coeffs[i];
             });
         } else {
@@ -427,8 +417,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         const auto step = [&](const std::size_t k) noexcept {
             const auto col = coeffs + (k * stride);
             if constexpr (has_Mt) {
-                poet::static_for<static_cast<std::intmax_t>(M_total)>([&]([[maybe_unused]] const auto I) {
-                    constexpr auto i = decltype(I)::value;
+                poet::static_for<M_total>([&](auto i) {
                     out[i] = detail::fma(out[i], xin[i], col[i]);
                 });
             } else {
@@ -439,11 +428,8 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         };
 
         if constexpr (has_Nt) {
-            poet::static_for<0, static_cast<std::intmax_t>(N_total)>([&]([[maybe_unused]] const auto I) {
-                constexpr auto k = decltype(I)::value;
-                if constexpr (k > 0) {
-                    step(k);
-                }
+            poet::static_for<1, N_total>([&](auto k) {
+                step(k);
             });
         } else {
             for (std::size_t k = 1; k < n_lim; ++k) {
@@ -461,7 +447,9 @@ template <std::size_t DegCT, bool SIMD, typename OutT, typename InVec, typename 
 PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
-    return detail::horner_nd_impl<Dim, Dim, DegCT, SIMD, OutT>(x, coeffs, idx, deg_rt);
+    return detail::horner_nd_impl<Dim, Dim, DegCT, OutT>(
+        std::conditional_t<SIMD, detail::simd_t, detail::scalar_t>{},
+        x, coeffs, idx, deg_rt);
 }
 
 } // namespace poly_eval

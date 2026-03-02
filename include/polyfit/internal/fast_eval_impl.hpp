@@ -186,16 +186,22 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
                                                            const Buffer<OutputType, N_compile_time> &y_cheb_) {
 
     for (std::size_t pass = 0; pass < Iters_compile_time; ++pass) {
-        // residuals
+        // residuals — monomials are stored low-degree-first, but horner expects
+        // high-degree-first, so use a reversed local copy for evaluation
         auto r_cheb = make_buffer<OutputType, N_compile_time>(monomials.size());
         const auto n_terms = monomials.size();
-        std::reverse(monomials.begin(), monomials.end());
+        Buffer<OutputType, N_compile_time> rev{};
+        if constexpr (N_compile_time != 0) {
+            std::reverse_copy(monomials.begin(), monomials.end(), rev.begin());
+        } else {
+            rev.resize(monomials.size());
+            std::reverse_copy(monomials.begin(), monomials.end(), rev.begin());
+        }
         for (std::size_t i = 0; i < n_terms; ++i) {
             auto xi = x_cheb_[i];
-            auto p_val = poly_eval::horner<N_compile_time>(xi, monomials.data(), monomials.size());
+            auto p_val = poly_eval::horner<N_compile_time>(xi, rev.data(), rev.size());
             r_cheb[i] = y_cheb_[i] - p_val;
         }
-        std::reverse(monomials.begin(), monomials.end());
         // correction
         auto newton_r = detail::bjorck_pereyra<N_compile_time, InputType, OutputType>(x_cheb_, r_cheb);
         auto mono_r = detail::newton_to_monomial<N_compile_time, InputType, OutputType>(newton_r, x_cheb_);
@@ -322,7 +328,7 @@ void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
 
     for (std::size_t i = 0; i < num_points; ++i) {
         auto vals = operator()(x[i]);
-        poet::static_for<static_cast<std::intmax_t>(M)>([&](const auto I) { out_m(i, decltype(I)::value) = vals[decltype(I)::value]; });
+        poet::static_for<M>([&](auto j) { out_m(i, j) = vals[j]; });
     }
 }
 PF_FAST_EVAL_END
@@ -707,8 +713,7 @@ template <double eps_val, auto a, auto b, std::size_t MaxN_val, std::size_t NumE
             return max_err;
         };
         int n = 0;
-        poet::static_for<2, static_cast<std::intmax_t>(MaxN_val)>([&](const auto I) {
-            constexpr auto i = decltype(I)::value;
+        poet::static_for<2, MaxN_val>([&](auto i) {
             using evaluator_t = std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, i>,
                                                    FuncEval<Func, i, Iters_compile_time>>;
             if constexpr (compute_error(evaluator_t(F, a, b)) <= eps_val) {
