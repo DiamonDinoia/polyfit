@@ -59,8 +59,6 @@ template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time
 template <int OuterUnrollFactor, bool pts_aligned, bool out_aligned>
 PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::horner_polyeval(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept {
-    static_assert(OuterUnrollFactor >= 0 && (OuterUnrollFactor & (OuterUnrollFactor - 1)) == 0,
-                  "OuterUnrollFactor must be a power of two greater than zero.");
     return horner<N_compile_time, pts_aligned, out_aligned, OuterUnrollFactor>(
         pts, out, num_points, monomials.data(), monomials.size(), [this](const auto v) { return map_from_domain(v); });
 }
@@ -184,34 +182,23 @@ template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time
 PF_C20CONSTEXPR void
 FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputType, N_compile_time> &x_cheb_,
                                                            const Buffer<OutputType, N_compile_time> &y_cheb_) {
+    const auto n = monomials.size();
+    std::reverse(monomials.begin(), monomials.end()); // to Horner order once
 
     for (std::size_t pass = 0; pass < Iters_compile_time; ++pass) {
-        // residuals — monomials are stored low-degree-first, but horner expects
-        // high-degree-first, so use a reversed local copy for evaluation
-        auto r_cheb = make_buffer<OutputType, N_compile_time>(monomials.size());
-        const auto n_terms = monomials.size();
-        Buffer<OutputType, N_compile_time> rev{};
-        if constexpr (N_compile_time != 0) {
-            std::reverse_copy(monomials.begin(), monomials.end(), rev.begin());
-        } else {
-            rev.resize(monomials.size());
-            std::reverse_copy(monomials.begin(), monomials.end(), rev.begin());
-        }
-        for (std::size_t i = 0; i < n_terms; ++i) {
-            auto xi = x_cheb_[i];
-            auto p_val = poly_eval::horner<N_compile_time>(xi, rev.data(), rev.size());
+        auto r_cheb = make_buffer<OutputType, N_compile_time>(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            auto p_val = poly_eval::horner<N_compile_time>(x_cheb_[i], monomials.data(), n);
             r_cheb[i] = y_cheb_[i] - p_val;
         }
-        // correction
         auto newton_r = detail::bjorck_pereyra<N_compile_time, InputType, OutputType>(x_cheb_, r_cheb);
         auto mono_r = detail::newton_to_monomial<N_compile_time, InputType, OutputType>(newton_r, x_cheb_);
-        assert(mono_r.size() == monomials.size());
 
-        for (std::size_t j = 0; j < monomials.size(); ++j) {
-            monomials[j] += mono_r[j];
-        }
+        // mono_r is low-degree-first; monomials is high-degree-first — add reversed
+        for (std::size_t j = 0; j < n; ++j)
+            monomials[n - 1 - j] += mono_r[j];
     }
-    std::reverse(monomials.begin(), monomials.end());
+    // monomials are now in Horner order (high-degree-first) — done
 }
 
 // ------------------------------ ctor -----------------------------------

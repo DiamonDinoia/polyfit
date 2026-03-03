@@ -243,34 +243,30 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
 }
 
 // stand-alone Newton→monomial conversion
+// The inner loop touches c[deg] where deg can reach n, so the workspace
+// needs n+1 entries; only c[0..n-1] are meaningful in the result.
 template <std::size_t N, class X, class Y>
 PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
     const std::size_t n = alpha.size();
-    Buffer<Y, N * 2> c{0};
-    if constexpr (N == 0) {
-        c.reserve(n);
-        c.push_back(Y(0));
-    }
+    constexpr std::size_t WN = (N == 0) ? 0 : N + 1;
+    auto c = make_buffer<Y, WN>(n + 1);
+    for (auto &v : c) v = Y(0);
+
     std::size_t deg = 0;
     for (std::size_t ii = n; ii-- > 0;) {
         ++deg;
-        if constexpr (N == 0) {
-            c.push_back(Y(0));
-        }
-        for (std::size_t j = deg; j >= 1; --j) {
+        for (std::size_t j = deg; j >= 1; --j)
             c[j] = c[j - 1] - (nodes[ii] * c[j]);
-        }
         c[0] = (-nodes[ii] * c[0]) + alpha[ii];
     }
     if constexpr (N == 0) {
-        if (c.size() > n) {
-            c.resize(n);
-        }
+        c.resize(n);
         return c;
+    } else {
+        Buffer<Y, N> result{};
+        std::copy_n(c.begin(), N, result.begin());
+        return result;
     }
-    Buffer<Y, N> result{};
-    std::copy_n(c.begin(), N, result.begin());
-    return result;
 }
 
 template <class T, std::size_t N = 1> constexpr std::uint8_t min_simd_width() {

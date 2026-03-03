@@ -6,6 +6,8 @@
 #include <cmath>
 #include <xsimd/xsimd.hpp>
 
+#include "simd_utils.h"
+
 namespace polyfit::internal::helpers {
 
 // Scalar mapping to canonical domain [-1,1]
@@ -20,10 +22,7 @@ PF_ALWAYS_INLINE constexpr ArgT map_to_domain_scalar(const ArgT arg, const Scala
 // Scalar/batch mapping from canonical domain back to original
 template <class ArgT, class ScalarT>
 PF_ALWAYS_INLINE constexpr ArgT map_from_domain_scalar(const ArgT arg, const ScalarT low, const ScalarT hi) noexcept {
-    if constexpr (std::is_arithmetic_v<ArgT>) {
-        return static_cast<ArgT>((std::fma(ArgT(2.0), arg, -ArgT(hi))) * ArgT(low));
-    }
-    return static_cast<ArgT>((xsimd::fms(ArgT(2.0), arg, ArgT(hi))) * ArgT(low));
+    return poly_eval::detail::fma(ArgT(2), arg, -ArgT(hi)) * ArgT(low);
 }
 
 // Array (std::array) mapping overloads
