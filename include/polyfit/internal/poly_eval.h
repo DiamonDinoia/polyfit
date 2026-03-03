@@ -148,12 +148,11 @@ horner_nd_impl(scalar_t, const InVec &x, const Mdspan &coeffs,
                std::array<std::size_t, Dim> &idx, int deg_rt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT  = std::tuple_size_v<OutT>;
-    const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
 
     OutT res{};
 
-    for (int k = 0; k < deg; ++k) {
-        idx[axis] = static_cast<std::size_t>(k);
+    auto step = [&](std::size_t k) {
+        idx[axis] = k;
 
         OutT inner{};
         if constexpr (Level > 1) {
@@ -167,6 +166,13 @@ horner_nd_impl(scalar_t, const InVec &x, const Mdspan &coeffs,
         poet::static_for<OUT>([&](auto i) {
             res[i] = std::fma(res[i], x[axis], inner[i]);
         });
+    };
+
+    if constexpr (DegCT != 0) {
+        poet::static_for<DegCT>([&](auto k) { step(k); });
+    } else {
+        for (int k = 0; k < deg_rt; ++k)
+            step(static_cast<std::size_t>(k));
     }
     return res;
 }
@@ -179,15 +185,14 @@ horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs,
                std::array<std::size_t, Dim> &idx, int deg_rt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT  = std::tuple_size_v<OutT>;
-    const int deg = DegCT ? static_cast<int>(DegCT) : deg_rt;
 
     using Scalar = typename OutT::value_type;
     using batch  = xsimd::make_sized_batch_t<Scalar, optimal_simd_width<Scalar, OUT>()>;
     alignas(batch::arch_type::alignment()) OutT res{0};
     const batch x_vec(x[axis]);
 
-    for (int k = 0; k < deg; ++k) {
-        idx[axis] = static_cast<std::size_t>(k);
+    auto step = [&](std::size_t k) {
+        idx[axis] = k;
         alignas(batch::arch_type::alignment()) OutT inner{};
         if constexpr (Level > 1) {
             inner = horner_nd_impl<Level - 1, Dim, DegCT, OutT>(simd_t{}, x, coeffs, idx, deg_rt);
@@ -210,6 +215,13 @@ horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs,
                 });
             }
         });
+    };
+
+    if constexpr (DegCT != 0) {
+        poet::static_for<DegCT>([&](auto k) { step(k); });
+    } else {
+        for (int k = 0; k < deg_rt; ++k)
+            step(static_cast<std::size_t>(k));
     }
     return res;
 }
@@ -286,14 +298,16 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         if constexpr (N_monomials != 0) {
             // CT path: full unroll (N is known)
             poet::static_for<1, N_monomials>([&](auto k) {
+                const auto ck = xsimd::batch<OutputType>(monomials[k]);
                 poet::static_for<UF>([&](auto j) {
-                    acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
+                    acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck);
                 });
             });
         } else {
             for (std::size_t k = 1; k < monomials_size; ++k) {
+                const auto ck = xsimd::batch<OutputType>(monomials[k]);
                 poet::static_for<UF>([&](auto j) {
-                    acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
+                    acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck);
                 });
             }
         }
@@ -304,8 +318,23 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         });
     }
 
-    // Remainder
-    PF_ASSUME(num_points - i < block);
+    // Middle: single-batch SIMD for remaining full batches
+    for (; i + simd_size <= num_points; i += simd_size) {
+        auto pt = map_func(xsimd::load(pts + i, pts_mode{}));
+        auto acc = xsimd::batch<OutputType>(monomials[0]);
+        if constexpr (N_monomials != 0) {
+            poet::static_for<1, N_monomials>([&](auto k) {
+                acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k]));
+            });
+        } else {
+            for (std::size_t k = 1; k < monomials_size; ++k) {
+                acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k]));
+            }
+        }
+        acc.store(out + i, out_mode{});
+    }
+
+    // Final scalar remainder (< simd_size points)
     for (; i < num_points; ++i) {
         out[i] = horner<N_monomials>(map_func(pts[i]), monomials, monomials_size);
     }
@@ -403,9 +432,11 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
                 [](auto body) { poet::static_for<C>([&](auto ci) { body(ci); }); });
         } else {
             using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
+            constexpr std::size_t max_chunks = 8; // supports up to 8*simd_width points
             const std::size_t C = m_lim / simd_width;
-            std::vector<batch_out> acc(C);
-            std::vector<batch_in> xvec(C);
+            assert(C <= max_chunks && "horner_transposed: C exceeds stack buffer capacity");
+            batch_out acc[max_chunks];
+            batch_in xvec[max_chunks];
             for (std::size_t ci = 0; ci < C; ++ci)
                 xvec[ci] = batch_in::load(xin + ci * simd_width, mode{});
             detail::horner_transposed_simd_core<N_total, simd_width, aligned>(

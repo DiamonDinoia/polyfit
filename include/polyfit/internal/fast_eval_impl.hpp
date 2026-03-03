@@ -176,6 +176,26 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
 
     // 4) optional refine
     refine(grid, samples);
+
+    // 5) fuse domain mapping into coefficients: p(t) → q(x) = p(alpha*x + beta)
+    //    where alpha = 2*low, beta = -hi*low. After this, evaluation skips per-point mapping.
+    //    Uses compensated arithmetic (twoProd+twoSum) so coefficient precision is O(n^2*eps^2).
+    //    Guard: the fused Horner evaluation's condition number is bounded by (|alpha|+|beta|)^deg.
+    //    Skip fusion when this exceeds the type's useful precision.
+    {
+        using Scalar = typename value_type_or_identity<InputType>::type;
+        const auto alpha = Scalar(2) * static_cast<Scalar>(low);
+        const auto beta  = -static_cast<Scalar>(hi) * static_cast<Scalar>(low);
+        const auto deg = static_cast<int>(monomials.size()) - 1;
+        // Evaluation condition guard: (|alpha|+|beta|)^deg must leave sufficient digits
+        const auto cond_base = std::abs(alpha) + std::abs(beta) + Scalar(1);
+        constexpr auto max_log = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
+        if (deg > 0 && Scalar(deg) * std::log10(cond_base) < max_log) {
+            polyfit::internal::helpers::fuse_linear_map(monomials.data(), monomials.size(), alpha, beta);
+            low = InputType(0.5);
+            hi  = InputType(0);
+        }
+    }
 }
 
 template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
@@ -335,14 +355,74 @@ template <typename... EvalTypes>
 void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
                                             std::size_t num_points) const noexcept {
     constexpr std::size_t M = kF;
-    using extents_t =
-        stdex::mdspan<OutputType, stdex::extents<std::size_t, stdex::dynamic_extent, M>, stdex::layout_right>;
-    extents_t out_m{out, num_points};
+    constexpr std::size_t simd_size = xsimd::batch<InputType>::size;
+    const std::size_t n_deg = static_cast<std::size_t>(coeffs_.extent(0));
+    const std::size_t stride = kF_pad;
 
-    for (std::size_t i = 0; i < num_points; ++i) {
-        auto vals = operator()(x[i]);
-        poet::static_for<M>([&](auto j) { out_m(i, j) = vals[j]; });
-    }
+    // For each polynomial, evaluate all points using SIMD across points
+    poet::static_for<M>([&](auto m) {
+        const auto low_m = low_[m];
+        const auto hi_m  = hi_[m];
+
+        // Gather this polynomial's coefficients (column m from transposed layout)
+        const OutputType *col = coeffs_.data_handle();
+
+        // SIMD loop: process simd_size points at a time
+        std::size_t i = 0;
+        for (; i + simd_size <= num_points; i += simd_size) {
+            // Load simd_size x-values and apply domain mapping
+            auto xv = xsimd::load_unaligned(x + i);
+            auto xu = xsimd::fms(xsimd::batch<InputType>(InputType(2.0)), xv,
+                                 xsimd::batch<InputType>(hi_m))
+                      * xsimd::batch<InputType>(low_m);
+
+            // Horner evaluation across points
+            auto acc = xsimd::batch<OutputType>(col[0 * stride + m]);
+            if constexpr (deg_max_ctime_ != 0) {
+                if (!truncated_) {
+                    poet::static_for<1, deg_max_ctime_>([&](auto k) {
+                        acc = poly_eval::detail::fma(acc, xu,
+                              xsimd::batch<OutputType>(col[std::size_t(k) * stride + m]));
+                    });
+                } else {
+                    for (std::size_t k = 1; k < n_deg; ++k)
+                        acc = poly_eval::detail::fma(acc, xu,
+                              xsimd::batch<OutputType>(col[k * stride + m]));
+                }
+            } else {
+                for (std::size_t k = 1; k < n_deg; ++k)
+                    acc = poly_eval::detail::fma(acc, xu,
+                          xsimd::batch<OutputType>(col[k * stride + m]));
+            }
+
+            // Scatter to row-major output: out[i*M + m], out[(i+1)*M + m], ...
+            alignas(xsimd::batch<OutputType>::arch_type::alignment()) OutputType tmp[simd_size];
+            acc.store_aligned(tmp);
+            for (std::size_t s = 0; s < simd_size; ++s) {
+                out[(i + s) * M + m] = tmp[s];
+            }
+        }
+
+        // Scalar remainder
+        for (; i < num_points; ++i) {
+            auto xu = (InputType(2.0) * x[i] - hi_m) * low_m;
+            OutputType acc = col[0 * stride + m];
+            if constexpr (deg_max_ctime_ != 0) {
+                if (!truncated_) {
+                    poet::static_for<1, deg_max_ctime_>([&](auto k) {
+                        acc = poly_eval::detail::fma(acc, xu, col[std::size_t(k) * stride + m]);
+                    });
+                } else {
+                    for (std::size_t k = 1; k < n_deg; ++k)
+                        acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
+                }
+            } else {
+                for (std::size_t k = 1; k < n_deg; ++k)
+                    acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
+            }
+            out[i * M + m] = acc;
+        }
+    });
 }
 PF_FAST_EVAL_END
 
