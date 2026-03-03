@@ -302,6 +302,68 @@ TEST(PolyEval, AdaptiveFitThenTruncate) {
     }
 }
 
+// ----- High-degree accuracy tests (compensated Horner) -----
+
+TEST(PolyEval, HighDegree48MachineEps) {
+    // Degree 48 on [-1,1] should achieve near machine epsilon
+    auto sin_func = [](double x) { return std::sin(x); };
+    const double a = -1.0, b = 1.0;
+    auto poly = poly_eval::make_func_eval(sin_func, 48, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_err = std::max(max_err, std::abs(poly(x) - sin_func(x)));
+    }
+    EXPECT_LT(max_err, 1e-14) << "Degree-48 sin fit max error: " << max_err;
+}
+
+TEST(PolyEval, HighDegree48Exp) {
+    // Degree 48 on [-1,1] for exp should also be excellent
+    auto exp_func = [](double x) { return std::exp(x); };
+    const double a = -1.0, b = 1.0;
+    auto poly = poly_eval::make_func_eval(exp_func, 48, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_err = std::max(max_err, std::abs(poly(x) - exp_func(x)));
+    }
+    EXPECT_LT(max_err, 1e-14) << "Degree-48 exp fit max error: " << max_err;
+}
+
+TEST(PolyEval, HighDegree48Complex) {
+    // Degree 48 complex fit on [-1, 1]
+    auto func = [](double x) { return std::complex<double>(std::sin(x), std::cos(x)); };
+    const double a = -1.0, b = 1.0;
+    auto poly = poly_eval::make_func_eval(func, 48, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_err = std::max(max_err, std::abs(poly(x) - func(x)));
+    }
+    EXPECT_LT(max_err, 1e-10) << "Degree-48 complex fit max error: " << max_err;
+}
+
+TEST(PolyEval, HighDegree48Batch) {
+    // Verify batch evaluation works at degree 48
+    auto sin_func = [](double x) { return std::sin(x); };
+    const double a = -1.0, b = 1.0;
+    auto poly = poly_eval::make_func_eval(sin_func, 48, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    std::vector<double> xs(kNumRandomTests), ys(kNumRandomTests);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i)
+        xs[i] = dist(gen);
+
+    poly(xs.data(), ys.data(), xs.size());
+    batch_verify<double>(sin_func, xs, ys, 1e-14);
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

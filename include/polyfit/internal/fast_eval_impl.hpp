@@ -205,10 +205,16 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
     const auto n = monomials.size();
     std::reverse(monomials.begin(), monomials.end()); // to Horner order once
 
-    for (std::size_t pass = 0; pass < Iters_compile_time; ++pass) {
+    // Compensated Horner gives more accurate residuals, preventing refinement
+    // divergence at high degrees where standard Horner rounding errors exceed
+    // the correction magnitude from bjorck_pereyra + newton_to_monomial.
+    // Extra passes for n > 32: the compensated residuals converge where standard ones diverge.
+    const std::size_t total_iters = Iters_compile_time + (n > 32 ? 2 : 0);
+
+    for (std::size_t pass = 0; pass < total_iters; ++pass) {
         auto r_cheb = make_buffer<OutputType, N_compile_time>(n);
         for (std::size_t i = 0; i < n; ++i) {
-            auto p_val = poly_eval::horner<N_compile_time>(x_cheb_[i], monomials.data(), n);
+            auto p_val = poly_eval::compensated_horner<N_compile_time>(x_cheb_[i], monomials.data(), n);
             r_cheb[i] = y_cheb_[i] - p_val;
         }
         auto newton_r = detail::bjorck_pereyra<N_compile_time, InputType, OutputType>(x_cheb_, r_cheb);

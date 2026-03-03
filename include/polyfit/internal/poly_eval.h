@@ -227,6 +227,21 @@ horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs,
 }
 
 } // namespace detail
+// Compensated Horner (scalar only, for fitting accuracy)
+// Tracks rounding errors at each FMA step using two_prod and two_sum,
+// effectively doubling working precision: relative error O(u + n*u^2*cond)
+// instead of O(n*u*cond). Only used during fitting (refinement residuals).
+
+// Real overload (general OutputType)
+template <std::size_t N_total = 0, typename OutputType, typename InputType>
+PF_ALWAYS_INLINE constexpr OutputType compensated_horner(InputType x, const OutputType *c_ptr,
+                                                         std::size_t c_size = 0) noexcept;
+
+// Complex overload (more specialized, preferred by partial ordering)
+template <std::size_t N_total = 0, typename T, typename InputType>
+PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(InputType x, const std::complex<T> *c_ptr,
+                                                               std::size_t c_size = 0) noexcept;
+
 } // namespace poly_eval
 
 //------------------------------------------------------------------------------
@@ -264,6 +279,50 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
         }
         return acc;
     }
+}
+
+//------------------------------------------------------------------------------
+// Compensated Horner (scalar, one-point)
+//------------------------------------------------------------------------------
+
+// Real overload
+template <std::size_t N_total, typename OutputType, typename InputType>
+PF_ALWAYS_INLINE constexpr OutputType compensated_horner(const InputType x, const OutputType *c_ptr,
+                                                         const std::size_t c_size) noexcept {
+    namespace eft = polyfit::internal::helpers::eft;
+    const std::size_t n = N_total != 0 ? N_total : c_size;
+    OutputType acc = c_ptr[0];
+    OutputType comp = OutputType(0);
+    for (std::size_t k = 1; k < n; ++k) {
+        auto [p, pi] = eft::two_prod(acc, OutputType(x));
+        auto [s, sigma] = eft::two_sum(p, c_ptr[k]);
+        comp = detail::fma(comp, OutputType(x), pi + sigma);
+        acc = s;
+    }
+    return acc + comp;
+}
+
+// Complex overload: component-wise compensation
+template <std::size_t N_total, typename T, typename InputType>
+PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(const InputType x, const std::complex<T> *c_ptr,
+                                                               const std::size_t c_size) noexcept {
+    namespace eft = polyfit::internal::helpers::eft;
+    const std::size_t n = N_total != 0 ? N_total : c_size;
+    T acc_re = c_ptr[0].real(), acc_im = c_ptr[0].imag();
+    T comp_re = T(0), comp_im = T(0);
+    const T xv = T(x);
+    for (std::size_t k = 1; k < n; ++k) {
+        auto [pr, pi_r] = eft::two_prod(acc_re, xv);
+        auto [sr, sig_r] = eft::two_sum(pr, c_ptr[k].real());
+        comp_re = std::fma(comp_re, xv, pi_r + sig_r);
+        acc_re = sr;
+
+        auto [pi, pi_i] = eft::two_prod(acc_im, xv);
+        auto [si, sig_i] = eft::two_sum(pi, c_ptr[k].imag());
+        comp_im = std::fma(comp_im, xv, pi_i + sig_i);
+        acc_im = si;
+    }
+    return {acc_re + comp_re, acc_im + comp_im};
 }
 
 //------------------------------------------------------------------------------
