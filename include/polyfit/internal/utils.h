@@ -17,6 +17,7 @@
 #include <complex>
 
 #include "macros.h"
+#include "helpers.h"
 
 #if __cplusplus < 202002L
 namespace std {
@@ -115,6 +116,8 @@ template <typename T> struct value_type_or_identity<T, std::void_t<typename T::v
 };
 
 namespace poly_eval::detail {
+
+namespace eft = polyfit::internal::helpers::eft;
 
 
 // std::countr_zero returns the number of trailing zero bits.
@@ -234,11 +237,74 @@ template <std::size_t N, class X, class Y>
 PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<Y, N> &y) {
     const std::size_t n = (N == 0 ? x.size() : N);
     Buffer<Y, N> a = y;
-    for (std::size_t k = 0; k + 1 < n; ++k) {
-        for (std::size_t i = n - 1; i > k; --i) {
-            a[i] = (a[i] - a[i - 1]) / static_cast<Y>(x[i] - x[i - k - 1]);
+
+    if constexpr (std::is_arithmetic_v<Y>) {
+        // Compensated path for real types
+        auto comp = make_buffer<Y, N>(n);
+        for (auto &v : comp) v = Y(0);
+
+        for (std::size_t k = 0; k + 1 < n; ++k) {
+            for (std::size_t i = n - 1; i > k; --i) {
+                auto [s, es] = eft::two_sum(a[i], -a[i - 1]);
+                Y sub_comp = es + (comp[i] - comp[i - 1]);
+                Y d = Y(x[i] - x[i - k - 1]);
+                Y q = s / d;
+                Y r = std::fma(-q, d, s); // division residual
+                comp[i] = (r + sub_comp) / d;
+                a[i] = q;
+            }
+            // Fold compensation back after each outer iteration (lossless)
+            for (std::size_t i = n - 1; i > k; --i) {
+                auto [s, e] = eft::two_sum(a[i], comp[i]);
+                a[i] = s;
+                comp[i] = e;
+            }
+        }
+    } else if constexpr (is_complex_v<Y>) {
+        // Compensated path for complex types
+        // Divisor d is real (type X), so division is component-wise
+        using Scalar = typename Y::value_type;
+        auto comp_re = make_buffer<Scalar, N>(n);
+        auto comp_im = make_buffer<Scalar, N>(n);
+        for (auto &v : comp_re) v = Scalar(0);
+        for (auto &v : comp_im) v = Scalar(0);
+
+        for (std::size_t k = 0; k + 1 < n; ++k) {
+            for (std::size_t i = n - 1; i > k; --i) {
+                Scalar d = Scalar(x[i] - x[i - k - 1]);
+                // Real component
+                auto [sr, esr] = eft::two_sum(a[i].real(), -a[i - 1].real());
+                Scalar sub_comp_re = esr + (comp_re[i] - comp_re[i - 1]);
+                Scalar qr = sr / d;
+                Scalar rr = std::fma(-qr, d, sr);
+                comp_re[i] = (rr + sub_comp_re) / d;
+                // Imaginary component
+                auto [si, esi] = eft::two_sum(a[i].imag(), -a[i - 1].imag());
+                Scalar sub_comp_im = esi + (comp_im[i] - comp_im[i - 1]);
+                Scalar qi = si / d;
+                Scalar ri = std::fma(-qi, d, si);
+                comp_im[i] = (ri + sub_comp_im) / d;
+
+                a[i] = Y(qr, qi);
+            }
+            // Fold compensation back after each outer iteration (lossless)
+            for (std::size_t i = n - 1; i > k; --i) {
+                auto [sr, er] = eft::two_sum(a[i].real(), comp_re[i]);
+                auto [si, ei] = eft::two_sum(a[i].imag(), comp_im[i]);
+                a[i] = Y(sr, si);
+                comp_re[i] = er;
+                comp_im[i] = ei;
+            }
+        }
+    } else {
+        // Fallback: uncompensated
+        for (std::size_t k = 0; k + 1 < n; ++k) {
+            for (std::size_t i = n - 1; i > k; --i) {
+                a[i] = (a[i] - a[i - 1]) / static_cast<Y>(x[i] - x[i - k - 1]);
+            }
         }
     }
+
     return a;
 }
 
@@ -252,13 +318,83 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
     auto c = make_buffer<Y, WN>(n + 1);
     for (auto &v : c) v = Y(0);
 
-    std::size_t deg = 0;
-    for (std::size_t ii = n; ii-- > 0;) {
-        ++deg;
-        for (std::size_t j = deg; j >= 1; --j)
-            c[j] = c[j - 1] - (nodes[ii] * c[j]);
-        c[0] = (-nodes[ii] * c[0]) + alpha[ii];
+    if constexpr (std::is_arithmetic_v<Y>) {
+        // Compensated path for real types
+        auto comp = make_buffer<Y, WN>(n + 1);
+        for (auto &v : comp) v = Y(0);
+
+        std::size_t deg = 0;
+        for (std::size_t ii = n; ii-- > 0;) {
+            ++deg;
+            for (std::size_t j = deg; j >= 1; --j) {
+                auto [p, ep] = eft::two_prod(Y(nodes[ii]), c[j]);
+                Y p_comp = Y(nodes[ii]) * comp[j];
+                auto [s, es] = eft::two_sum(c[j - 1], -p);
+                comp[j] = comp[j - 1] + es - ep - p_comp;
+                c[j] = s;
+            }
+            // c[0] = (-nodes[ii]*c[0]) + alpha[ii]
+            auto [p0, ep0] = eft::two_prod(Y(nodes[ii]), c[0]);
+            Y p0_comp = Y(nodes[ii]) * comp[0];
+            auto [s0, es0] = eft::two_sum(alpha[ii], -p0);
+            comp[0] = es0 - ep0 - p0_comp;
+            c[0] = s0;
+        }
+        // Apply compensation
+        for (std::size_t k = 0; k <= n; ++k)
+            c[k] += comp[k];
+    } else if constexpr (is_complex_v<Y>) {
+        // Compensated path for complex types (component-wise)
+        using Scalar = typename Y::value_type;
+        auto comp_re = make_buffer<Scalar, WN>(n + 1);
+        auto comp_im = make_buffer<Scalar, WN>(n + 1);
+        for (auto &v : comp_re) v = Scalar(0);
+        for (auto &v : comp_im) v = Scalar(0);
+
+        std::size_t deg = 0;
+        for (std::size_t ii = n; ii-- > 0;) {
+            ++deg;
+            Scalar node = Scalar(nodes[ii]);
+            for (std::size_t j = deg; j >= 1; --j) {
+                // Real component
+                auto [pr, epr] = eft::two_prod(node, c[j].real());
+                Scalar pr_comp = node * comp_re[j];
+                auto [sr, esr] = eft::two_sum(c[j - 1].real(), -pr);
+                comp_re[j] = comp_re[j - 1] + esr - epr - pr_comp;
+                // Imaginary component
+                auto [pi, epi] = eft::two_prod(node, c[j].imag());
+                Scalar pi_comp = node * comp_im[j];
+                auto [si, esi] = eft::two_sum(c[j - 1].imag(), -pi);
+                comp_im[j] = comp_im[j - 1] + esi - epi - pi_comp;
+                c[j] = Y(sr, si);
+            }
+            // c[0] = (-nodes[ii]*c[0]) + alpha[ii]
+            auto [pr0, epr0] = eft::two_prod(node, c[0].real());
+            Scalar pr0_comp = node * comp_re[0];
+            auto [sr0, esr0] = eft::two_sum(alpha[ii].real(), -pr0);
+            comp_re[0] = esr0 - epr0 - pr0_comp;
+
+            auto [pi0, epi0] = eft::two_prod(node, c[0].imag());
+            Scalar pi0_comp = node * comp_im[0];
+            auto [si0, esi0] = eft::two_sum(alpha[ii].imag(), -pi0);
+            comp_im[0] = esi0 - epi0 - pi0_comp;
+
+            c[0] = Y(sr0, si0);
+        }
+        // Apply compensation
+        for (std::size_t k = 0; k <= n; ++k)
+            c[k] += Y(comp_re[k], comp_im[k]);
+    } else {
+        // Fallback: uncompensated
+        std::size_t deg = 0;
+        for (std::size_t ii = n; ii-- > 0;) {
+            ++deg;
+            for (std::size_t j = deg; j >= 1; --j)
+                c[j] = c[j - 1] - (nodes[ii] * c[j]);
+            c[0] = (-nodes[ii] * c[0]) + alpha[ii];
+        }
     }
+
     if constexpr (N == 0) {
         c.resize(n);
         return c;

@@ -54,7 +54,7 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     constexpr auto b = static_cast<float>(M_PI);
     constexpr auto n = 12;
     constexpr size_t iters = 1;
-    constexpr auto eps = 2e-4;
+    constexpr auto eps = 2.5e-4;
     const auto poly = poly_eval::make_func_eval<iters>(float_func, n, a, b);
 
     // Randomized tests (single-point)

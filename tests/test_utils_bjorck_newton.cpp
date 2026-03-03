@@ -1,3 +1,4 @@
+#include <cmath>
 #include <gtest/gtest.h>
 #include "polyfit/fast_eval.hpp"
 
@@ -30,4 +31,41 @@ TEST(Utils, BjorckNewtonRoundtrip) {
         }
         EXPECT_NEAR(eval, values[i], 1e-12);
     }
+}
+
+TEST(Utils, BjorckNewtonHighDegreeAccuracy) {
+    // Degree-8 polynomial p(x) = x^8 + x^7 + ... + x + 1
+    // on Chebyshev nodes of the second kind in [-1, 1].
+    // At degree 8 the monomial Vandermonde condition number is modest (~256),
+    // so compensated arithmetic recovers coefficients to near machine precision.
+    constexpr std::size_t degree = 8;
+    constexpr std::size_t n = degree + 1;
+
+    std::vector<double> expected_coeffs(n, 1.0);
+
+    // Generate Chebyshev nodes: x_k = cos(k * pi / (n-1)), k = 0..n-1
+    poly_eval::Buffer<double, 0> nodes(n);
+    for (std::size_t k = 0; k < n; ++k)
+        nodes[k] = std::cos(static_cast<double>(k) * M_PI / static_cast<double>(n - 1));
+
+    // Evaluate via Horner: p(x) = 1 + x*(1 + x*(1 + ... + x*(1 + x)))
+    poly_eval::Buffer<double, 0> values(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        double x = nodes[i];
+        double val = 1.0;
+        for (std::size_t k = 1; k < n; ++k)
+            val = std::fma(val, x, 1.0);
+        values[i] = val;
+    }
+
+    auto newton = detail::bjorck_pereyra<0, double, double>(nodes, values);
+    auto mono = detail::newton_to_monomial<0, double, double>(newton, nodes);
+
+    double max_err = 0.0;
+    for (std::size_t k = 0; k < n; ++k) {
+        double err = std::abs(mono[k] - expected_coeffs[k]);
+        max_err = std::max(max_err, err);
+    }
+    // Verify compensation is near machine precision
+    EXPECT_LT(max_err, 1e-13) << "max coefficient error = " << max_err;
 }
