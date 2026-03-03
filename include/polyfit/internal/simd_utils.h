@@ -4,6 +4,7 @@
 // Keep this header minimal to avoid duplicating helpers defined in utils.h.
 
 #include <xsimd/xsimd.hpp>
+#include <poet/core/register_info.hpp>
 #include <vector>
 #include <array>
 #include <complex>
@@ -15,6 +16,16 @@
 
 namespace poly_eval {
 namespace detail {
+
+// Optimal Horner unroll factor derived from vector register pressure.
+// Each lane: 1 pt_batch + 1 acc_batch = 2 vector registers.
+// Reserve: 1 broadcast + 2 scratch.
+// AVX2/SSE (16 regs) → 6, AVX-512/NEON/SVE (32 regs) → 14.
+template <typename T>
+constexpr std::size_t optimal_horner_uf() noexcept {
+    constexpr std::size_t nregs = poet::vector_register_count();
+    return (nregs - 3) / 2;
+}
 
 // detect xsimd batches
 template <typename T>

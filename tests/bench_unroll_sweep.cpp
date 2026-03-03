@@ -4,12 +4,13 @@
 #include <random>
 #include <vector>
 #include <iomanip>
+#include <string>
 
 int main() {
     std::mt19937_64 rng(42);
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
-    const std::vector<int> unrolls = {1, 2, 4, 8, 16, 32};
+    const std::vector<int> unrolls = {0, 1, 2, 4, 8, 16, 32};
     const std::vector<std::size_t> degs = {8, 16, 24, 32};
 
     const std::size_t P = 1024;            // points per eval
@@ -31,7 +32,7 @@ int main() {
 
     for (size_t ui = 0; ui < unrolls.size(); ++ui) {
         int U = unrolls[ui];
-        std::cout << "| " << U << " |";
+        std::cout << "| " << (U == 0 ? "auto" : std::to_string(U)) << " |";
         for (size_t di = 0; di < degs.size(); ++di) {
             std::size_t deg = degs[di];
 
@@ -50,6 +51,10 @@ int main() {
                 auto t0 = steady_clock::now();
                 for (int it = 0; it < bench_iters; ++it) {
                     switch (unroll) {
+                    case 0:
+                        poly_eval::horner<0, false, false, 0>(pts.data(), out.data(), P, coeffs.data(), deg,
+                                                             [](auto v) { return v; });
+                        break;
                     case 1:
                         poly_eval::horner<0, false, false, 1>(pts.data(), out.data(), P, coeffs.data(), deg,
                                                              [](auto v) { return v; });
@@ -104,7 +109,7 @@ int main() {
     for (size_t i = 0; i < degs.size(); ++i) std::cout << "---|";
     std::cout << "\n";
     for (size_t ui = 0; ui < unrolls.size(); ++ui) {
-        std::cout << "| " << unrolls[ui] << " |";
+        std::cout << "| " << (unrolls[ui] == 0 ? "auto" : std::to_string(unrolls[ui])) << " |";
         for (size_t di = 0; di < degs.size(); ++di) {
             std::cout << " " << std::fixed << std::setprecision(2) << results[ui][di] << " |";
         }

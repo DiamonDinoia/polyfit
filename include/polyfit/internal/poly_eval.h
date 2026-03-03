@@ -230,14 +230,21 @@ template <std::size_t N_total, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c_ptr,
                                           const std::size_t c_size) noexcept {
     if constexpr (N_total != 0) {
-        // Compile-time unrolled Horner on reversed array
+        // CT path: full unroll (N is known, serial chain)
+        // GCC false positive: deep static_for inlining confuses -Wmaybe-uninitialized
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
         OutputType acc = c_ptr[0];
         poet::static_for<1, N_total>([&](auto i) {
             acc = detail::fma(acc, x, c_ptr[i]);
         });
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         return acc;
     } else {
-        // Runtime iterative Horner
         OutputType acc = c_ptr[0];
         for (std::size_t k = 1; k < c_size; ++k) {
             acc = detail::fma(acc, x, c_ptr[k]);
@@ -256,48 +263,50 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
                                     const OutputType *monomials, std::size_t monomials_size,
                                     const MapFunc map_func) noexcept {
     PF_C23STATIC constexpr auto simd_size = xsimd::batch<InputType>::size;
-    PF_C23STATIC constexpr auto OuterUnrollFactor = UNROLL > 0 ? UNROLL : 32 / sizeof(OutputType);
-    PF_C23STATIC constexpr auto block = simd_size * OuterUnrollFactor;
+    PF_C23STATIC constexpr auto UF = UNROLL > 0 ? UNROLL : detail::optimal_horner_uf<OutputType>();
+    PF_C23STATIC constexpr auto block = simd_size * UF;
 
     using pts_mode = std::conditional_t<pts_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
     using out_mode = std::conditional_t<out_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
-    const std::size_t trunc = num_points & (-block);
 
-    for (std::size_t i = 0; i < trunc; i += block) {
-        xsimd::batch<InputType> pt_batches[OuterUnrollFactor];
-        xsimd::batch<OutputType> acc_batches[OuterUnrollFactor];
+    std::size_t i = 0;
+    if (num_points >= block)
+    for (const std::size_t limit = num_points - block; i <= limit; i += block) {
+        xsimd::batch<InputType> pt_batches[UF];
+        xsimd::batch<OutputType> acc_batches[UF];
 
         // Load and init with highest-degree term
-        poet::static_for<OuterUnrollFactor>([&](auto j) {
+        poet::static_for<UF>([&](auto j) {
             pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
             acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
         });
 
         // Horner steps
         if constexpr (N_monomials != 0) {
+            // CT path: full unroll (N is known)
             poet::static_for<1, N_monomials>([&](auto k) {
-                poet::static_for<OuterUnrollFactor>([&](auto j) {
+                poet::static_for<UF>([&](auto j) {
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
             });
         } else {
             for (std::size_t k = 1; k < monomials_size; ++k) {
-                poet::static_for<OuterUnrollFactor>([&](auto j) {
+                poet::static_for<UF>([&](auto j) {
                     acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], xsimd::batch<OutputType>(monomials[k]));
                 });
             }
         }
 
         // Store results
-        poet::static_for<OuterUnrollFactor>([&](auto j) {
+        poet::static_for<UF>([&](auto j) {
             acc_batches[j].store(out + i + j * simd_size, out_mode{});
         });
     }
 
     // Remainder
-    PF_ASSUME((num_points - trunc) < block);
-    for (std::size_t idx = trunc; idx < num_points; ++idx) {
-        out[idx] = horner<N_monomials>(map_func(pts[idx]), monomials, monomials_size);
+    PF_ASSUME(num_points - i < block);
+    for (; i < num_points; ++i) {
+        out[i] = horner<N_monomials>(map_func(pts[i]), monomials, monomials_size);
     }
 }
 
