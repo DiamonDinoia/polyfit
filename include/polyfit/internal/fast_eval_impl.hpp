@@ -201,6 +201,22 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
     // monomials are now in Horner order (high-degree-first) — done
 }
 
+// ------------------------------ truncate -------------------------------
+
+template <class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::truncate(
+    typename value_type_or_identity<OutputType>::type eps) noexcept
+{
+    if constexpr (N_compile_time == 0) {
+        // monomials are in Horner order: [0]=highest degree, [size-1]=constant
+        std::size_t skip = 0;
+        while (skip + 1 < monomials.size() && std::abs(monomials[skip]) < eps)
+            ++skip;
+        if (skip > 0)
+            monomials.erase(monomials.begin(), monomials.begin() + static_cast<std::ptrdiff_t>(skip));
+    }
+}
+
 // ------------------------------ ctor -----------------------------------
 
 template <typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const EvalTypes &...evals) {
@@ -229,7 +245,7 @@ template <typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::Fun
 template <typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
         : coeff_store_(other.coeff_store_), coeffs_{coeff_store_.data(), other.coeffs_.extents()}, low_(other.low_),
-            hi_(other.hi_) {}
+            hi_(other.hi_), truncated_(other.truncated_) {}
 
 template <typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
@@ -237,6 +253,7 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
         coeff_store_ = other.coeff_store_;
         low_ = other.low_;
         hi_ = other.hi_;
+        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -245,7 +262,7 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
 template <typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
         : coeff_store_(std::move(other.coeff_store_)), coeffs_{coeff_store_.data(), other.coeffs_.extents()},
-            low_(std::move(other.low_)), hi_(std::move(other.hi_)) {}
+            low_(std::move(other.low_)), hi_(std::move(other.hi_)), truncated_(other.truncated_) {}
 
 template <typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
@@ -253,6 +270,7 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other)
         coeff_store_ = std::move(other.coeff_store_);
         low_ = std::move(other.low_);
         hi_ = std::move(other.hi_);
+        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -270,13 +288,17 @@ PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
 std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
 FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept {
-    std::array<InputType, kF_pad> xu{};
+    alignas(kAlignment) std::array<InputType, kF_pad> xu{};
     for (std::size_t i = 0; i < kF; ++i)
         xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i];
 
-    std::array<OutputType, kF_pad> res{};
-    horner_transposed<kF_pad, deg_max_ctime_, vector_width>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                            static_cast<std::size_t>(coeffs_.extent(0)));
+    alignas(kAlignment) std::array<OutputType, kF_pad> res{};
+    if (truncated_)
+        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
+                                                         static_cast<std::size_t>(coeffs_.extent(0)));
+    else
+        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
+                                                                      static_cast<std::size_t>(coeffs_.extent(0)));
 
     if constexpr (kF == kF_pad) {
         return res; // no padding
@@ -291,13 +313,17 @@ PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
 std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
 FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept {
-    std::array<InputType, kF_pad> xu{};
+    alignas(kAlignment) std::array<InputType, kF_pad> xu{};
     for (std::size_t i = 0; i < kF; ++i)
         xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i];
 
-    std::array<OutputType, kF_pad> res{};
-    horner_transposed<kF_pad, deg_max_ctime_, vector_width>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                            static_cast<std::size_t>(coeffs_.extent(0)));
+    alignas(kAlignment) std::array<OutputType, kF_pad> res{};
+    if (truncated_)
+        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
+                                                         static_cast<std::size_t>(coeffs_.extent(0)));
+    else
+        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
+                                                                      static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -361,6 +387,25 @@ template <typename... EvalTypes> PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>
     for (std::size_t j = kF; j < kF_pad; ++j)
         for (std::size_t k = 0; k < coeffs_.extent(0); ++k)
             coeffs_(k, j) = OutputType{};
+}
+
+// ------------------------------ truncate -------------------------------
+
+template <typename... EvalTypes>
+PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(typename value_type_or_identity<OutputType>::type eps) {
+    // Scan from highest-degree row downward
+    std::size_t new_deg = coeffs_.extent(0);
+    while (new_deg > 1) {
+        OutputType row_max{};
+        for (std::size_t j = 0; j < kF; ++j)
+            row_max = std::max(row_max, std::abs(coeffs_(new_deg - 1, j)));
+        if (row_max >= eps) break;
+        --new_deg;
+    }
+    if (new_deg < coeffs_.extent(0)) {
+        coeffs_ = decltype(coeffs_){coeff_store_.data(), new_deg, kF_pad};
+        truncated_ = true;
+    }
 }
 
 // ------------------------------ extract_real ---------------------------
@@ -638,7 +683,7 @@ template <std::size_t N_compile_time, class Func,
     return FuncEvalND<Func, N_compile_time>(F, a, b);
 }
 
-// Runtime error tolerance (1D or ND)
+// Runtime error tolerance (1D or ND) — fit once at MaxN, then truncate
 template <std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters_compile_time, class Func,
           typename FloatType, std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int>>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
@@ -647,21 +692,37 @@ template <std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters
     using evaluator_t =
         std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, 0>, FuncEval<Func, 0, Iters_compile_time>>;
     const auto eval_pts = detail::linspace(a, b, int(NumEvalPoints_val));
-    double max_err;
-    for (int n = 2; n <= int(MaxN_val); ++n) {
-        const evaluator_t evaluator(F, n, a, b);
-        max_err = 0.0;
+
+    // 1. Fit once at MaxN
+    evaluator_t evaluator(F, int(MaxN_val), a, b);
+
+    // Helper to compute max error across eval points
+    auto compute_max_err = [&]() {
+        double max_err = 0.0;
         for (auto const &pt : eval_pts) {
-            const auto actual = F(pt);
-            const auto approx = evaluator(pt);
-            max_err = std::max(detail::relative_l2_norm(actual, approx), max_err);
+            max_err = std::max(detail::relative_l2_norm(F(pt), evaluator(pt)), max_err);
         }
-        if (max_err <= eps) {
-            return evaluator;
-        }
+        return max_err;
+    };
+
+    // 2. Try truncating negligible high-degree coefficients
+    if constexpr (!has_tuple_size_v<RawInputType>) {
+        auto candidate = evaluator;
+        candidate.truncate(static_cast<typename value_type_or_identity<typename evaluator_t::OutputType>::type>(eps));
+        double err = 0.0;
+        for (auto const &pt : eval_pts)
+            err = std::max(detail::relative_l2_norm(F(pt), candidate(pt)), err);
+        if (err <= eps)
+            return candidate;
     }
+
+    // 3. Full-degree fit — verify error
+    if (compute_max_err() <= eps)
+        return evaluator;
+
     throw std::runtime_error("No polynomial degree found for requested error tolerance. eps=" + std::to_string(eps) +
-                             ", MaxN=" + std::to_string(MaxN_val) + ", max_err=" + std::to_string(max_err));
+                             ", MaxN=" + std::to_string(MaxN_val) +
+                             ", max_err=" + std::to_string(compute_max_err()));
 }
 
 template <std::size_t N_compile_time, std::size_t Iters_compile_time, typename Func,
@@ -701,6 +762,7 @@ template <double eps_val, auto a, auto b, std::size_t MaxN_val, std::size_t NumE
         };
         int n = 0;
         poet::static_for<2, MaxN_val>([&](auto i) {
+            if (n != 0) return; // already found minimal degree
             using evaluator_t = std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, i>,
                                                    FuncEval<Func, i, Iters_compile_time>>;
             if constexpr (compute_error(evaluator_t(F, a, b)) <= eps_val) {

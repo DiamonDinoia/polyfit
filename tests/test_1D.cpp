@@ -257,6 +257,51 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
 }
 #endif
 
+// ----- FuncEval truncation tests -----
+
+TEST(PolyEval, TruncateLowDegreeFunc) {
+    // Fit a cubic polynomial at degree 16 — high-degree terms should be ~0
+    auto cubic = [](double x) { return x * x * x - 2.0 * x + 1.0; };
+    auto poly = poly_eval::make_func_eval(cubic, 16, -1.0, 1.0);
+    const auto original_size = poly.coeffs().size();
+    EXPECT_EQ(original_size, 16u);
+
+    poly.truncate(1e-8);
+    // Should truncate down to ~4 terms (degree 3 = 4 coefficients)
+    EXPECT_LT(poly.coeffs().size(), original_size);
+    EXPECT_LE(poly.coeffs().size(), 6u); // some slack for numerical noise
+
+    // Verify accuracy after truncation
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (std::size_t i = 0; i < 100; ++i) {
+        double x = dist(gen);
+        EXPECT_NEAR(poly(x), cubic(x), 1e-7) << "x=" << x;
+    }
+}
+
+TEST(PolyEval, TruncatePreservesConstant) {
+    // A constant function: all coefficients except constant should be ~0
+    auto const_func = [](double x) { (void)x; return 42.0; };
+    auto poly = poly_eval::make_func_eval(const_func, 16, -1.0, 1.0);
+    poly.truncate(1e-10);
+    EXPECT_EQ(poly.coeffs().size(), 1u); // only constant term remains
+    EXPECT_NEAR(poly(0.5), 42.0, 1e-10);
+}
+
+TEST(PolyEval, AdaptiveFitThenTruncate) {
+    // The adaptive make_func_eval should now fit-then-truncate
+    auto poly = poly_eval::make_func_eval(double_func, 1e-12, -0.5, 0.5);
+    // cos(x) on [-0.5, 0.5] needs ~8 terms for 1e-12 accuracy
+    EXPECT_LE(poly.coeffs().size(), 32u);
+
+    // Verify accuracy
+    std::uniform_real_distribution<double> dist(-0.5, 0.5);
+    for (std::size_t i = 0; i < 100; ++i) {
+        double x = dist(gen);
+        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(x), double_func(x)), 1e-12);
+    }
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

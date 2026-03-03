@@ -121,6 +121,78 @@ TYPED_TEST(FastEvalManyTest, Tuple) {
         EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
 }
 
+// ----- SIMD constant assertions -----
+
+TEST(FuncEvalManySIMD, CorrectConstants) {
+    using Group2 = decltype(make_group<2>());
+    using Group3 = decltype(make_group<3>());
+    using Group5 = decltype(make_group<5>());
+
+    constexpr auto simd_w = xsimd::batch<double>::size;
+
+    // kSimd should be the native SIMD width
+    EXPECT_EQ(Group2::kSimd, simd_w);
+    EXPECT_EQ(Group3::kSimd, simd_w);
+
+    // kF_pad should be kF rounded up to kSimd
+    EXPECT_EQ(Group2::kF_pad, ((2 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group3::kF_pad, ((3 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group5::kF_pad, ((5 + simd_w - 1) / simd_w) * simd_w);
+
+    // vector_width should equal kSimd
+    EXPECT_EQ(Group2::vector_width, simd_w);
+}
+
+// ----- FuncEvalMany truncation tests -----
+
+TEST(FuncEvalManyTruncate, BasicTruncation) {
+    auto group = make_group<4>();
+    EXPECT_EQ(group.degree(), 16u);
+
+    // Truncate with a generous threshold — should reduce degree
+    group.truncate(1e-8);
+    EXPECT_LE(group.degree(), 16u);
+
+    // Verify accuracy is maintained
+    double x = 0.3;
+    auto out = group(x);
+    double expected = func(x);
+    for (std::size_t f = 0; f < 4; ++f)
+        EXPECT_NEAR(out[f], expected, 1e-7);
+}
+
+TEST(FuncEvalManyTruncate, PreservesAccuracy) {
+    auto group = make_group<3>();
+
+    // Truncate with a tight threshold
+    group.truncate(1e-14);
+
+    // Verify across multiple points
+    for (int i = 0; i < 50; ++i) {
+        double x = rand_uniform();
+        auto out = group(x);
+        for (std::size_t f = 0; f < 3; ++f)
+            EXPECT_NEAR(out[f], func(x), 1e-13);
+    }
+}
+
+// Non-SIMD-multiple sizes should still work correctly with padding
+TEST(FuncEvalManySIMD, NonMultipleSizes) {
+    // Size 3 and 5 are not multiples of typical SIMD widths (2 or 4)
+    auto group3 = make_group<3>();
+    auto group5 = make_group<5>();
+
+    double x = 0.42;
+    auto out3 = group3(x);
+    auto out5 = group5(x);
+    double expected = func(x);
+
+    for (std::size_t f = 0; f < 3; ++f)
+        EXPECT_NEAR(out3[f], expected, 1e-14);
+    for (std::size_t f = 0; f < 5; ++f)
+        EXPECT_NEAR(out5[f], expected, 1e-14);
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

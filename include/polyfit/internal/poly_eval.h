@@ -95,7 +95,8 @@ PF_ALWAYS_INLINE constexpr void horner_many(InputType xin, const OutputType *coe
  * @param M Number of points (used if M_total == 0).
  * @param N Number of coefficients (used if N_total == 0).
  */
-template <std::size_t M_total = 0, std::size_t N_total = 0, std::size_t simd_width = 0, typename Out, typename In>
+template <std::size_t M_total = 0, std::size_t N_total = 0, std::size_t simd_width = 0, bool aligned = false,
+          typename Out, typename In>
 PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, std::size_t M = 0,
                                                std::size_t N = 0) noexcept;
 
@@ -335,92 +336,88 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputTyp
 }
 
 //------------------------------------------------------------------------------
-// horner_transposed
+// horner_transposed — shared SIMD core + public dispatch
 //------------------------------------------------------------------------------
 
-template <std::size_t M_total, std::size_t N_total, std::size_t simd_width, typename Out, typename In>
+namespace detail {
+
+template <std::size_t N_total, std::size_t simd_width, bool is_aligned,
+          typename Out, typename AccArr, typename XvecArr, typename ForChunks>
+PF_ALWAYS_INLINE void horner_transposed_simd_core(
+    const Out *coeffs, Out *out, std::size_t stride, std::size_t n_lim,
+    AccArr &acc, XvecArr &xvec, ForChunks for_chunks) noexcept
+{
+    using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
+    using mode = std::conditional_t<is_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
+
+    // Init accumulators from row 0
+    for_chunks([&](auto ci) {
+        acc[ci] = batch_out::load(coeffs + std::size_t(ci) * simd_width, mode{});
+    });
+
+    // Horner steps
+    auto step = [&](std::size_t k) {
+        const auto *col = coeffs + k * stride;
+        for_chunks([&](auto ci) {
+            acc[ci] = detail::fma(acc[ci], xvec[ci],
+                                  batch_out::load(col + std::size_t(ci) * simd_width, mode{}));
+        });
+    };
+
+    if constexpr (N_total != 0)
+        poet::static_for<1, N_total>([&](auto k) { step(k); });
+    else
+        for (std::size_t k = 1; k < n_lim; ++k) step(k);
+
+    // Store results
+    for_chunks([&](auto ci) {
+        acc[ci].store(out + std::size_t(ci) * simd_width, mode{});
+    });
+}
+
+} // namespace detail
+
+template <std::size_t M_total, std::size_t N_total, std::size_t simd_width, bool aligned,
+          typename Out, typename In>
 PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, const std::size_t M,
                                                const std::size_t N) noexcept {
     constexpr bool has_Mt = (M_total != 0);
     constexpr bool has_Nt = (N_total != 0);
-    constexpr bool do_simd = (simd_width > 0);
     const std::size_t m_lim = has_Mt ? M_total : M;
     const std::size_t n_lim = has_Nt ? N_total : N;
     const std::size_t stride = m_lim;
 
-    if constexpr (do_simd) {
+    if constexpr (simd_width > 0) {
         using batch_in = xsimd::make_sized_batch_t<In, simd_width>;
-        using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
+        using mode = std::conditional_t<aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
+
         if constexpr (has_Mt) {
             constexpr std::size_t C = M_total / simd_width;
-            std::array<batch_out, C> acc;
+            std::array<xsimd::make_sized_batch_t<Out, simd_width>, C> acc;
             std::array<batch_in, C> xvec;
-
             poet::static_for<C>([&](auto ci) {
-                constexpr auto base = ci * simd_width;
-                xvec[ci] = batch_in::load_unaligned(xin + base);
-                acc[ci] = batch_out::load_unaligned(coeffs + base);
+                xvec[ci] = batch_in::load(xin + std::size_t(ci) * simd_width, mode{});
             });
-
-            if constexpr (has_Nt) {
-                poet::static_for<1, N_total>([&](auto k) {
-                    const auto col = coeffs + (k * stride);
-                    poet::static_for<C>([&](auto ci) {
-                        constexpr auto base = ci * simd_width;
-                        batch_out ck = batch_out::load_unaligned(col + base);
-                        acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
-                    });
-                });
-            } else {
-                for (std::size_t k = 1; k < n_lim; ++k) {
-                    const auto col = coeffs + (k * stride);
-                    poet::static_for<C>([&](auto ci) {
-                        constexpr auto base = ci * simd_width;
-                        batch_out ck = batch_out::load_unaligned(col + base);
-                        acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
-                    });
-                }
-            }
-
-            poet::static_for<C>([&](auto ci) {
-                constexpr auto base = ci * simd_width;
-                acc[ci].store_unaligned(out + base);
-            });
+            detail::horner_transposed_simd_core<N_total, simd_width, aligned>(
+                coeffs, out, stride, n_lim, acc, xvec,
+                [](auto body) { poet::static_for<C>([&](auto ci) { body(ci); }); });
         } else {
-            // Runtime-M SIMD path: heap allocation here is a known trade-off.
-            // The compile-time path above uses stack-allocated std::array instead.
-            const std::size_t chunks = m_lim / simd_width;
-            std::vector<batch_out> acc(chunks);
-            std::vector<batch_in> xvec(chunks);
-
-            for (std::size_t ci = 0; ci < chunks; ++ci) {
-                const auto base = ci * simd_width;
-                xvec[ci] = batch_in::load_unaligned(xin + base);
-                acc[ci] = batch_out::load_unaligned(coeffs + base);
-            }
-            for (std::size_t k = 1; k < n_lim; ++k) {
-                const auto col = coeffs + (k * stride);
-                for (std::size_t ci = 0; ci < chunks; ++ci) {
-                    const auto base = ci * simd_width;
-                    batch_out ck = batch_out::load_unaligned(col + base);
-                    acc[ci] = detail::fma(acc[ci], xvec[ci], ck);
-                }
-            }
-            for (std::size_t ci = 0; ci < chunks; ++ci) {
-                const auto base = ci * simd_width;
-                acc[ci].store_unaligned(out + base);
-            }
+            using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
+            const std::size_t C = m_lim / simd_width;
+            std::vector<batch_out> acc(C);
+            std::vector<batch_in> xvec(C);
+            for (std::size_t ci = 0; ci < C; ++ci)
+                xvec[ci] = batch_in::load(xin + ci * simd_width, mode{});
+            detail::horner_transposed_simd_core<N_total, simd_width, aligned>(
+                coeffs, out, stride, n_lim, acc, xvec,
+                [C](auto body) { for (std::size_t ci = 0; ci < C; ++ci) body(ci); });
         }
     } else {
         // Scalar path
         if constexpr (has_Mt) {
-            poet::static_for<M_total>([&](auto i) {
-                out[i] = coeffs[i];
-            });
+            poet::static_for<M_total>([&](auto i) { out[i] = coeffs[i]; });
         } else {
-            for (std::size_t i = 0; i < m_lim; ++i) {
-                out[i] = coeffs[i];
-            }
+            for (std::size_t i = 0; i < m_lim; ++i) out[i] = coeffs[i];
         }
 
         const auto step = [&](const std::size_t k) noexcept {
@@ -437,13 +434,9 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         };
 
         if constexpr (has_Nt) {
-            poet::static_for<1, N_total>([&](auto k) {
-                step(k);
-            });
+            poet::static_for<1, N_total>([&](auto k) { step(k); });
         } else {
-            for (std::size_t k = 1; k < n_lim; ++k) {
-                step(k);
-            }
+            for (std::size_t k = 1; k < n_lim; ++k) step(k);
         }
     }
 }

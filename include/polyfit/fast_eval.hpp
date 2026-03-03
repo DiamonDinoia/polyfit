@@ -113,6 +113,17 @@ template <class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_
     constexpr void operator()(const InputType *pts, OutputType *out, std::size_t num_points) const noexcept;
 
     /**
+     * @brief Truncate negligible high-degree coefficients.
+     *
+     * Scans leading (high-degree) coefficients and removes those whose
+     * absolute value is below `eps`. Only available for runtime-degree
+     * evaluators (N_compile_time == 0).
+     *
+     * @param eps Threshold below which coefficients are considered negligible.
+     */
+    PF_C20CONSTEXPR void truncate(typename value_type_or_identity<OutputType>::type eps) noexcept;
+
+    /**
      * @brief Access the fitted coefficients in monomial order.
      *
      * The returned `Buffer` contains coefficients ordered from the constant
@@ -173,12 +184,13 @@ template <typename... EvalTypes> class FuncEvalMany {
 
     /* Compile‑time constants */
     static constexpr std::size_t kF = sizeof...(EvalTypes);            // #polynomials
-    static constexpr std::size_t kSimd = 1;                            // SIMD width (1 → scalar)
-    static constexpr std::size_t kF_pad = kF;                          // padded #polynomials
-    static constexpr std::size_t vector_width = kSimd > 1 ? kSimd : 0; // 0 for scalar path
+    static constexpr std::size_t kSimd = xsimd::batch<InputType>::size;
+    static constexpr std::size_t kF_pad = ((kF + kSimd - 1) / kSimd) * kSimd;
+    static constexpr std::size_t vector_width = kSimd;
+    static constexpr std::size_t kAlignment = xsimd::batch<OutputType>::arch_type::alignment();
 
-    static_assert(kSimd == 1 || !std::is_void_v<xsimd::make_sized_batch_t<InputType, kSimd>>,
-                  "Best SIMD width must be valid for the given type T");
+    static_assert(!std::is_void_v<xsimd::make_sized_batch_t<InputType, kSimd>>,
+                  "SIMD width must be valid for the given type T");
 
     // Max compile‑time degree across EvalTypes (0 → runtime)
     static constexpr std::size_t deg_max_ctime_ = std::max({EvalTypes::kDegreeCompileTime...});
@@ -204,6 +216,17 @@ template <typename... EvalTypes> class FuncEvalMany {
 
     template <typename... Ts> std::array<OutputType, kF> operator()(const std::tuple<Ts...> &tup) const noexcept;
 
+    /**
+     * @brief Truncate negligible high-degree coefficient rows.
+     *
+     * Scans from the highest-degree row downward and removes rows where
+     * all coefficients are below `eps`. After truncation, evaluation uses
+     * runtime-degree Horner.
+     *
+     * @param eps Threshold below which coefficient rows are considered negligible.
+     */
+    PF_C20CONSTEXPR void truncate(typename value_type_or_identity<OutputType>::type eps);
+
   private:
     /* Helper routines */
     template <std::size_t I, typename FE, typename... Rest> PF_C20CONSTEXPR void copy_coeffs(const FE &eval, const Rest &...rest);
@@ -215,14 +238,15 @@ template <typename... EvalTypes> class FuncEvalMany {
     static constexpr std::size_t dyn = stdex::dynamic_extent;
     using Ext = stdex::extents<std::size_t, (deg_max_ctime_ ? deg_max_ctime_ : dyn), kF_pad>;
 
-    Buffer<OutputType, kF_pad * deg_max_ctime_> coeff_store_{};
+    AlignedBuffer<OutputType, kF_pad * deg_max_ctime_, kAlignment> coeff_store_{};
     stdex::mdspan<OutputType, Ext> coeffs_{nullptr, 1, kF_pad};
 
     // Per‑polynomial scaling data
     std::array<InputType, kF_pad> low_{};
     std::array<InputType, kF_pad> hi_{};
 
-    // Runtime max degree (≡ deg_max_ctime_ unless CT value is 0)
+    // True after truncate() — forces runtime-degree Horner path
+    bool truncated_{false};
 };
 
 /**

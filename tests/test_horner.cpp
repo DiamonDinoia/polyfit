@@ -223,7 +223,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_Scalar_Runtime) {
         xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
-    poly_eval::horner_transposed<0, 0, 0, T, T>(x.data(), c.data(), out.data(), M, N);
+    poly_eval::horner_transposed<0, 0, 0>(x.data(), c.data(), out.data(), M, N);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_transposed_elem(x.data(), c.data(), M, N, i);
         EXPECT_NEAR(out[i], ex, eps<T>);
@@ -237,7 +237,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_Scalar_CompileTime) {
         xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
-    poly_eval::horner_transposed<M, N, 0, T, T>(x.data(), c.data(), out.data(), 0, 0);
+    poly_eval::horner_transposed<M, N, 0>(x.data(), c.data(), out.data(), 0, 0);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_transposed_elem(x.data(), c.data(), M, N, i);
         EXPECT_NEAR(out[i], ex, eps<T>);
@@ -252,7 +252,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_SIMD_Runtime) {
         xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
-    poly_eval::horner_transposed<0, 0, simd_w, T, T>(x.data(), c.data(), out.data(), M, N);
+    poly_eval::horner_transposed<0, 0, simd_w>(x.data(), c.data(), out.data(), M, N);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_transposed_elem(x.data(), c.data(), M, N, i);
         EXPECT_NEAR(out[i], ex, eps<T>);
@@ -267,7 +267,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_SIMD_CompileTime) {
         xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
-    poly_eval::horner_transposed<M, N, simd_w, T, T>(x.data(), c.data(), out.data(), 0, 0);
+    poly_eval::horner_transposed<M, N, simd_w>(x.data(), c.data(), out.data(), 0, 0);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_transposed_elem(x.data(), c.data(), M, N, i);
         EXPECT_NEAR(out[i], ex, eps<T>);
