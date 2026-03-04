@@ -45,7 +45,8 @@ TEST(Utils, BjorckNewtonHighDegreeAccuracy) {
 
     // Generate Chebyshev nodes: x_k = cos(k * pi / (n-1)), k = 0..n-1
     poly_eval::Buffer<double, 0> nodes(n);
-    for (std::size_t k = 0; k < n; ++k) nodes[k] = std::cos(static_cast<double>(k) * M_PI / static_cast<double>(n - 1));
+    constexpr double pi = 3.14159265358979323846;
+    for (std::size_t k = 0; k < n; ++k) nodes[k] = std::cos(static_cast<double>(k) * pi / static_cast<double>(n - 1));
 
     // Evaluate via Horner: p(x) = 1 + x*(1 + x*(1 + ... + x*(1 + x)))
     poly_eval::Buffer<double, 0> values(n);

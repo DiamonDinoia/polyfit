@@ -198,9 +198,6 @@ TEST(PolyEval, RuntimeEpsComplexRandom) {
 constexpr auto double_constexpr_func = [](const double x) constexpr {
     return 2.0 * x * x * x - 3.0 * x + 1.0;
 };
-constexpr auto complex_constexpr_func = [](const double x) constexpr {
-    return std::complex<double>(x * x, x + x);
-};
 // 5. Full Compile-Time Fitting and Evaluation (constexpr fixed-degree API)
 TEST(PolyEval, FullCompileTimeRandom) {
     constexpr double a = -1.0, b = 1.0;
@@ -223,6 +220,9 @@ TEST(PolyEval, FullCompileTimeRandom) {
 }
 
 #if PF_HAS_CONSTEXPR_EPS_OVERLOAD
+constexpr auto complex_constexpr_func = [](const double x) constexpr {
+    return std::complex<double>(x * x, x + x);
+};
 // 6. Full Compile-Time Fitting and Evaluation (constexpr fixed-degree API)
 TEST(PolyEval, FullCompileTimeEps) {
     constexpr double a = -1.0, b = 1.0;

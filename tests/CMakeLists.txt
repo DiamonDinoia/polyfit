@@ -19,7 +19,7 @@ CPMAddPackage(
         VERSION 1.17.0
         OPTIONS
         "INSTALL_GTEST OFF"
-        "gtest_force_shared_crt OFF"
+        "gtest_force_shared_crt ON"
         "BUILD_GMOCK OFF"
 )
 
