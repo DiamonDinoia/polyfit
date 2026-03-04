@@ -214,8 +214,7 @@ jobs:
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
             -DPOLYFIT_ENABLE_CLANG_TIDY=ON \
-            -DPOLYFIT_ENABLE_CPPCHECK=ON \
-            -DPOLYFIT_MAX_TEST_STANDARD=17
+            -DPOLYFIT_ENABLE_CPPCHECK=ON
 
       - name: Build (analysis)
         env:

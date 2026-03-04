@@ -83,6 +83,14 @@
 #define PF_ASSUME(cond) ((void)0)
 #endif
 
+// The eps-based constexpr make_func_eval uses a function parameter in an
+// if-constexpr condition — a GCC extension that Clang strictly rejects.
+#if __cplusplus >= 202002L && defined(__GNUC__) && !defined(__clang__)
+#define PF_HAS_CONSTEXPR_EPS_OVERLOAD 1
+#else
+#define PF_HAS_CONSTEXPR_EPS_OVERLOAD 0
+#endif
+
 // PF_IS_CONSTANT_EVALUATED(): portable wrapper for std::is_constant_evaluated().
 // In C++20+ returns true when in a constant-evaluated context; always false in C++17
 // (causing compile-time branches to fold away harmlessly).

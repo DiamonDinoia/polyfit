@@ -222,6 +222,7 @@ TEST(PolyEval, FullCompileTimeRandom) {
     batch_verify<double>(double_constexpr_func, xs, ys, 1e-7);
 }
 
+#if PF_HAS_CONSTEXPR_EPS_OVERLOAD
 // 6. Full Compile-Time Fitting and Evaluation (constexpr fixed-degree API)
 TEST(PolyEval, FullCompileTimeEps) {
     constexpr double a = -1.0, b = 1.0;
@@ -265,6 +266,7 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
     poly(xs.data(), ys.data(), xs.size());
     batch_verify<std::complex<double>>(complex_constexpr_func, xs, ys, eps);
 }
+#endif // PF_HAS_CONSTEXPR_EPS_OVERLOAD
 #endif
 
 // ----- FuncEval truncation tests -----

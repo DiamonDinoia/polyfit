@@ -808,7 +808,7 @@ template<std::size_t N_compile_time, std::size_t Iters_compile_time, typename Fu
     }
 }
 
-#if __cplusplus >= 202002L
+#if PF_HAS_CONSTEXPR_EPS_OVERLOAD
 template<double eps_val, auto a, auto b, std::size_t MaxN_val, std::size_t NumEvalPoints_val,
          std::size_t Iters_compile_time, class Func>
 [[nodiscard]] constexpr auto make_func_eval(Func F) {
@@ -844,7 +844,7 @@ template<double eps_val, auto a, auto b, std::size_t MaxN_val, std::size_t NumEv
                                            FuncEval<Func, degree, Iters_compile_time>>;
     return evaluator_t(F, a, b);
 }
-#endif
+#endif // PF_HAS_CONSTEXPR_EPS_OVERLOAD
 
 template<typename... EvalTypes>
 [[nodiscard]] PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> make_func_eval_many(EvalTypes... evals) noexcept {

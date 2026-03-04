@@ -385,9 +385,11 @@ template<std::size_t N_compile_time, auto a, auto b, class Func> [[nodiscard]] c
     return FuncEvalND<Func, N_compile_time>(F, a, b);
 }
 
+#if PF_HAS_CONSTEXPR_EPS_OVERLOAD
 template<double eps_val, auto a, auto b, std::size_t MaxN_val = 32, std::size_t NumEvalPoints_val = 100,
          std::size_t Iters_compile_time = 1, class Func>
 [[nodiscard]] constexpr auto make_func_eval(Func F);
+#endif // PF_HAS_CONSTEXPR_EPS_OVERLOAD
 #endif
 
 /**

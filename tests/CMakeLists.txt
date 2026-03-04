@@ -52,22 +52,20 @@ endfunction()
 # -----------------------------------------------------------------------------
 # Standards to test/build: start at C++17 and add every later standard the compiler supports.
 # C++23 and beyond additionally require native std::mdspan (checked in root CMakeLists.txt).
-# Set POLYFIT_MAX_TEST_STANDARD to limit which standards are tested (e.g., 17 for analysis with Clang,
-# which rejects function-parameter-in-constexpr-if that GCC accepts as an extension in C++20 mode).
+# Compiler-specific features (e.g. constexpr eps overload) are guarded by PF_HAS_* macros
+# in the headers, so all supported standards can be tested on every compiler.
 set(POLYFIT_TEST_STANDARDS 17)
 include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-std=c++20" _POLYFIT_CXX20)
-if (_POLYFIT_CXX20 AND (NOT DEFINED POLYFIT_MAX_TEST_STANDARD OR POLYFIT_MAX_TEST_STANDARD GREATER_EQUAL 20))
-    list(APPEND POLYFIT_TEST_STANDARDS 20)
-endif ()
-if (POLYFIT_HAS_NATIVE_MDSPAN)
-    foreach(_std IN ITEMS 23 26)
-        check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
-        if (_POLYFIT_CXX${_std})
-            list(APPEND POLYFIT_TEST_STANDARDS ${_std})
+foreach(_std IN ITEMS 20 23 26)
+    check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
+    if (_POLYFIT_CXX${_std})
+        # C++23+ requires native std::mdspan
+        if (_std GREATER_EQUAL 23 AND NOT POLYFIT_HAS_NATIVE_MDSPAN)
+            continue()
         endif ()
-    endforeach()
-endif ()
+        list(APPEND POLYFIT_TEST_STANDARDS ${_std})
+    endif ()
+endforeach()
 message(STATUS "Polyfit test standards: ${POLYFIT_TEST_STANDARDS}")
 
 function(add_polyfit_test_for_std BASENAME SRC STD)
@@ -109,7 +107,7 @@ function(add_polyfit_benchmark NAME SRC)
 
     target_compile_options(${NAME} PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
-            $<$<CXX_COMPILER_ID:MSVC>:/O2>
+            $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:MSVC>>:/fp:fast>
@@ -132,7 +130,7 @@ function(add_polyfit_benchmark_for_std BASENAME SRC STD)
     set_property(TARGET ${TGT} PROPERTY CXX_EXTENSIONS OFF)
     target_compile_options(${TGT} PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
-            $<$<CXX_COMPILER_ID:MSVC>:/O2>
+            $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:MSVC>>:/fp:fast>
