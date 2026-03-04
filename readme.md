@@ -119,7 +119,7 @@ int main() {
     // if c++20 is not available, use:
     // auto poly = poly_eval::make_func_eval<degree>(my_func, a, b);
     // which will do the fitting at runtime. But generates a faster evaluator than the runtime version.
-    
+
     std::cout << "my_func(1.0) ≈ " << poly(1.0) << std::endl;
 }
 ```
@@ -164,7 +164,7 @@ int main() {
     int degree = 12;
 
     auto poly = poly_eval::make_func_eval(f, degree, a, b);
-    
+
     // if the degree is known at compile time, this version generates a faster evaluator:
     // auto poly = poly_eval::make_func_eval<degree>(f, a, b);
 
@@ -201,12 +201,13 @@ int main() {
     std::cout << "f(0.5, -0.2) ≈ {" << result[0] << ", " << result[1] << "}" << std::endl;
 }
 ```
+
 ## Building the Examples
 
 The project includes several examples. You can build and run them all using the `run_examples` CMake target.
 
 ```bash
-# Clone the repository and navigate to the project directory then 
+# Clone the repository and navigate to the project directory then
 
 # Configure the project
 cmake -S . -B build

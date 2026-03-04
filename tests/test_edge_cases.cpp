@@ -10,7 +10,9 @@
 // Edge cases: batch evaluation with num_points=0 and num_points=1
 // --------------------------------------------------------------------------
 
-static auto cos_func = [](double x) { return std::cos(x); };
+static auto cos_func = [](double x) {
+    return std::cos(x);
+};
 
 TEST(EdgeCases, BatchEvalZeroPoints) {
     auto poly = poly_eval::make_func_eval(cos_func, 8, -1.0, 1.0);
@@ -35,7 +37,9 @@ TEST(EdgeCases, BatchEvalSinglePoint) {
 TEST(EdgeCases, DegenerateDomainAEqualsB) {
     // When a == b the domain mapping involves division by zero (1/(b-a)).
     // The evaluator constructs but produces Inf/NaN on evaluation.
-    auto identity = [](double x) { return x; };
+    auto identity = [](double x) {
+        return x;
+    };
     auto poly = poly_eval::make_func_eval(identity, 4, 1.0, 1.0);
     const double result = poly(1.0);
     EXPECT_TRUE(std::isinf(result) || std::isnan(result))
@@ -71,8 +75,7 @@ TEST(SpecialValues, InfinityInputProducesInfOrNaN) {
     const double inf_val = std::numeric_limits<double>::infinity();
     const double result = poly(inf_val);
     // Evaluating at infinity should produce inf or NaN (not a finite wrong answer)
-    EXPECT_TRUE(std::isinf(result) || std::isnan(result))
-        << "Expected inf or NaN, got " << result;
+    EXPECT_TRUE(std::isinf(result) || std::isnan(result)) << "Expected inf or NaN, got " << result;
 }
 
 TEST(SpecialValues, NaNBatchInputProducesNaN) {

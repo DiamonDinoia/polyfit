@@ -7,7 +7,9 @@
 using namespace poly_eval;
 
 TEST(CopyMove, FuncEval1D) {
-    auto f = [](double x) { return std::sin(x); };
+    auto f = [](double x) {
+        return std::sin(x);
+    };
     auto base = make_func_eval<5>(f, -1.0, 1.0);
     using FE = decltype(base);
 
@@ -31,8 +33,12 @@ TEST(CopyMove, FuncEval1D) {
 }
 
 TEST(CopyMove, FuncEvalMany) {
-    auto f1 = [](double x) { return x * x; };
-    auto f2 = [](double x) { return std::sin(x); };
+    auto f1 = [](double x) {
+        return x * x;
+    };
+    auto f2 = [](double x) {
+        return std::sin(x);
+    };
     auto fe1 = make_func_eval<5>(f1, -1.0, 1.0);
     auto fe2 = make_func_eval<5>(f2, -1.0, 1.0);
     auto base = make_func_eval_many(fe1, fe2);
@@ -70,7 +76,9 @@ TEST(CopyMove, FuncEvalMany) {
 TEST(CopyMove, FuncEvalND) {
     using In = std::array<double, 2>;
     using Out = std::array<double, 2>;
-    auto f = [](const In &pt) -> Out { return Out{pt[0] + pt[1], pt[0] - pt[1]}; };
+    auto f = [](const In &pt) -> Out {
+        return Out{pt[0] + pt[1], pt[0] - pt[1]};
+    };
     In low{-1.0, -1.0}, high{1.0, 1.0};
     auto base = make_func_eval<3>(f, low, high);
     using FEN = decltype(base);
@@ -108,4 +116,3 @@ int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-

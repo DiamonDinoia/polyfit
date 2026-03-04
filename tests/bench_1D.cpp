@@ -10,7 +10,7 @@ using namespace ankerl::nanobench;
 
 std::mt19937_64 rng(42);
 // A single templated bench function: T is the input/output type, F is the functor.
-template <typename F>
+template<typename F>
 void run_bench(const std::string &label, Bench &bench, F func, typename poly_eval::function_traits<F>::arg0_type a,
                typename poly_eval::function_traits<F>::arg0_type b, size_t num_points = 1024) {
     using T = decltype(a);

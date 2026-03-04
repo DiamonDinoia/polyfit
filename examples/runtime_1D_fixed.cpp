@@ -1,11 +1,13 @@
+#include "polyfit/fast_eval.hpp"
+#include <cmath>
 #include <iostream>
 #include <vector>
-#include <cmath>
-#include "polyfit/fast_eval.hpp"
 
 int main() {
     // 1. Define the function to approximate and its domain.
-    auto my_func = [](double x) { return std::cos(x); };
+    auto my_func = [](double x) {
+        return std::cos(x);
+    };
     double a = -1.0, b = 1.0;
     int degree = 16;
 

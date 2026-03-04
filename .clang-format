@@ -1,4 +1,41 @@
+---
 Language: Cpp
 BasedOnStyle: LLVM
 ColumnLimit: 120
 IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Namespace closing braces get a // namespace foo comment
+FixNamespaceComments: true
+
+# At most one blank line between consecutive declarations
+MaxEmptyLinesToKeep: 1
+
+# Sort #includes case-sensitively (uppercase before lowercase)
+SortIncludes: CaseSensitive
+
+# No space in: (T)x, !x, template<
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+
+# Short if/loop/lambda: keep bodies on the same line when they fit
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortLambdasOnASingleLine: Inline
+
+# Trailing comments: align within blocks; bridge over blank lines
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+
+# Qualifier order: static inline constexpr const <type>
+QualifierAlignment: Custom
+QualifierOrder:
+  - static
+  - inline
+  - constexpr
+  - const
+  - type
+...

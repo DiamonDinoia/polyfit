@@ -44,12 +44,20 @@
 #define PF_RESTRICT
 #endif
 
-// Define a c++20 cconstexpr macro
+// Define a c++20 constexpr macro
 #if __cplusplus >= 202002L
 #define PF_C20CONSTEXPR constexpr
 #else
 #define PF_C20CONSTEXPR
+#endif
 
+// C++20 branch-prediction attributes — silently dropped in C++17
+#if __cplusplus >= 202002L
+#define PF_UNLIKELY [[unlikely]]
+#define PF_LIKELY [[likely]]
+#else
+#define PF_UNLIKELY
+#define PF_LIKELY
 #endif
 
 #if __cplusplus >= 202302L
@@ -67,13 +75,21 @@
 #elif defined(__clang__)
 #define PF_ASSUME(cond) __builtin_assume(cond)
 #elif defined(__GNUC__) || defined(__GNUG__)
-#define PF_ASSUME(cond)                                                                                                  \
+#define PF_ASSUME(cond)                                                                                                \
     do {                                                                                                               \
-        if (!(cond))                                                                                                   \
-            __builtin_unreachable();                                                                                   \
+        if (!(cond)) __builtin_unreachable();                                                                          \
     } while (0)
 #else
 #define PF_ASSUME(cond) ((void)0)
+#endif
+
+// PF_IS_CONSTANT_EVALUATED(): portable wrapper for std::is_constant_evaluated().
+// In C++20+ returns true when in a constant-evaluated context; always false in C++17
+// (causing compile-time branches to fold away harmlessly).
+#if __cplusplus >= 202002L
+#define PF_IS_CONSTANT_EVALUATED() std::is_constant_evaluated()
+#else
+#define PF_IS_CONSTANT_EVALUATED() false
 #endif
 
 // Per-function "fast eval" optimization pragmas.
@@ -88,38 +104,43 @@
 //   // function definition
 //   PF_FAST_EVAL_END
 //
-#if defined(__GNUC__) || defined(__clang__)
-  // Allow users to disable per-function pragmas entirely via PF_DISABLE_FAST_EVAL.
-  #ifdef PF_DISABLE_FAST_EVAL
-    #define PF_FAST_EVAL_PUSH
-    #define PF_FAST_EVAL_OPTIMIZE
-    #define PF_FAST_EVAL_EXTRA
-    #define PF_FAST_EVAL_POP
-    #define PF_FAST_EVAL_BEGIN
-    #define PF_FAST_EVAL_END
-  #else
-    // Push per-function optimize options that layer on top of user flags.
-    // Keep them conservative: enable unroll/vectorize and allow fp-contract.
-    #define PF_FAST_EVAL_PUSH _Pragma("GCC push_options")
-    #define PF_FAST_EVAL_OPTIMIZE _Pragma("GCC optimize (\"unroll-loops,tree-vectorize,fp-contract=fast\")")
-    #ifdef PF_EXTRA_FAST_EVAL
-      #define PF_FAST_EVAL_EXTRA _Pragma(PF_EXTRA_FAST_EVAL)
-    #else
-      #define PF_FAST_EVAL_EXTRA
-    #endif
-    #define PF_FAST_EVAL_POP _Pragma("GCC pop_options")
-    #define PF_FAST_EVAL_BEGIN PF_FAST_EVAL_PUSH PF_FAST_EVAL_OPTIMIZE PF_FAST_EVAL_EXTRA
-    #define PF_FAST_EVAL_END PF_FAST_EVAL_POP
-  #endif
+#if defined(__clang__)
+// Clang does not support GCC push/pop_options pragmas.
+// Per-function optimization pragmas are left empty; rely on global flags.
+#define PF_FAST_EVAL_BEGIN
+#define PF_FAST_EVAL_END
+#elif defined(__GNUC__)
+// Allow users to disable per-function pragmas entirely via PF_DISABLE_FAST_EVAL.
+#ifdef PF_DISABLE_FAST_EVAL
+#define PF_FAST_EVAL_PUSH
+#define PF_FAST_EVAL_OPTIMIZE
+#define PF_FAST_EVAL_EXTRA
+#define PF_FAST_EVAL_POP
+#define PF_FAST_EVAL_BEGIN
+#define PF_FAST_EVAL_END
+#else
+// Push per-function optimize options that layer on top of user flags.
+// Keep them conservative: enable unroll/vectorize and allow fp-contract.
+#define PF_FAST_EVAL_PUSH _Pragma("GCC push_options")
+#define PF_FAST_EVAL_OPTIMIZE _Pragma("GCC optimize (\"unroll-loops,tree-vectorize,fp-contract=fast\")")
+#ifdef PF_EXTRA_FAST_EVAL
+#define PF_FAST_EVAL_EXTRA _Pragma(PF_EXTRA_FAST_EVAL)
+#else
+#define PF_FAST_EVAL_EXTRA
+#endif
+#define PF_FAST_EVAL_POP _Pragma("GCC pop_options")
+#define PF_FAST_EVAL_BEGIN PF_FAST_EVAL_PUSH PF_FAST_EVAL_OPTIMIZE PF_FAST_EVAL_EXTRA
+#define PF_FAST_EVAL_END PF_FAST_EVAL_POP
+#endif
 
 #elif defined(_MSC_VER)
-  // MSVC optimize pragma accepts a short option string; "gt" requests favoring
-  // speed and global optimizations. We keep this minimal and let global flags
-  // take precedence where needed.
-  #define PF_FAST_EVAL_BEGIN __pragma(optimize("gt", on))
-  #define PF_FAST_EVAL_END   __pragma(optimize("", on))
+// MSVC optimize pragma accepts a short option string; "gt" requests favoring
+// speed and global optimizations. We keep this minimal and let global flags
+// take precedence where needed.
+#define PF_FAST_EVAL_BEGIN __pragma(optimize("gt", on))
+#define PF_FAST_EVAL_END __pragma(optimize("", on))
 
 #else
-  #define PF_FAST_EVAL_BEGIN
-  #define PF_FAST_EVAL_END
+#define PF_FAST_EVAL_BEGIN
+#define PF_FAST_EVAL_END
 #endif

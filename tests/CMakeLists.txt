@@ -52,10 +52,12 @@ endfunction()
 # -----------------------------------------------------------------------------
 # Standards to test/build: start at C++17 and add every later standard the compiler supports.
 # C++23 and beyond additionally require native std::mdspan (checked in root CMakeLists.txt).
+# Set POLYFIT_MAX_TEST_STANDARD to limit which standards are tested (e.g., 17 for analysis with Clang,
+# which rejects function-parameter-in-constexpr-if that GCC accepts as an extension in C++20 mode).
 set(POLYFIT_TEST_STANDARDS 17)
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-std=c++20" _POLYFIT_CXX20)
-if (_POLYFIT_CXX20)
+if (_POLYFIT_CXX20 AND (NOT DEFINED POLYFIT_MAX_TEST_STANDARD OR POLYFIT_MAX_TEST_STANDARD GREATER_EQUAL 20))
     list(APPEND POLYFIT_TEST_STANDARDS 20)
 endif ()
 if (POLYFIT_HAS_NATIVE_MDSPAN)

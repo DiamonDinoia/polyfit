@@ -3,9 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <type_traits>
 #include <utility>
-#include <cmath>
 #include <vector>
 #include <xsimd/xsimd.hpp>
 
@@ -14,24 +14,25 @@
 namespace polyfit::internal::helpers {
 
 // Scalar mapping to canonical domain [-1,1]
-template <class ArgT, class ScalarT>
+template<class ArgT, class ScalarT>
 PF_ALWAYS_INLINE constexpr ArgT map_to_domain_scalar(const ArgT arg, const ScalarT low, const ScalarT hi) noexcept {
     if constexpr (std::is_arithmetic_v<ArgT>) {
         return static_cast<ArgT>(ArgT(0.5) * ((arg / static_cast<ArgT>(low)) + static_cast<ArgT>(hi)));
+    } else {
+        return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(low)) + ArgT(hi)));
     }
-    return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(low)) + ArgT(hi)));
 }
 
 // Scalar/batch mapping from canonical domain back to original
-template <class ArgT, class ScalarT>
+template<class ArgT, class ScalarT>
 PF_ALWAYS_INLINE constexpr ArgT map_from_domain_scalar(const ArgT arg, const ScalarT low, const ScalarT hi) noexcept {
     return poly_eval::detail::fma(ArgT(2), arg, -ArgT(hi)) * ArgT(low);
 }
 
 // Array (std::array) mapping overloads
-template <class T, std::size_t N>
-PF_ALWAYS_INLINE constexpr std::array<T, N>
-map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &low, const std::array<T, N> &hi) noexcept {
+template<class T, std::size_t N>
+PF_ALWAYS_INLINE constexpr std::array<T, N> map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &low,
+                                                                const std::array<T, N> &hi) noexcept {
     std::array<T, N> out{};
     for (std::size_t d = 0; d < N; ++d) {
         out[d] = map_to_domain_scalar<T, T>(t[d], low[d], hi[d]);
@@ -39,7 +40,7 @@ map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &low, cons
     return out;
 }
 
-template <class T, std::size_t N>
+template<class T, std::size_t N>
 PF_ALWAYS_INLINE constexpr std::array<T, N>
 map_from_domain_array(const std::array<T, N> &x, const std::array<T, N> &low, const std::array<T, N> &hi) noexcept {
     std::array<T, N> out{};
@@ -49,10 +50,9 @@ map_from_domain_array(const std::array<T, N> &x, const std::array<T, N> &low, co
     return out;
 }
 
-template <class T, std::size_t N>
-PF_ALWAYS_INLINE constexpr void
-compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
-                      std::array<T, N> &low, std::array<T, N> &high) noexcept {
+template<class T, std::size_t N>
+PF_ALWAYS_INLINE constexpr void compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
+                                                      std::array<T, N> &low, std::array<T, N> &high) noexcept {
     for (std::size_t dim = 0; dim < N; ++dim) {
         low[dim] = T(1) / (to[dim] - from[dim]);
         high[dim] = (to[dim] + from[dim]);
@@ -65,17 +65,18 @@ compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
 namespace eft {
 
 // twoSum: s + e = a + b exactly (Knuth/Moller)
-template <class T>
-PF_ALWAYS_INLINE constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
+template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
     T s = a + b;
     T v = s - a;
     return {s, (a - (s - v)) + (b - v)};
 }
 
 // twoProd via FMA: p + e = a * b exactly
-template <class T>
-PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
+// In constant-evaluated contexts std::fma is not constexpr on Clang (until C++26),
+// so drop the error term and return {a*b, 0} for compile-time polynomial fitting.
+template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
     T p = a * b;
+    if (PF_IS_CONSTANT_EVALUATED()) return {p, T(0)};
     return {p, std::fma(a, b, -p)};
 }
 
@@ -91,7 +92,7 @@ PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
 //------------------------------------------------------------------------------
 
 // Real arithmetic types: full twoProd + twoSum compensation
-template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
+template<class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
 constexpr void fuse_linear_map(T *coeffs, std::size_t n, T alpha, T beta) noexcept {
     if (n <= 1) return;
 
@@ -117,8 +118,7 @@ constexpr void fuse_linear_map(T *coeffs, std::size_t n, T alpha, T beta) noexce
     }
 
     // Apply accumulated compensation
-    for (std::size_t k = 0; k < n; ++k)
-        coeffs[k] += comp[k];
+    for (std::size_t k = 0; k < n; ++k) coeffs[k] += comp[k];
 
     // --- Compensated alpha scaling: coeff[k] *= alpha^k ---
     T alpha_pow = alpha;
@@ -136,8 +136,7 @@ constexpr void fuse_linear_map(T *coeffs, std::size_t n, T alpha, T beta) noexce
 }
 
 // Complex coefficients with real mapping parameters: component-wise compensation
-template <class T>
-constexpr void fuse_linear_map(std::complex<T> *coeffs, std::size_t n, T alpha, T beta) noexcept {
+template<class T> constexpr void fuse_linear_map(std::complex<T> *coeffs, std::size_t n, T alpha, T beta) noexcept {
     if (n <= 1) return;
 
     std::reverse(coeffs, coeffs + n);
@@ -166,8 +165,7 @@ constexpr void fuse_linear_map(std::complex<T> *coeffs, std::size_t n, T alpha, 
     }
 
     // Apply compensation
-    for (std::size_t k = 0; k < n; ++k)
-        coeffs[k] += std::complex<T>(comp_re[k], comp_im[k]);
+    for (std::size_t k = 0; k < n; ++k) coeffs[k] += std::complex<T>(comp_re[k], comp_im[k]);
 
     // --- Compensated alpha scaling (component-wise) ---
     T alpha_pow = alpha;
@@ -175,9 +173,8 @@ constexpr void fuse_linear_map(std::complex<T> *coeffs, std::size_t n, T alpha, 
     for (std::size_t k = 1; k < n; ++k) {
         auto [pr, epr] = eft::two_prod(coeffs[k].real(), alpha_pow);
         auto [pi, epi] = eft::two_prod(coeffs[k].imag(), alpha_pow);
-        coeffs[k] = std::complex<T>(
-            pr + (epr + coeffs[k].real() * alpha_err),
-            pi + (epi + coeffs[k].imag() * alpha_err));
+        coeffs[k] =
+            std::complex<T>(pr + (epr + coeffs[k].real() * alpha_err), pi + (epi + coeffs[k].imag() * alpha_err));
         auto [ap, ae] = eft::two_prod(alpha_pow, alpha);
         alpha_err = alpha_err * alpha + ae;
         alpha_pow = ap;

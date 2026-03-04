@@ -6,7 +6,9 @@
 
 int main() {
     // 1. Define the function, domain, and desired error tolerance.
-    auto my_func = [](double x) { return std::cos(x); };
+    auto my_func = [](double x) {
+        return std::cos(x);
+    };
     double a = -1.0, b = 1.0;
     double epsilon = 1e-12;
 

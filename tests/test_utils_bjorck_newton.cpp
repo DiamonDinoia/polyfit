@@ -1,6 +1,6 @@
+#include "polyfit/fast_eval.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
-#include "polyfit/fast_eval.hpp"
 
 using namespace poly_eval;
 
@@ -45,16 +45,14 @@ TEST(Utils, BjorckNewtonHighDegreeAccuracy) {
 
     // Generate Chebyshev nodes: x_k = cos(k * pi / (n-1)), k = 0..n-1
     poly_eval::Buffer<double, 0> nodes(n);
-    for (std::size_t k = 0; k < n; ++k)
-        nodes[k] = std::cos(static_cast<double>(k) * M_PI / static_cast<double>(n - 1));
+    for (std::size_t k = 0; k < n; ++k) nodes[k] = std::cos(static_cast<double>(k) * M_PI / static_cast<double>(n - 1));
 
     // Evaluate via Horner: p(x) = 1 + x*(1 + x*(1 + ... + x*(1 + x)))
     poly_eval::Buffer<double, 0> values(n);
     for (std::size_t i = 0; i < n; ++i) {
         double x = nodes[i];
         double val = 1.0;
-        for (std::size_t k = 1; k < n; ++k)
-            val = std::fma(val, x, 1.0);
+        for (std::size_t k = 1; k < n; ++k) val = std::fma(val, x, 1.0);
         values[i] = val;
     }
 

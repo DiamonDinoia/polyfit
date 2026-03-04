@@ -21,26 +21,24 @@
 using std::size_t;
 
 // templated tolerance ~100× machine epsilon
-template <typename T> constexpr T eps = std::numeric_limits<T>::epsilon() * T(100);
+template<typename T> constexpr T eps = std::numeric_limits<T>::epsilon() * T(100);
 
 // RNG helper
 static std::mt19937 rng(42);
 static std::uniform_real_distribution<double> uni_dist(-1.0, 1.0);
 
-template <typename T> T uni() { return static_cast<T>(uni_dist(rng)); }
+template<typename T> T uni() { return static_cast<T>(uni_dist(rng)); }
 
-template <typename T> std::vector<T> random_vector(size_t n) {
+template<typename T> std::vector<T> random_vector(size_t n) {
     std::vector<T> v(n);
-    for (auto &x : v)
-        x = uni<T>();
+    for (auto &x : v) x = uni<T>();
     return v;
 }
 
 // build all multi-indices (n0,...,n_{Dim-1}), 0 ≤ ni < Deg
-template <size_t Dim> auto multi_indices(size_t Deg) {
+template<size_t Dim> auto multi_indices(size_t Deg) {
     size_t M = 1;
-    for (size_t i = 0; i < Dim; ++i)
-        M *= Deg;
+    for (size_t i = 0; i < Dim; ++i) M *= Deg;
     std::vector<std::array<size_t, Dim>> out(M);
     for (size_t k = 0; k < M; ++k) {
         size_t t = k;
@@ -53,16 +51,15 @@ template <size_t Dim> auto multi_indices(size_t Deg) {
 }
 
 // Vandermonde baseline with reversed-degree layout
-template <typename T, size_t Dim>
+template<typename T, size_t Dim>
 std::array<T, Dim> vander_eval(const std::array<T, Dim> &x, const std::vector<T> &coeffs, size_t Deg) {
     auto monoms = multi_indices<Dim>(Deg);
     T powers[Dim][33]{};
     for (size_t d = 0; d < Dim; ++d) {
         powers[d][0] = T(1);
-        for (size_t k = 1; k < Deg; ++k)
-            powers[d][k] = powers[d][k - 1] * x[d];
+        for (size_t k = 1; k < Deg; ++k) powers[d][k] = powers[d][k - 1] * x[d];
     }
-    auto coeff_off = [Deg](auto const &n, size_t od) {
+    auto coeff_off = [Deg](const auto &n, size_t od) {
         size_t off = od, stride = Dim;
         for (size_t d = Dim; d-- > 0;) {
             size_t rev = Deg - 1 - n[d];
@@ -74,35 +71,30 @@ std::array<T, Dim> vander_eval(const std::array<T, Dim> &x, const std::vector<T>
     std::array<T, Dim> res{};
     for (auto &n : monoms) {
         auto mono = T(1);
-        for (size_t d = 0; d < Dim; ++d)
-            mono *= powers[d][n[d]];
-        for (size_t od = 0; od < Dim; ++od)
-            res[od] += mono * coeffs[coeff_off(n, od)];
+        for (size_t d = 0; d < Dim; ++d) mono *= powers[d][n[d]];
+        for (size_t od = 0; od < Dim; ++od) res[od] += mono * coeffs[coeff_off(n, od)];
     }
     return res;
 }
 
 // random coefficients [Deg]^Dim × Dim
-template <typename T, size_t Dim> auto random_coeffs(size_t Deg) {
+template<typename T, size_t Dim> auto random_coeffs(size_t Deg) {
     size_t M = 1;
-    for (size_t i = 0; i < Dim; ++i)
-        M *= Deg;
+    for (size_t i = 0; i < Dim; ++i) M *= Deg;
     M *= Dim;
     return random_vector<T>(M);
 }
 
 // unified ND Horner tester
-template <typename T, size_t Dim, size_t Deg> void run_nd_horner() {
+template<typename T, size_t Dim, size_t Deg> void run_nd_horner() {
     auto coeffs = random_coeffs<T, Dim>(Deg);
     std::array<size_t, Dim + 1> exts;
-    for (size_t d = 0; d < Dim; ++d)
-        exts[d] = Deg;
+    for (size_t d = 0; d < Dim; ++d) exts[d] = Deg;
     exts[Dim] = Dim;
     auto C = stdex::mdspan<const T, stdex::dextents<size_t, Dim + 1>>{coeffs.data(), exts};
 
     std::array<T, Dim> x;
-    for (auto &xi : x)
-        xi = uni<T>();
+    for (auto &xi : x) xi = uni<T>();
 
     auto rt = poly_eval::horner<0, true, std::array<T, Dim>>(x, C, Deg);
     auto ct = poly_eval::horner<Deg, true, std::array<T, Dim>>(x, C, Deg);
@@ -114,24 +106,22 @@ template <typename T, size_t Dim, size_t Deg> void run_nd_horner() {
 }
 
 // simple scalar Horner reference
-template <typename T> T naive_horner_scalar(T x, const T *c, size_t n) {
+template<typename T> T naive_horner_scalar(T x, const T *c, size_t n) {
     T acc = c[0];
-    for (size_t i = 1; i < n; ++i)
-        acc = acc * x + c[i];
+    for (size_t i = 1; i < n; ++i) acc = acc * x + c[i];
     return acc;
 }
 
 // element-wise reference for horner_transposed
-template <typename T> T naive_horner_transposed_elem(const T *x, const T *c, size_t M, size_t N, size_t i) {
+template<typename T> T naive_horner_transposed_elem(const T *x, const T *c, size_t M, size_t N, size_t i) {
     size_t stride = M;
     T acc = c[0 * stride + i];
-    for (size_t k = 1; k < N; ++k)
-        acc = acc * x[i] + c[k * stride + i];
+    for (size_t k = 1; k < N; ++k) acc = acc * x[i] + c[k * stride + i];
     return acc;
 }
 
 // type-parameterized test suite for float/double
-template <typename T> class HornerTyped : public testing::Test {};
+template<typename T> class HornerTyped : public testing::Test {};
 typedef testing::Types<float, double> FloatingTypes;
 TYPED_TEST_SUITE(HornerTyped, FloatingTypes);
 
@@ -219,8 +209,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_Scalar_Runtime) {
     using T = TypeParam;
     constexpr size_t M = 6, N = 4;
     std::array<T, M> x{};
-    for (auto &xi : x)
-        xi = uni<T>();
+    for (auto &xi : x) xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
     poly_eval::horner_transposed<0, 0, 0>(x.data(), c.data(), out.data(), M, N);
@@ -233,8 +222,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_Scalar_CompileTime) {
     using T = TypeParam;
     constexpr size_t M = 6, N = 4;
     std::array<T, M> x{};
-    for (auto &xi : x)
-        xi = uni<T>();
+    for (auto &xi : x) xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
     poly_eval::horner_transposed<M, N, 0>(x.data(), c.data(), out.data(), 0, 0);
@@ -248,8 +236,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_SIMD_Runtime) {
     using B = xsimd::batch<T>;
     constexpr size_t simd_w = B::size, M = simd_w * 2, N = 5;
     std::array<T, M> x{};
-    for (auto &xi : x)
-        xi = uni<T>();
+    for (auto &xi : x) xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
     poly_eval::horner_transposed<0, 0, simd_w>(x.data(), c.data(), out.data(), M, N);
@@ -263,8 +250,7 @@ TYPED_TEST(HornerTyped, HornerTransposed_SIMD_CompileTime) {
     using B = xsimd::batch<T>;
     constexpr size_t simd_w = B::size, M = simd_w * 2, N = 5;
     std::array<T, M> x{};
-    for (auto &xi : x)
-        xi = uni<T>();
+    for (auto &xi : x) xi = uni<T>();
     std::vector<T> c = random_vector<T>(M * N);
     std::array<T, M> out{};
     poly_eval::horner_transposed<M, N, simd_w>(x.data(), c.data(), out.data(), 0, 0);

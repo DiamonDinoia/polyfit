@@ -1,11 +1,15 @@
-#include <iostream>
 #include "polyfit/fast_eval.hpp"
+#include <iostream>
 
 int main() {
     using namespace poly_eval;
 
-    auto f1 = [](double x) { return std::sin(x); };
-    auto f2 = [](double x) { return std::cos(2 * x); };
+    auto f1 = [](double x) {
+        return std::sin(x);
+    };
+    auto f2 = [](double x) {
+        return std::cos(2 * x);
+    };
 
     auto fe1 = make_func_eval<8>(f1, -1.0, 1.0);
     auto fe2 = make_func_eval<8>(f2, -1.0, 1.0);

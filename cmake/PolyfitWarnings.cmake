@@ -20,7 +20,8 @@ function(polyfit_enable_warnings target)
   set(_msvc $<CXX_COMPILER_ID:MSVC>)
   set(_lang_is_cxx $<COMPILE_LANGUAGE:CXX>)
 
-  set(_warnings_clang_like
+  # Warnings enabled for both GCC and Clang.
+  set(_warnings_common
     -Wall
     -Wextra
     -Wpedantic
@@ -30,12 +31,21 @@ function(polyfit_enable_warnings target)
     -Wdouble-promotion
     -Wold-style-cast
     -Wnon-virtual-dtor
-    -Wnull-dereference
     -Woverloaded-virtual
     -Wcast-align
     -Wunused
     -Wimplicit-fallthrough
     -Wformat=2
+  )
+
+  # Clang-only warnings.
+  # - Wnull-dereference: GCC's IPA produces false positives when deeply inlining
+  #   standard library vector operations through template chains.
+  # - Wno-gnu-zero-variadic-macro-arguments: GTest TYPED_TEST_SUITE uses GNU
+  #   extension zero-arg variadic macros; suppress the pedantic warning.
+  set(_warnings_clang_only
+    -Wnull-dereference
+    -Wno-gnu-zero-variadic-macro-arguments
   )
 
   set(_warnings_msvc
@@ -62,6 +72,7 @@ function(polyfit_enable_warnings target)
     /w14928
   )
 
+  # Additional GCC-only warnings (checked at configure time; applied only to GCC).
   set(_additional_warnings
     -Wduplicated-cond
     -Wlogical-op
@@ -73,6 +84,17 @@ function(polyfit_enable_warnings target)
     -Wsuggest-override
   )
 
+  set(_compile_options)
+  foreach(_flag IN LISTS _warnings_common)
+    list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_gnu_or_clang}>:${_flag}>)
+  endforeach()
+  foreach(_flag IN LISTS _warnings_clang_only)
+    list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_clang_like}>:${_flag}>)
+  endforeach()
+  foreach(_flag IN LISTS _warnings_msvc)
+    list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_msvc}>:${_flag}>)
+  endforeach()
+
   include(CheckCXXCompilerFlag)
   foreach(_flag IN LISTS _additional_warnings)
     string(MAKE_C_IDENTIFIER "POLYFIT_HAS${_flag}" _flag_id)
@@ -82,14 +104,6 @@ function(polyfit_enable_warnings target)
       # to avoid "unknown warning option" errors in clang-tidy and Clang builds.
       list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_gnu}>:${_flag}>)
     endif()
-  endforeach()
-
-  set(_compile_options)
-  foreach(_flag IN LISTS _warnings_clang_like)
-    list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_gnu_or_clang}>:${_flag}>)
-  endforeach()
-  foreach(_flag IN LISTS _warnings_msvc)
-    list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_msvc}>:${_flag}>)
   endforeach()
 
   if(POLYFIT_WARNINGS_AS_ERRORS)

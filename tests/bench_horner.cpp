@@ -13,7 +13,6 @@
 // ankerl::nanobench::templates::markdown().
 // -----------------------------------------------------------------------------
 
- 
 #include "polyfit/fast_eval.hpp"
 #include <nanobench.h>
 
@@ -45,8 +44,7 @@ int main() {
             .run("Dim=1, Deg=" + std::to_string(deg) + ", SIMD=No, scalar-runtime",
                  [&] {
                      std::vector<double> coeffs(deg);
-                     for (auto &c : coeffs)
-                         c = dist(rng);
+                     for (auto &c : coeffs) c = dist(rng);
                      double x = dist(rng);
                      ankerl::nanobench::doNotOptimizeAway(poly_eval::horner(x, coeffs.data(), deg));
                  })
@@ -61,10 +59,8 @@ int main() {
                      std::vector<double> pts(P);
                      std::vector<double> out(P);
                      std::vector<double> coeffs(deg);
-                     for (auto &p : pts)
-                         p = dist(rng);
-                     for (auto &c : coeffs)
-                         c = dist(rng);
+                     for (auto &p : pts) p = dist(rng);
+                     for (auto &c : coeffs) c = dist(rng);
                      poly_eval::horner<0, false, false, 0>(pts.data(), out.data(), P, coeffs.data(), deg,
                                                            [](auto v) { return v; });
                      ankerl::nanobench::doNotOptimizeAway(out.data());
@@ -83,8 +79,7 @@ int main() {
                      [&] {
                          std::vector<double> coeffs(M * deg);
                          std::vector<double> out(M);
-                         for (auto &c : coeffs)
-                             c = dist(rng);
+                         for (auto &c : coeffs) c = dist(rng);
                          double x = dist(rng);
                          poly_eval::horner_many<0, 0, false, double, double>(x, coeffs.data(), out.data(), M, deg);
                          ankerl::nanobench::doNotOptimizeAway(out.data());
@@ -102,13 +97,13 @@ int main() {
                  [&] {
                      const size_t Dim = 2;
                      std::vector<double> coeffs(deg * deg * Dim);
-                     for (auto &c : coeffs)
-                         c = dist(rng);
+                     for (auto &c : coeffs) c = dist(rng);
                      std::experimental::mdspan<const double, std::experimental::dextents<size_t, 3>> C(coeffs.data(),
                                                                                                        deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(
+                             x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }
@@ -122,13 +117,13 @@ int main() {
                  [&] {
                      const size_t Dim = 3;
                      std::vector<double> coeffs(deg * deg * deg * Dim);
-                     for (auto &c : coeffs)
-                         c = dist(rng);
+                     for (auto &c : coeffs) c = dist(rng);
                      std::experimental::mdspan<const double, std::experimental::dextents<size_t, 4>> C(
                          coeffs.data(), deg, deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(
+                             x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }
@@ -143,13 +138,13 @@ int main() {
                      const size_t Dim = 4;
                      size_t total = static_cast<size_t>(std::pow(deg, 4) * Dim);
                      std::vector<double> coeffs(total);
-                     for (auto &c : coeffs)
-                         c = dist(rng);
+                     for (auto &c : coeffs) c = dist(rng);
                      std::experimental::mdspan<const double, std::experimental::dextents<size_t, 5>> C(
                          coeffs.data(), deg, deg, deg, deg, Dim);
                      std::array<double, Dim> x{dist(rng), dist(rng), dist(rng), dist(rng)};
                      ankerl::nanobench::doNotOptimizeAway(
-                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(x, C, static_cast<int>(deg)));
+                         poly_eval::horner<0, true, std::array<double, Dim>, decltype(x), decltype(C)>(
+                             x, C, static_cast<int>(deg)));
                  })
             .clearContext();
     }

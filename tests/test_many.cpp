@@ -24,14 +24,16 @@ static double rand_uniform() {
 static double func(double x) { return std::cos(x); }
 
 // Helper to build a FuncEvalMany<N>
-template <std::size_t N, std::size_t... Is> auto make_group_impl(std::index_sequence<Is...>) {
-    const auto make_one = [] { return poly_eval::make_func_eval(func, 16, -1.0, 1.0); };
+template<std::size_t N, std::size_t... Is> auto make_group_impl(std::index_sequence<Is...>) {
+    const auto make_one = [] {
+        return poly_eval::make_func_eval(func, 16, -1.0, 1.0);
+    };
     return poly_eval::make_func_eval_many((static_cast<void>(Is), make_one())...);
 }
-template <std::size_t N> auto make_group() { return make_group_impl<N>(std::make_index_sequence<N>{}); }
+template<std::size_t N> auto make_group() { return make_group_impl<N>(std::make_index_sequence<N>{}); }
 
 // Test fixture: N is captured via integral_constant
-template <typename IC> class FastEvalManyTest : public ::testing::Test {
+template<typename IC> class FastEvalManyTest : public ::testing::Test {
   public:
     static constexpr std::size_t N = IC::value;
     using Group = decltype(make_group<N>());
@@ -51,10 +53,9 @@ TYPED_TEST(FastEvalManyTest, Introspection) {
 
 // Pointer overload, small batch (N points)
 TYPED_TEST(FastEvalManyTest, PointerSmall) {
-    const std::size_t M = this->N;
+    constexpr std::size_t M = TestFixture::N;
     std::vector<double> xs(M), out(M * M);
-    for (std::size_t i = 0; i < M; ++i)
-        xs[i] = rand_uniform();
+    for (std::size_t i = 0; i < M; ++i) xs[i] = rand_uniform();
     this->group(xs.data(), out.data(), M);
     stdex::mdspan<double, stdex::extents<std::size_t, stdex::dynamic_extent, M>> view(out.data(), M);
     for (std::size_t i = 0; i < M; ++i) {
@@ -68,10 +69,9 @@ TYPED_TEST(FastEvalManyTest, PointerSmall) {
 // Pointer overload, large batch (1000 points)
 TYPED_TEST(FastEvalManyTest, PointerLarge) {
     const std::size_t M = 1000;
-    const std::size_t F = this->N;
+    constexpr std::size_t F = TestFixture::N;
     std::vector<double> xs(M), out(M * F);
-    for (std::size_t i = 0; i < M; ++i)
-        xs[i] = rand_uniform();
+    for (std::size_t i = 0; i < M; ++i) xs[i] = rand_uniform();
     this->group(xs.data(), out.data(), M);
     stdex::mdspan<double, stdex::extents<std::size_t, stdex::dynamic_extent, F>> view(out.data(), M);
     for (std::size_t i = 0; i < M; ++i) {
@@ -86,39 +86,32 @@ TYPED_TEST(FastEvalManyTest, PointerLarge) {
 TYPED_TEST(FastEvalManyTest, Scalar) {
     double x = rand_uniform();
     auto out = this->group(x);
-    for (std::size_t f = 0; f < this->N; ++f)
-        EXPECT_NEAR(out[f], func(x), 1e-15);
+    for (std::size_t f = 0; f < this->N; ++f) EXPECT_NEAR(out[f], func(x), 1e-15);
 }
 
 // Array overload
 TYPED_TEST(FastEvalManyTest, Array) {
     std::array<double, TestFixture::N> xs;
-    for (std::size_t i = 0; i < TestFixture::N; ++i)
-        xs[i] = rand_uniform();
+    for (std::size_t i = 0; i < TestFixture::N; ++i) xs[i] = rand_uniform();
     auto out = this->group(xs);
-    for (std::size_t f = 0; f < this->N; ++f)
-        EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
+    for (std::size_t f = 0; f < this->N; ++f) EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
 }
 
 // Variadic overload
 TYPED_TEST(FastEvalManyTest, Variadic) {
     std::array<double, TestFixture::N> xs;
-    for (std::size_t i = 0; i < TestFixture::N; ++i)
-        xs[i] = rand_uniform();
+    for (std::size_t i = 0; i < TestFixture::N; ++i) xs[i] = rand_uniform();
     auto out = std::apply([&](auto... vals) { return this->group(vals...); }, xs);
-    for (std::size_t f = 0; f < this->N; ++f)
-        EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
+    for (std::size_t f = 0; f < this->N; ++f) EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
 }
 
 // Tuple overload
 TYPED_TEST(FastEvalManyTest, Tuple) {
     std::array<double, TestFixture::N> xs;
-    for (std::size_t i = 0; i < TestFixture::N; ++i)
-        xs[i] = rand_uniform();
+    for (std::size_t i = 0; i < TestFixture::N; ++i) xs[i] = rand_uniform();
     auto tup = std::apply([](auto... vals) { return std::make_tuple(vals...); }, xs);
     auto out = this->group(tup);
-    for (std::size_t f = 0; f < this->N; ++f)
-        EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
+    for (std::size_t f = 0; f < this->N; ++f) EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
 }
 
 // ----- SIMD constant assertions -----
@@ -157,8 +150,7 @@ TEST(FuncEvalManyTruncate, BasicTruncation) {
     double x = 0.3;
     auto out = group(x);
     double expected = func(x);
-    for (std::size_t f = 0; f < 4; ++f)
-        EXPECT_NEAR(out[f], expected, 1e-7);
+    for (std::size_t f = 0; f < 4; ++f) EXPECT_NEAR(out[f], expected, 1e-7);
 }
 
 TEST(FuncEvalManyTruncate, PreservesAccuracy) {
@@ -171,8 +163,7 @@ TEST(FuncEvalManyTruncate, PreservesAccuracy) {
     for (int i = 0; i < 50; ++i) {
         double x = rand_uniform();
         auto out = group(x);
-        for (std::size_t f = 0; f < 3; ++f)
-            EXPECT_NEAR(out[f], func(x), 1e-13);
+        for (std::size_t f = 0; f < 3; ++f) EXPECT_NEAR(out[f], func(x), 1e-13);
     }
 }
 
@@ -187,10 +178,8 @@ TEST(FuncEvalManySIMD, NonMultipleSizes) {
     auto out5 = group5(x);
     double expected = func(x);
 
-    for (std::size_t f = 0; f < 3; ++f)
-        EXPECT_NEAR(out3[f], expected, 1e-14);
-    for (std::size_t f = 0; f < 5; ++f)
-        EXPECT_NEAR(out5[f], expected, 1e-14);
+    for (std::size_t f = 0; f < 3; ++f) EXPECT_NEAR(out3[f], expected, 1e-14);
+    for (std::size_t f = 0; f < 5; ++f) EXPECT_NEAR(out5[f], expected, 1e-14);
 }
 
 int main(int argc, char **argv) {

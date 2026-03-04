@@ -1,5 +1,5 @@
-#include <gtest/gtest.h>
 #include "polyfit/fast_eval.hpp"
+#include <gtest/gtest.h>
 
 using namespace poly_eval;
 

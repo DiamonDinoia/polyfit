@@ -11,15 +11,21 @@
 std::mt19937 gen(42);
 
 // Example functions
-static auto double_func = [](const double x) { return std::cos(x); };
-static auto float_func = [](const float x) { return std::cos(x); };
-static auto complex_func = [](const double x) { return std::complex<double>(x * x, std::sin(x)); };
+static auto double_func = [](const double x) {
+    return std::cos(x);
+};
+static auto float_func = [](const float x) {
+    return std::cos(x);
+};
+static auto complex_func = [](const double x) {
+    return std::complex<double>(x * x, std::sin(x));
+};
 
 // Number of random test points
 static constexpr std::size_t kNumRandomTests = 100;
 
 // Helper to batch-evaluate and compare
-template <typename T>
+template<typename T>
 void batch_verify(std::function<T(double)> &&f, const std::vector<double> &xs, const std::vector<T> &ys,
                   const double tol) {
     for (size_t i = 0; i < xs.size(); ++i) {
@@ -189,8 +195,12 @@ TEST(PolyEval, RuntimeEpsComplexRandom) {
 #if __cplusplus >= 202002L && __cplusplus < 202302L
 // Pure arithmetic constexpr function for C++20 tests
 // (Disabled under C++23: static_for with mutable captures is not constant-expression-valid)
-constexpr auto double_constexpr_func = [](const double x) constexpr { return 2.0 * x * x * x - 3.0 * x + 1.0; };
-constexpr auto complex_constexpr_func = [](const double x) constexpr { return std::complex<double>(x * x, x + x); };
+constexpr auto double_constexpr_func = [](const double x) constexpr {
+    return 2.0 * x * x * x - 3.0 * x + 1.0;
+};
+constexpr auto complex_constexpr_func = [](const double x) constexpr {
+    return std::complex<double>(x * x, x + x);
+};
 // 5. Full Compile-Time Fitting and Evaluation (constexpr fixed-degree API)
 TEST(PolyEval, FullCompileTimeRandom) {
     constexpr double a = -1.0, b = 1.0;
@@ -261,7 +271,9 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
 
 TEST(PolyEval, TruncateLowDegreeFunc) {
     // Fit a cubic polynomial at degree 16 — high-degree terms should be ~0
-    auto cubic = [](double x) { return x * x * x - 2.0 * x + 1.0; };
+    auto cubic = [](double x) {
+        return x * x * x - 2.0 * x + 1.0;
+    };
     auto poly = poly_eval::make_func_eval(cubic, 16, -1.0, 1.0);
     const auto original_size = poly.coeffs().size();
     EXPECT_EQ(original_size, 16u);
@@ -281,7 +293,10 @@ TEST(PolyEval, TruncateLowDegreeFunc) {
 
 TEST(PolyEval, TruncatePreservesConstant) {
     // A constant function: all coefficients except constant should be ~0
-    auto const_func = [](double x) { (void)x; return 42.0; };
+    auto const_func = [](double x) {
+        (void)x;
+        return 42.0;
+    };
     auto poly = poly_eval::make_func_eval(const_func, 16, -1.0, 1.0);
     poly.truncate(1e-10);
     EXPECT_EQ(poly.coeffs().size(), 1u); // only constant term remains
@@ -306,7 +321,9 @@ TEST(PolyEval, AdaptiveFitThenTruncate) {
 
 TEST(PolyEval, HighDegree48MachineEps) {
     // Degree 48 on [-1,1] should achieve near machine epsilon
-    auto sin_func = [](double x) { return std::sin(x); };
+    auto sin_func = [](double x) {
+        return std::sin(x);
+    };
     const double a = -1.0, b = 1.0;
     auto poly = poly_eval::make_func_eval(sin_func, 48, a, b);
 
@@ -321,7 +338,9 @@ TEST(PolyEval, HighDegree48MachineEps) {
 
 TEST(PolyEval, HighDegree48Exp) {
     // Degree 48 on [-1,1] for exp should also be excellent
-    auto exp_func = [](double x) { return std::exp(x); };
+    auto exp_func = [](double x) {
+        return std::exp(x);
+    };
     const double a = -1.0, b = 1.0;
     auto poly = poly_eval::make_func_eval(exp_func, 48, a, b);
 
@@ -336,7 +355,9 @@ TEST(PolyEval, HighDegree48Exp) {
 
 TEST(PolyEval, HighDegree48Complex) {
     // Degree 48 complex fit on [-1, 1]
-    auto func = [](double x) { return std::complex<double>(std::sin(x), std::cos(x)); };
+    auto func = [](double x) {
+        return std::complex<double>(std::sin(x), std::cos(x));
+    };
     const double a = -1.0, b = 1.0;
     auto poly = poly_eval::make_func_eval(func, 48, a, b);
 
@@ -351,14 +372,15 @@ TEST(PolyEval, HighDegree48Complex) {
 
 TEST(PolyEval, HighDegree48Batch) {
     // Verify batch evaluation works at degree 48
-    auto sin_func = [](double x) { return std::sin(x); };
+    auto sin_func = [](double x) {
+        return std::sin(x);
+    };
     const double a = -1.0, b = 1.0;
     auto poly = poly_eval::make_func_eval(sin_func, 48, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests), ys(kNumRandomTests);
-    for (std::size_t i = 0; i < kNumRandomTests; ++i)
-        xs[i] = dist(gen);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) xs[i] = dist(gen);
 
     poly(xs.data(), ys.data(), xs.size());
     batch_verify<double>(sin_func, xs, ys, 1e-14);

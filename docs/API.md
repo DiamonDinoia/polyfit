@@ -50,6 +50,7 @@ This document summarizes the public API of polyfit and the responsibilities of t
 ## Config / macros
 
 Macros used by the implementation are internal. See include/polyfit/internal/macros.h for internal definitions (these are not part of the public API):
+
 - PF_ALWAYS_INLINE, PF_NO_INLINE, PF_RESTRICT, PF_C20CONSTEXPR, PF_C23STATIC, PF_ASSUME
 
 ## Mapping semantics
@@ -106,6 +107,7 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 ## Examples
 
 See examples/ for runnable examples demonstrating the overloads:
+
 - examples/runtime_1D_fixed.cpp
 - examples/runtime_1D_eps.cpp
 - examples/runtime_ND_fixed.cpp

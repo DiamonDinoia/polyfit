@@ -6,4 +6,6 @@
 #undef PF_C20CONSTEXPR
 #undef PF_C23STATIC
 #undef PF_ASSUME
-
+#undef PF_UNLIKELY
+#undef PF_LIKELY
+#undef PF_IS_CONSTANT_EVALUATED

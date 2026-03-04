@@ -7,10 +7,9 @@
 
 using std::size_t;
 
-template <typename T> static T naive_horner_scalar(T x, const T *c, size_t n) {
+template<typename T> static T naive_horner_scalar(T x, const T *c, size_t n) {
     T acc = c[0];
-    for (size_t i = 1; i < n; ++i)
-        acc = acc * x + c[i];
+    for (size_t i = 1; i < n; ++i) acc = acc * x + c[i];
     return acc;
 }
 
@@ -51,14 +50,15 @@ TEST(HornerMany, ScalingTruePerPoly) {
 
 TEST(FuncEval, AlignmentVarianceBulkEval) {
     using T = double;
-    auto f = [](T x) { return std::sin(x) + 0.25 * x; };
+    auto f = [](T x) {
+        return std::sin(x) + 0.25 * x;
+    };
     T a = -1.0, b = 1.0;
     auto fe = poly_eval::make_func_eval(f, 8, a, b);
 
     const size_t P = 65; // use odd + offsets to vary alignment
     std::vector<T> pts(P + 2), out1(P + 2), out2(P + 2);
-    for (size_t i = 0; i < P + 2; ++i)
-        pts[i] = a + (b - a) * (T(i) / T(P + 1));
+    for (size_t i = 0; i < P + 2; ++i) pts[i] = a + (b - a) * (T(i) / T(P + 1));
 
     // Mismatched alignments (different offsets) to exercise safe unaligned path
     fe(pts.data() + 1, out2.data() + 0, P);

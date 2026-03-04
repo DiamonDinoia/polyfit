@@ -6,7 +6,9 @@
 
 int main() {
     // 1. Define the function and domain.
-    constexpr auto my_func = [](double x) { return 2.0 * x * x * x - 3.0 * x + 1.0; };
+    constexpr auto my_func = [](double x) {
+        return 2.0 * x * x * x - 3.0 * x + 1.0;
+    };
     constexpr double a = -1.0, b = 1.0;
 
     // 2. Create the approximation with a compile-time epsilon error tolerance.

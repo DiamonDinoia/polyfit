@@ -6,7 +6,7 @@
 #include "polyfit/fast_eval.hpp"
 
 // --- Helper to print results ---
-template <typename Func, typename Poly, typename Input>
+template<typename Func, typename Poly, typename Input>
 void test_and_print(const std::string &title, Func f, const Poly &poly, const Input &pt) {
     auto y_approx = poly(pt);
     auto y_true = f(pt);
@@ -25,7 +25,9 @@ int main() {
     {
         using In = std::array<double, 2>;
         using Out = std::array<double, 2>;
-        auto f = [](const In &p) { return Out{std::cos(p[0]) + std::sin(p[1]), std::exp(p[0] * p[1])}; };
+        auto f = [](const In &p) {
+            return Out{std::cos(p[0]) + std::sin(p[1]), std::exp(p[0] * p[1])};
+        };
         In a{-1.0, -1.0}, b{1.0, 1.0};
         int degree = 12;
         auto poly = poly_eval::make_func_eval(f, degree, a, b);
@@ -38,7 +40,9 @@ int main() {
     {
         using In = std::array<double, 2>;
         using Out = std::array<double, 3>;
-        auto f = [](const In &p) { return Out{std::cos(p[0]), std::sin(p[1]), p[0] + p[1]}; };
+        auto f = [](const In &p) {
+            return Out{std::cos(p[0]), std::sin(p[1]), p[0] + p[1]};
+        };
         In a{-1.0, -1.0}, b{1.0, 1.0};
         int degree = 10;
         auto poly = poly_eval::make_func_eval(f, degree, a, b);
@@ -51,7 +55,9 @@ int main() {
     {
         using In = std::array<double, 3>;
         using Out = std::array<double, 2>;
-        auto f = [](const In &p) { return Out{p[0] * p[1] + p[2], std::exp(p[0] + p[1] - p[2])}; };
+        auto f = [](const In &p) {
+            return Out{p[0] * p[1] + p[2], std::exp(p[0] + p[1] - p[2])};
+        };
         In a{-1.0, -1.0, -1.0}, b{1.0, 1.0, 1.0};
         int degree = 8;
         auto poly = poly_eval::make_func_eval(f, degree, a, b);

@@ -1,0 +1,52 @@
+repos:
+  # --- C / C++: staged hunks only via git-clang-format ---
+  - repo: local
+    hooks:
+      - id: clang-format-staged
+        name: clang-format (staged hunks)
+        entry: git-clang-format --binary clang-format --staged
+        language: python
+        additional_dependencies: [clang-format==22.*]
+        pass_filenames: true
+        types_or: [c++, c]
+        files: \.(c|cc|cpp|h|hpp)$
+        exclude: ^build/
+
+  # --- CMake ---
+  - repo: https://github.com/BlankSpruce/gersemi
+    rev: 0.26.0
+    hooks:
+      - id: gersemi
+        args: [--indent=2, --line-length=100]
+
+  # --- Python ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.1
+    hooks:
+      - id: ruff
+        files: ^scripts/
+        args: [--fix]
+      - id: ruff-format
+        files: ^scripts/
+
+  # --- Standard file hygiene ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        args: [--unsafe]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-illegal-windows-names
+
+  # --- Markdown ---
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^docs/api/

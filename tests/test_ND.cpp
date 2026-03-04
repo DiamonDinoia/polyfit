@@ -13,10 +13,9 @@ constexpr int kNumPoints = 1000; // random evaluation points per test
 
 // Global test function: sum of cosines across all dimensions.  Replace or edit
 // the body if you want to test a different analytic function.
-template <typename Array, typename OutPut = Array> constexpr auto sumCos(Array const &x) {
+template<typename Array, typename OutPut = Array> constexpr auto sumCos(const Array &x) {
     double s = 0.0;
-    for (const double xi : x)
-        s += std::cos(xi);
+    for (const double xi : x) s += std::cos(xi);
     OutPut y{};
     y.fill(s);
     for (std::size_t i = 1; i < y.size(); ++i) {
@@ -33,11 +32,11 @@ std::uniform_real_distribution<double> dist(-1.0, 1.0);
 // compile‑time combination <InDim,OutDim,Degree>.
 // -----------------------------------------------------------------------------
 
-template <std::size_t InDim, std::size_t OutDim, std::size_t Degree> void RunmMonomialTest() {
+template<std::size_t InDim, std::size_t OutDim, std::size_t Degree> void RunmMonomialTest() {
     using Input = std::array<double, InDim>;
     using Output = std::array<double, OutDim>;
     // set ktol to 10^{-Degree}
-    constexpr double kTol = std::pow(10.0, -static_cast<double>(Degree - 3));
+    const double kTol = std::pow(10.0, -static_cast<double>(Degree - 3));
     // Domain [a,b] = [-1,1]^InDim
     Input a{};
     a.fill(-1.0);
@@ -50,8 +49,7 @@ template <std::size_t InDim, std::size_t OutDim, std::size_t Degree> void RunmMo
     // Pseudo‑random validation points
     for (int i = 0; i < kNumPoints; ++i) {
         Input x;
-        for (auto &xi : x)
-            xi = dist(gen);
+        for (auto &xi : x) xi = dist(gen);
         auto y_true = sumCos<Input, Output>(x);
         auto y_poly = approx(x);
         for (std::size_t j = 0; j < OutDim; ++j) {

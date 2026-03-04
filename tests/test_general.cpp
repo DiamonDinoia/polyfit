@@ -9,7 +9,7 @@
 std::mt19937 rng(42);
 
 // Helper to compute maximum relative error over random samples
-template <typename TrueF, typename ApproxF, typename Domain>
+template<typename TrueF, typename ApproxF, typename Domain>
 double compute_max_relative_error(TrueF f_true, ApproxF f_approx, Domain low, Domain high, int num_samples) {
     // RNG seeded from GoogleTest's random seed for reproducibility
 
@@ -41,7 +41,9 @@ double compute_max_relative_error(TrueF f_true, ApproxF f_approx, Domain low, Do
 
 TEST(FuncEval1D, FixedDegreeVsAdaptiveRelativeError) {
     using namespace poly_eval;
-    auto f = [](double x) { return std::exp(std::sin(3 * x)); };
+    auto f = [](double x) {
+        return std::exp(std::sin(3 * x));
+    };
     double a = -1.0;
     double b = 1.0;
     constexpr int num_samples = 1000;

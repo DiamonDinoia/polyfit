@@ -1,0 +1,5 @@
+# Bulk reformat commits — ignored by git blame.
+# Configure locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add the hash of this reformat commit once it is made.

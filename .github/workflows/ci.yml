@@ -17,19 +17,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build_type: [Debug, Release]
         include:
-          - os: ubuntu-24.04
-            toolchain: gcc
-          - os: ubuntu-24.04
-            toolchain: llvm
-          - os: macos-14
-            toolchain: apple-clang
-          - os: ubuntu-24.04
-            toolchain: gcc-14
-          - os: windows-2022
-            toolchain: msvc
-            multi_config: true
+          # Ubuntu Debug
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Debug}
+          # Ubuntu Release
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release}
+          # macOS
+          - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release}
+          # Windows
+          - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -190,9 +198,12 @@ jobs:
       - name: Install tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang clang-tidy cppcheck ninja-build
+          sudo apt-get install -y clang clang-tidy cppcheck ninja-build cmake
 
       - name: Configure analysis
+        env:
+          CC: clang
+          CXX: clang++
         run: |
           cmake -S . -B build/analyze \
             -G Ninja \
@@ -203,9 +214,13 @@ jobs:
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
             -DPOLYFIT_ENABLE_CLANG_TIDY=ON \
-            -DPOLYFIT_ENABLE_CPPCHECK=ON
+            -DPOLYFIT_ENABLE_CPPCHECK=ON \
+            -DPOLYFIT_MAX_TEST_STANDARD=17
 
       - name: Build (analysis)
+        env:
+          CC: clang
+          CXX: clang++
         run: cmake --build build/analyze
 
       - name: Test (analysis)
