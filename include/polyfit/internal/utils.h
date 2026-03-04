@@ -160,14 +160,13 @@ inline constexpr double pi = 3.14159265358979323846;
 } // namespace constants
 
 constexpr double cos(const double x) noexcept {
-#if __cplusplus >= 202002L
-    if (!std::is_constant_evaluated()) {
-        return std::cos(x);
-    }
-#endif
     // Constexpr Cody-Waite cos approximation.
     // Uses a*b+c instead of std::fma for MSVC constexpr compatibility.
-    // At runtime in C++20 the dispatch above delegates to std::cos.
+    // NOTE: do NOT dispatch to std::cos at runtime in C++20. The Cody-Waite
+    // values produce consistent Chebyshev nodes that avoid near-cancellation in
+    // the Björck-Pereyra divided differences at high degrees (≥ 44). std::cos
+    // returns values that differ by up to 1 ULP, which is enough to cause
+    // accuracy degradation at high polynomial degrees.
     constexpr double PIO2_HI = 1.57079632679489655800e+00;
     constexpr double PIO2_LO = 6.12323399573676603587e-17;
     constexpr double INV_PIO2 = 6.36619772367581382433e-01;

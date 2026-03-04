@@ -51,7 +51,8 @@ Checks: "*,
         -cppcoreguidelines-avoid-const-or-ref-data-members,
         -cppcoreguidelines-pro-type-member-init,
         -hicpp-member-init,
-        -readability-function-cognitive-complexity"
+        -readability-function-cognitive-complexity,
+        -readability-isolate-declaration"
 
 WarningsAsErrors: ''
 HeaderFilterRegex: 'include/polyfit/'

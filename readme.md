@@ -4,19 +4,22 @@
 
 In mathematical terms, to approximate a function $f(x)$ over an interval $(a, b)$ with a polynomial $P(x)$ of degree $d$, the library constructs an interpolating polynomial. The process is as follows:
 
-1.  **Node Selection**: The function $f(x)$ is sampled at $d+1$ specific points within the interval $[a, b]$. These points are the Chebyshev nodes, which are chosen to minimize the maximum approximation error, preventing the large oscillations typical of interpolation with equally spaced points (Runge's phenomenon).
+1.  **Node Selection**: The function $f(x)$ is sampled at $d+1$ Chebyshev nodes within the interval $[a, b]$. These nodes are chosen to minimize the maximum approximation error, preventing the large oscillations typical of interpolation with equally spaced points (Runge's phenomenon).
 
-2.  **System Formulation**: The goal is to find the coefficients $\mathbf{c} = (c_0, c_1, \dots, c_d)$ of the polynomial in the monomial basis, $P(x) = \sum_{j=0}^{d} c_j x^j$, such that the polynomial passes exactly through the sampled points. This creates a system of linear equations.
+2.  **Newton Divided Differences (Björck–Pereyra)**: The samples are used to compute Newton divided differences via the Björck–Pereyra algorithm. This produces the polynomial in Newton form, which is numerically stable and avoids forming the ill-conditioned Vandermonde matrix.
 
-3.  **Solving**: This system is expressed in matrix form as $V\mathbf{c} = \mathbf{y}$, where $V$ is the Vandermonde matrix of the Chebyshev nodes, $\mathbf{y}$ is the vector of the function values at these nodes, and $\mathbf{c}$ is the vector of polynomial coefficients. The library finds the coefficients by solving this system.
+3.  **Monomial Conversion**: The Newton-form coefficients are converted to the standard monomial basis $P(x) = \sum_{j=0}^{d} c_j x^j$ via a stable recurrence.
+
+4.  **Optional Refinement**: Iterative refinement reruns the fitting step on the residual to further reduce numerical error. The number of refinement iterations is controlled by the `Iters_compile_time` template parameter (default: 1).
 
 The library supports approximating both scalar ($f: \mathbb{R} \to \mathbb{R}$) and vector-valued ($f: \mathbb{R}^N \to \mathbb{R}^M$) functions.
 
 ## Requirements
 
-*   A C++17 compatible compiler.
+*   A C++17 compatible compiler (GCC, Clang, or MSVC).
 *   A C++20 compatible compiler is required for compile-time approximation features.
 *   CMake version 3.14 or higher.
+*   **MSVC note**: C++17 is fully supported. For C++20 `constexpr` fitting with MSVC, add `/Zc:__cplusplus` to your compiler flags.
 
 ## How to use with CMake
 
@@ -211,6 +214,30 @@ cmake -S . -B build
 # Build and run the examples
 cmake --build build --target run_examples
 ```
+
+## Accuracy & Performance
+
+### Compensated Arithmetic
+
+Both `bjorck_pereyra` (Newton divided differences) and `newton_to_monomial` (monomial conversion) use **error-free transformations (EFT) / compensated summation**. This yields near-machine-precision fitting accuracy even at high polynomial degrees where naive floating-point accumulation would lose significant digits.
+
+### Refinement Iterations
+
+The `Iters_compile_time` template parameter on `FuncEval` controls the number of iterative refinement steps applied after the initial fit (default: 1). Each iteration reruns the fitting pipeline on the current residual and corrects accumulated floating-point error. For high-degree polynomials or stringent accuracy requirements, increasing `Iters_compile_time` to 2–3 can meaningfully reduce the approximation error. Refinement uses a compensated Horner scheme internally to avoid divergence at high degrees.
+
+### Truncation
+
+When using the error-tolerance overload of `make_func_eval`, the evaluator may drop trailing near-zero coefficients via `truncate(eps)` after fitting converges. This reduces the polynomial degree actually evaluated, lowering per-call cost without exceeding the requested error bound.
+
+### SIMD Bulk Evaluation
+
+Bulk evaluation paths use SIMD intrinsics (via xsimd) automatically. For best throughput, prefer the bulk overload:
+
+```cpp
+poly(pts, out, num_points);  // operator()(const T* pts, T* out, std::size_t n)
+```
+
+For evaluating multiple polynomials over the same inputs simultaneously, use `FuncEvalMany` (see API reference).
 
 ## Notes on Coefficients and Mapping
 

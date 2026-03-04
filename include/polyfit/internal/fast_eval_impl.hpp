@@ -312,8 +312,8 @@ template <typename... EvalTypes> constexpr std::size_t FuncEvalMany<EvalTypes...
 
 PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
-std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
-FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept {
+auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept
+    -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
     for (std::size_t i = 0; i < kF; ++i)
         xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i];
@@ -337,8 +337,8 @@ PF_FAST_EVAL_END
 
 PF_FAST_EVAL_BEGIN
 template <typename... EvalTypes>
-std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
-FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept {
+auto FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept
+    -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
     for (std::size_t i = 0; i < kF; ++i)
         xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i];
@@ -436,8 +436,8 @@ PF_FAST_EVAL_END
 
 template <typename... EvalTypes>
 template <typename... Ts>
-std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
-FuncEvalMany<EvalTypes...>::operator()(InputType first, Ts... rest) const noexcept {
+auto FuncEvalMany<EvalTypes...>::operator()(InputType first, Ts... rest) const noexcept
+    -> std::array<OutputType, kF> {
     static_assert(sizeof...(Ts) + 1 == kF, "Incorrect number of arguments");
     return operator()(std::array<InputType, kF>{first, static_cast<InputType>(rest)...});
 }
@@ -446,8 +446,8 @@ FuncEvalMany<EvalTypes...>::operator()(InputType first, Ts... rest) const noexce
 
 template <typename... EvalTypes>
 template <typename... Ts>
-std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
-FuncEvalMany<EvalTypes...>::operator()(const std::tuple<Ts...> &tup) const noexcept {
+auto FuncEvalMany<EvalTypes...>::operator()(const std::tuple<Ts...> &tup) const noexcept
+    -> std::array<OutputType, kF> {
     static_assert(sizeof...(Ts) == kF, "Tuple size must equal number of polynomials");
     std::array<InputType, kF> xs{};
     std::apply([&](auto &&...e) { xs = {static_cast<InputType>(e)...}; }, tup);
@@ -497,8 +497,8 @@ PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(typename value_type_or
 // ------------------------------ extract_real ---------------------------
 
 template <typename... EvalTypes>
-constexpr std::array<typename FuncEvalMany<EvalTypes...>::OutputType, FuncEvalMany<EvalTypes...>::kF>
-FuncEvalMany<EvalTypes...>::extract_real(const std::array<OutputType, kF_pad> &full) const noexcept {
+constexpr auto FuncEvalMany<EvalTypes...>::extract_real(const std::array<OutputType, kF_pad> &full) const noexcept
+    -> std::array<OutputType, kF> {
     if constexpr (kF == kF_pad) {
         return full; // no padding
     }

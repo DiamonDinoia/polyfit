@@ -11,9 +11,12 @@ This document summarizes the public API of polyfit and the responsibilities of t
     - Runtime adaptive (epsilon): make_func_eval(func, eps, a, b)
     - ND / vector-valued functions use std::array-like inputs/outputs
   - Behavior:
-    - Samples f on Chebyshev nodes, fits via Newton→monomial conversion.
+    - Samples f on Chebyshev nodes, fits via Björck–Pereyra Newton interpolation → monomial conversion. No Vandermonde matrix is formed.
     - Returns a callable evaluator (FuncEval or FuncEvalND) that evaluates with Horner's method.
     - For C++20 constexpr overloads, fitting may occur at compile time.
+  - Key template parameters on the returned FuncEval:
+    - `N_compile_time`: polynomial degree known at compile time (0 = runtime degree).
+    - `Iters_compile_time`: number of iterative refinement passes (default 1). Increase to 2–3 for high-degree polynomials where residual error matters.
 
 ## Main types
 
@@ -23,8 +26,9 @@ This document summarizes the public API of polyfit and the responsibilities of t
     - N_compile_time == 0: runtime degree (n passed to constructor)
   - Key members:
     - operator()(InputType) — scalar evaluation
-    - operator()(const InputType* pts, OutputType* out, std::size_t num) — bulk eval
-    - coeffs() — access monomial coefficients (monomial basis)
+    - operator()(const InputType* pts, OutputType* out, std::size_t num) — bulk SIMD evaluation
+    - coeffs() — access monomial coefficients (monomial basis, highest degree first)
+    - truncate(eps) — remove trailing coefficients whose absolute value is ≤ eps, reducing effective degree
 
 - poly_eval::FuncEvalND<Func, N_compile_time = 0>
   - N‑D variant using mdspan extents for storage.
@@ -36,6 +40,12 @@ This document summarizes the public API of polyfit and the responsibilities of t
     - all compile-time degree, or
     - all runtime degree.
     Mixing runtime and compile-time degree evaluators in one pack is unsupported.
+  - Key members:
+    - operator()(InputType x) — evaluates all packed polynomials at x; returns an array of outputs
+    - operator()(InputType first, Ts... rest) — variadic overload; evaluates each packed polynomial at its corresponding argument
+    - operator()(const std::tuple<Ts...>&) — tuple overload; elements of the tuple are forwarded to the corresponding polynomial
+    - operator()(const InputType* pts, OutputType* out, std::size_t n) — bulk evaluation across many points using SIMD
+    - truncate(eps) — delegates to each packed evaluator's truncate(eps)
 
 ## Config / macros
 
@@ -54,11 +64,28 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 - Internal fitting converts Newton-form coefficients to monomial form and reverses the order before evaluation.
 - When interacting with low-level APIs such as `horner`, pass coefficients as `[c_N, c_{N-1}, …, c_0]`.
 
+## Accuracy
+
+### Compensated Fitting Pipeline
+
+- **Björck–Pereyra** (Newton divided differences) and **newton_to_monomial** (monomial conversion) both use error-free transformations (EFT) and compensated summation, achieving near-machine-precision fitting even at high polynomial degrees.
+- **Compensated Horner** is used in the iterative refinement step to prevent divergence when evaluating high-degree polynomials during residual correction.
+
+### Truncation
+
+- `FuncEval::truncate(eps)` removes trailing coefficients with absolute value ≤ eps.
+- Called automatically by the adaptive (`epsilon`) overload of `make_func_eval` after the degree search converges, so the evaluator operates at the minimal degree that satisfies the error bound.
+
+## MSVC Compatibility
+
+- **C++17**: fully supported. Internal constants use `detail::constants::pi` instead of `M_PI`; `detail::cos()` uses a Cody-Waite minimax approximation (consistent across standards) to produce numerically stable Chebyshev nodes at high polynomial degrees.
+- **C++20 constexpr fitting**: requires `/Zc:__cplusplus` compiler flag so that MSVC correctly reports the language standard version to the library's feature-detection macros. Without this flag, constexpr fitting silently falls back to runtime fitting.
+
 ## C++ Standards
 
 - C++17: fully supported for runtime fitting and evaluation (tests build as `_cxx17` targets).
 - C++20: enables additional constexpr paths and cleaner syntax (tests build as `_cxx20` targets).
-- The public headers avoid requiring C++20 features where not necessary; internal implementations may use feature-detection macros.
+- The public headers avoid requiring C++20 features where not necessary; internal implementations use feature-detection macros.
 
 ## Running Tests and Benchmarks
 

@@ -26,7 +26,8 @@
 
 int main() {
     // RNG setup
-    std::mt19937_64 rng(42);
+    std::random_device rd;
+    std::mt19937_64 rng(rd());
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
     // Benchmark configuration
@@ -57,7 +58,9 @@ int main() {
             .run("Dim=1, Deg=" + std::to_string(deg) + ", SIMD=Yes, simd-runtime",
                  [&] {
                      const size_t P = 1024;
-                     std::vector<double> pts(P), out(P), coeffs(deg);
+                     std::vector<double> pts(P);
+                     std::vector<double> out(P);
+                     std::vector<double> coeffs(deg);
                      for (auto &p : pts)
                          p = dist(rng);
                      for (auto &c : coeffs)
@@ -78,7 +81,8 @@ int main() {
                 .run("Dim=1, horner_many M=" + std::to_string(M) + ", Deg=" + std::to_string(deg) +
                          ", SIMD=No, many-runtime",
                      [&] {
-                         std::vector<double> coeffs(M * deg), out(M);
+                         std::vector<double> coeffs(M * deg);
+                         std::vector<double> out(M);
                          for (auto &c : coeffs)
                              c = dist(rng);
                          double x = dist(rng);

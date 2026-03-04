@@ -78,7 +78,9 @@ function(polyfit_enable_warnings target)
     string(MAKE_C_IDENTIFIER "POLYFIT_HAS${_flag}" _flag_id)
     check_cxx_compiler_flag("${_flag}" "${_flag_id}")
     if(${_flag_id})
-      list(APPEND _warnings_clang_like "${_flag}")
+      # Apply additional (GCC-specific) warnings only to GCC, not Clang/MSVC,
+      # to avoid "unknown warning option" errors in clang-tidy and Clang builds.
+      list(APPEND _compile_options $<$<AND:${_lang_is_cxx},${_gnu}>:${_flag}>)
     endif()
   endforeach()
 

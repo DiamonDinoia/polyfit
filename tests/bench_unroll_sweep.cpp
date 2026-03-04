@@ -7,7 +7,8 @@
 #include <string>
 
 int main() {
-    std::mt19937_64 rng(42);
+    std::random_device rd;
+    std::mt19937_64 rng(rd());
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
     const std::vector<int> unrolls = {0, 1, 2, 4, 8, 16, 32};
@@ -20,7 +21,8 @@ int main() {
     // storage for results: rows = unrolls, cols = degs
     std::vector<std::vector<double>> results(unrolls.size(), std::vector<double>(degs.size(), 0.0));
 
-    std::vector<double> pts(P), out(P);
+    std::vector<double> pts(P);
+    std::vector<double> out(P);
 
     for (auto &p : pts) p = dist(rng);
 

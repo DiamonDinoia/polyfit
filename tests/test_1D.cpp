@@ -50,8 +50,8 @@ TEST(PolyEval, RuntimeDegreeDoubleRandom) {
 
 // 2. Runtime Degree (float, custom iters)
 TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
-    constexpr auto a = -static_cast<float>(M_PI);
-    constexpr auto b = static_cast<float>(M_PI);
+    constexpr auto a = -static_cast<float>(poly_eval::detail::constants::pi);
+    constexpr auto b = static_cast<float>(poly_eval::detail::constants::pi);
     constexpr auto n = 12;
     constexpr size_t iters = 1;
     constexpr auto eps = 2.5e-4;
