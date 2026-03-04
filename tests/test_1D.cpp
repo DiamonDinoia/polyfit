@@ -25,9 +25,8 @@ static auto complex_func = [](const double x) {
 static constexpr std::size_t kNumRandomTests = 100;
 
 // Helper to batch-evaluate and compare
-template<typename T>
-void batch_verify(std::function<T(double)> &&f, const std::vector<double> &xs, const std::vector<T> &ys,
-                  const double tol) {
+template<typename T, typename X = double, typename F>
+void batch_verify(F &&f, const std::vector<X> &xs, const std::vector<T> &ys, const double tol) {
     for (size_t i = 0; i < xs.size(); ++i) {
         EXPECT_LE(poly_eval::detail::relative_l2_norm(ys[i], f(xs[i])), tol)
             << "Failed at x=" << xs[i] << ": expected " << f(xs[i]) << ", got " << ys[i];
@@ -75,10 +74,7 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     std::vector<float> ys_f(kNumRandomTests);
     poly(xs.data(), ys_f.data(), ys_f.size());
 
-    // Convert inputs and outputs to double for unified verification
-    std::vector<double> xs_d(xs.begin(), xs.end());
-    std::vector<double> ys_d(ys_f.begin(), ys_f.end());
-    batch_verify<double>(float_func, xs_d, ys_d, eps);
+    batch_verify<float>(float_func, xs, ys_f, eps);
 }
 
 TEST(PolyEval, RuntimeDegreeRejectsNonPositive) {

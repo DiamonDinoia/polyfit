@@ -25,7 +25,9 @@ set(SOURCES
         runtime_ND_eps.cpp
         many_polys_example.cpp
 )
-if (COMPILER_SUPPORTS_CXX20)
+# The constexpr eps overload uses a GCC extension (function parameter in
+# if-constexpr condition) that Clang and MSVC reject.
+if (COMPILER_SUPPORTS_CXX20 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND SOURCES compiletime_1D_eps.cpp)
 endif()
 
