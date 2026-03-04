@@ -155,28 +155,31 @@ template <typename T> constexpr size_t get_alignment(const T *ptr) noexcept {
     return static_cast<size_t>(1) << detail::countr_zero(address);
 }
 
+namespace constants {
+inline constexpr double pi = 3.14159265358979323846;
+} // namespace constants
+
 constexpr double cos(const double x) noexcept {
-    /* π/2 split (Cody-Waite) */
+#if __cplusplus >= 202002L
+    if (!std::is_constant_evaluated()) {
+        return std::cos(x);
+    }
+#endif
+    // Constexpr Cody-Waite cos approximation.
+    // Uses a*b+c instead of std::fma for MSVC constexpr compatibility.
+    // At runtime in C++20 the dispatch above delegates to std::cos.
     constexpr double PIO2_HI = 1.57079632679489655800e+00;
     constexpr double PIO2_LO = 6.12323399573676603587e-17;
     constexpr double INV_PIO2 = 6.36619772367581382433e-01;
 
-    if (!std::isfinite(x)) {
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    /* argument reduction: x = n·π/2 + y, |y| ≤ π/4 */
-
     const double fn = x * INV_PIO2;
     const int n = static_cast<int>(fn + (fn >= 0.0 ? 0.5 : -0.5));
     const int q = n & 3; // quadrant 0‥3
-    const auto y = [n, x] {
-        double reduced = std::fma(-n, PIO2_HI, x);
-        reduced = std::fma(-n, PIO2_LO, reduced);
-        return reduced;
-    }();
+    const double yn = static_cast<double>(-n);
+    const double y = (yn * PIO2_HI + x) + yn * PIO2_LO;
+
     /* cos & sin minimax polynomials as lambdas with embedded coeffs */
-    constexpr auto cos_poly = [](const double yy) constexpr {
+    const auto cos_poly = [](const double yy) noexcept {
         /*
          * The coefficients c1-c6 are under the following license:
          * ====================================================
@@ -195,15 +198,15 @@ constexpr double cos(const double x) noexcept {
         constexpr double c5 = 2.08757232129817482790e-09;
         constexpr double c6 = -1.13596475577881948265e-11;
         const double z = yy * yy;
-        double r = std::fma(c6, z, c5);
-        r = std::fma(r, z, c4);
-        r = std::fma(r, z, c3);
-        r = std::fma(r, z, c2);
-        r = std::fma(r, z, c1);
-        return std::fma(z * z, r, 1.0 - 0.5 * z);
+        double r = c6 * z + c5;
+        r = r * z + c4;
+        r = r * z + c3;
+        r = r * z + c2;
+        r = r * z + c1;
+        return z * z * r + (1.0 - 0.5 * z);
     };
 
-    constexpr auto sin_poly = [](const double yy) constexpr {
+    const auto sin_poly = [](const double yy) noexcept {
         constexpr double s1 = -1.66666666666666307295e-01;
         constexpr double s2 = 8.33333333332211858878e-03;
         constexpr double s3 = -1.98412698295895385996e-04;
@@ -211,12 +214,12 @@ constexpr double cos(const double x) noexcept {
         constexpr double s5 = -2.50507477628578072866e-08;
         constexpr double s6 = 1.58962301576546568060e-10;
         const double z = yy * yy;
-        double r = std::fma(s6, z, s5);
-        r = std::fma(r, z, s4);
-        r = std::fma(r, z, s3);
-        r = std::fma(r, z, s2);
-        r = std::fma(r, z, s1);
-        return std::fma(yy * z, r, yy);
+        double r = s6 * z + s5;
+        r = r * z + s4;
+        r = r * z + s3;
+        r = r * z + s2;
+        r = r * z + s1;
+        return yy * z * r + yy;
     };
 
     /* quadrant dispatch—only compute what we need */

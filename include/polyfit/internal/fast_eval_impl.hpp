@@ -161,7 +161,7 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
     // 2) fill
     const auto n_terms = monomials.size();
     for (std::size_t k = 0; k < n_terms; ++k) {
-        grid[k] = pts ? pts[k] : InputType(detail::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * double(n_terms))));
+        grid[k] = pts ? pts[k] : InputType(detail::cos((2.0 * double(k) + 1.0) * detail::constants::pi / (2.0 * double(n_terms))));
     }
     for (std::size_t i = 0; i < n_terms; ++i) {
         samples[i] = F(map_to_domain(grid[i]));
@@ -610,7 +610,7 @@ template <class Func, std::size_t N_compile> constexpr void FuncEvalND<Func, N_c
     const auto n_nodes = static_cast<std::size_t>(n);
     auto nodes = make_buffer<Scalar, N_compile>(n_nodes);
     for (std::size_t k = 0; k < n_nodes; ++k)
-        nodes[k] = detail::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * double(n)));
+        nodes[k] = detail::cos((2.0 * double(k) + 1.0) * detail::constants::pi / (2.0 * double(n)));
 
     std::array<int, dim_> ext_idx{};
     ext_idx.fill(n);
