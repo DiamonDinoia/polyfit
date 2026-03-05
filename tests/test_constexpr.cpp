@@ -43,7 +43,7 @@ static_assert(m::log10(0.1) > -1.01 && m::log10(0.1) < -0.99, "log10(0.1) ~= -1"
 static_assert(m::sqrt(4.0) == 2.0, "sqrt(4)");
 static_assert(m::sqrt(0.0) == 0.0, "sqrt(0)");
 static_assert(m::sqrt(9.0) == 3.0, "sqrt(9)");
-static_assert(m::sqrt(2.0) > 1.41 && m::sqrt(2.0) < 1.42, "sqrt(2) ~= 1.414");
+static_assert(m::sqrt(2.0) > 1.41 && m::sqrt(2.0) < 1.42, "sqrt(2) ~= 1.414"); // NOLINT(modernize-use-std-numbers)
 
 // ---------------------------------------------------------------------------
 // FuncEval CT construction (C++20+)
