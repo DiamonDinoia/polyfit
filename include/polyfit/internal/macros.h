@@ -117,7 +117,8 @@
 // C++23 native `if consteval` — cleaner than std::is_constant_evaluated() and
 // works correctly inside consteval functions (std::is_constant_evaluated() always
 // returns false inside a consteval function).
-#if __cplusplus >= 202302L
+// cppcheck's parser does not support `if consteval`, so force the C++20 form.
+#if __cplusplus >= 202302L && !defined(__cppcheck__)
 #define PF_IF_CONSTEVAL     if consteval
 #define PF_IF_NOT_CONSTEVAL if !consteval
 #else

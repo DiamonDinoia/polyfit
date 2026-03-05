@@ -32,7 +32,9 @@ function(polyfit_configure_static_analysis target)
   if(POLYFIT_ENABLE_CPPCHECK)
     find_program(_cppcheck_exe NAMES cppcheck)
     if(_cppcheck_exe)
-      set(_cppcheck_cmd "${_cppcheck_exe}" "--inline-suppr")
+      # -D__cppcheck__: force the guard active so PF_IF_CONSTEVAL uses the
+      # C++20-compatible form (cppcheck's parser cannot handle `if consteval`).
+      set(_cppcheck_cmd "${_cppcheck_exe}" "--inline-suppr" "-D__cppcheck__")
       if(POLYFIT_CPPCHECK_OPTIONS)
         list(APPEND _cppcheck_cmd "${POLYFIT_CPPCHECK_OPTIONS}")
       endif()
