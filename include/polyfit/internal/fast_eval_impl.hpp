@@ -115,13 +115,11 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_tim
         const auto unaligned_points = std::min(
             ((alignment - pts_alignment) & (alignment - 1)) >> detail::countr_zero(sizeof(InputType)), num_points);
 
-        constexpr std::size_t min_align = alignof(std::max_align_t); // in bytes, typically 16
-        constexpr std::size_t scalar_unroll =
-            alignment > min_align ? (alignment - min_align) / sizeof(InputType) : std::size_t{0};
-
-        if constexpr (scalar_unroll > 0) {
-            PF_ASSUME(unaligned_points < scalar_unroll); // helps bounded scalar prologue vectorization
-        }
+        // Maximum possible unaligned_points = alignment/sizeof(T) - 1 (e.g. 3 for double+AVX2).
+        // PF_ASSUME gives the compiler a tight loop-count bound for the scalar prologue.
+        constexpr std::size_t scalar_unroll = alignment / sizeof(InputType);
+        static_assert(scalar_unroll > 0);
+        PF_ASSUME(unaligned_points < scalar_unroll);
         // process scalar until we reach the first aligned point
         for (std::size_t i = 0; i < unaligned_points; ++i) {
             out[i] = operator()(pts[i]);
