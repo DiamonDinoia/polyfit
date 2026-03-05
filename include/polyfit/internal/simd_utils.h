@@ -26,6 +26,15 @@ template<typename T> PF_C23CONSTEVAL std::size_t optimal_horner_uf() noexcept {
     return (nregs - 3) / 2;
 }
 
+// Optimal unroll factor for FuncEvalMany bulk eval.
+// Matches optimal_horner_uf: UF pt + UF acc + 1 broadcast + 2 scratch = 2*UF + 3.
+// Benchmarked: UF=6 beats UF=7 (icache pressure from larger blocks offsets register gain).
+// AVX2/SSE (16 vregs) → 6, AVX-512/NEON/SVE (32 vregs) → 14.
+template<typename T> PF_C23CONSTEVAL std::size_t optimal_many_eval_uf() noexcept {
+    constexpr std::size_t nregs = poet::vector_register_count();
+    return (nregs - 3) / 2;
+}
+
 // detect xsimd batches
 template<typename T> struct is_xsimd_batch : std::false_type {};
 

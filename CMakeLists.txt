@@ -99,7 +99,7 @@ endif ()
 CPMAddPackage(
         NAME poet
         GITHUB_REPOSITORY DiamonDinoia/poet
-        GIT_TAG main
+        GIT_TAG e112c1759baa27538ede6c549b9f7ae93eae1ddd
         OPTIONS
         "POET_BUILD_TESTS OFF"
         "BUILD_TESTING OFF"

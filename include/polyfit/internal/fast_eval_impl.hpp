@@ -371,61 +371,76 @@ void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
     const std::size_t n_deg = static_cast<std::size_t>(coeffs_.extent(0));
     const std::size_t stride = kF_pad;
 
-    // For each polynomial, evaluate all points using SIMD across points
+    // Multi-accumulator Horner: UF independent chains per coefficient step for ILP.
+    // UF tuned to vector register pressure via poet::vector_register_count().
+    constexpr std::size_t UF = detail::optimal_many_eval_uf<OutputType>();
+    constexpr std::size_t block = simd_size * UF;
+
     poet::static_for<M>([&](auto m) {
         const auto low_m = low_[m];
         const auto hi_m = hi_[m];
-
-        // Gather this polynomial's coefficients (column m from transposed layout)
         const OutputType *col = coeffs_.data_handle();
 
-        // SIMD loop: process simd_size points at a time
-        std::size_t i = 0;
-        for (; i + simd_size <= num_points; i += simd_size) {
-            // Load simd_size x-values and apply domain mapping
-            auto xv = xsimd::load_unaligned(x + i);
-            auto xu = xsimd::fms(xsimd::batch<InputType>(InputType(2.0)), xv, xsimd::batch<InputType>(hi_m)) *
-                      xsimd::batch<InputType>(low_m);
-
-            // Horner evaluation across points
-            auto acc = xsimd::batch<OutputType>(col[0 * stride + m]);
+        // Horner coefficient dispatch: CT-unrolled or runtime loop.
+        auto for_each_coeff = [&](auto body) {
             if constexpr (deg_max_ctime_ != 0) {
                 if (!truncated_) {
-                    poet::static_for<1, deg_max_ctime_>([&](auto k) {
-                        acc =
-                            poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[std::size_t(k) * stride + m]));
-                    });
-                } else {
-                    for (std::size_t k = 1; k < n_deg; ++k)
-                        acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
+                    poet::static_for<1, deg_max_ctime_>([&](auto k) { body(std::size_t(k)); });
+                    return;
                 }
-            } else {
-                for (std::size_t k = 1; k < n_deg; ++k)
-                    acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
             }
+            for (std::size_t k = 1; k < n_deg; ++k) body(k);
+        };
 
-            // Scatter to row-major output: out[i*M + m], out[(i+1)*M + m], ...
+        // Scatter a SIMD batch to strided row-major output.
+        auto scatter = [&](auto acc, std::size_t base) {
             alignas(xsimd::batch<OutputType>::arch_type::alignment()) OutputType tmp[simd_size];
             acc.store_aligned(tmp);
-            for (std::size_t s = 0; s < simd_size; ++s) {
-                out[(i + s) * M + m] = tmp[s];
+            for (std::size_t s = 0; s < simd_size; ++s)
+                out[(base + s) * M + m] = tmp[s];
+        };
+
+        // Domain mapping helpers.
+        const auto two_vec = xsimd::batch<InputType>(InputType(2.0));
+        const auto hi_vec = xsimd::batch<InputType>(hi_m);
+        const auto low_vec = xsimd::batch<InputType>(low_m);
+        auto map_simd = [&](auto xv) { return xsimd::fms(two_vec, xv, hi_vec) * low_vec; };
+
+        // Main unrolled SIMD loop: UF batches per iteration for ILP
+        std::size_t i = 0;
+        if (num_points >= block)
+            for (const std::size_t limit = num_points - block; i <= limit; i += block) {
+                xsimd::batch<InputType> pt[UF];
+                xsimd::batch<OutputType> acc[UF];
+
+                poet::static_for<UF>([&](auto j) {
+                    pt[j] = map_simd(xsimd::load_unaligned(x + i + j * simd_size));
+                    acc[j] = xsimd::batch<OutputType>(col[0 * stride + m]);
+                });
+
+                for_each_coeff([&](std::size_t k) {
+                    const auto ck = xsimd::batch<OutputType>(col[k * stride + m]);
+                    poet::static_for<UF>([&](auto j) { acc[j] = poly_eval::detail::fma(acc[j], pt[j], ck); });
+                });
+
+                poet::static_for<UF>([&](auto j) { scatter(acc[j], i + j * simd_size); });
             }
+
+        // Single-batch SIMD remainder
+        for (; i + simd_size <= num_points; i += simd_size) {
+            auto xu = map_simd(xsimd::load_unaligned(x + i));
+            auto acc = xsimd::batch<OutputType>(col[0 * stride + m]);
+            for_each_coeff([&](std::size_t k) {
+                acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
+            });
+            scatter(acc, i);
         }
 
         // Scalar remainder
         for (; i < num_points; ++i) {
             auto xu = (InputType(2.0) * x[i] - hi_m) * low_m;
             OutputType acc = col[0 * stride + m];
-            if constexpr (deg_max_ctime_ != 0) {
-                if (!truncated_) {
-                    poet::static_for<1, deg_max_ctime_>(
-                        [&](auto k) { acc = poly_eval::detail::fma(acc, xu, col[std::size_t(k) * stride + m]); });
-                } else {
-                    for (std::size_t k = 1; k < n_deg; ++k) acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
-                }
-            } else {
-                for (std::size_t k = 1; k < n_deg; ++k) acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
-            }
+            for_each_coeff([&](std::size_t k) { acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]); });
             out[i * M + m] = acc;
         }
     });
