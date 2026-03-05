@@ -182,7 +182,7 @@ if (POLYFIT_ENABLE_COVERAGE)
                 COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --output-on-failure
                 COMMAND ${LCOV_EXECUTABLE} --capture --directory ${CMAKE_BINARY_DIR} --output-file ${LCOV_INFO} --ignore-errors inconsistent,unused
                 COMMAND ${LCOV_EXECUTABLE} --remove ${LCOV_INFO} "/usr/*" "*/_deps/*" --output-file ${LCOV_FILTERED} --ignore-errors inconsistent,unused
-                COMMAND ${GENHTML_EXECUTABLE} -o ${COVERAGE_DIR} ${LCOV_FILTERED}
+                COMMAND ${GENHTML_EXECUTABLE} --ignore-errors mismatch -o ${COVERAGE_DIR} ${LCOV_FILTERED}
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Running tests and generating coverage report (lcov+genhtml)"
                 VERBATIM

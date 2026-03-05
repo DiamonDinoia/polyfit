@@ -1,5 +1,8 @@
 #include "polyfit/fast_eval.hpp"
 #include <cmath>
+#if __cplusplus >= 202002L
+#include <numbers>
+#endif
 #include <gtest/gtest.h>
 
 using namespace poly_eval;
@@ -45,7 +48,11 @@ TEST(Utils, BjorckNewtonHighDegreeAccuracy) {
 
     // Generate Chebyshev nodes: x_k = cos(k * pi / (n-1)), k = 0..n-1
     poly_eval::Buffer<double, 0> nodes(n);
+#if __cplusplus >= 202002L
+    constexpr double pi = std::numbers::pi;
+#else
     constexpr double pi = 3.14159265358979323846;
+#endif
     for (std::size_t k = 0; k < n; ++k) nodes[k] = std::cos(static_cast<double>(k) * pi / static_cast<double>(n - 1));
 
     // Evaluate via Horner: p(x) = 1 + x*(1 + x*(1 + ... + x*(1 + x)))
