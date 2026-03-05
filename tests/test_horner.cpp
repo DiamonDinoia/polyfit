@@ -183,7 +183,7 @@ TYPED_TEST(HornerTyped, HornerMany_Runtime) {
     constexpr size_t M = 2, N = 3;
     std::vector<T> c = random_vector<T>(M * N);
     T out[M];
-    poly_eval::horner_many<0, 0, false, T, T>(x, c.data(), out, M, N);
+    poly_eval::horner_many<0, 0, T, T>(x, c.data(), out, M, N);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_scalar(x, c.data() + i * N, N);
         EXPECT_NEAR(out[i], ex, eps<T>);
@@ -197,7 +197,7 @@ TYPED_TEST(HornerTyped, HornerMany_CompileTime) {
     T c[M * N];
     std::copy(vec.begin(), vec.end(), c);
     T out[M];
-    poly_eval::horner_many<M, N, false, T, T>(x, c, out);
+    poly_eval::horner_many<M, N, T, T>(x, c, out);
     for (size_t i = 0; i < M; ++i) {
         T ex = naive_horner_scalar(x, c + i * N, N);
         EXPECT_NEAR(out[i], ex, eps<T>);

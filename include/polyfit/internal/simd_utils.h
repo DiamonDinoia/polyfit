@@ -7,7 +7,7 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
-#include <poet/core/register_info.hpp>
+#include <poet/core/cpu_info.hpp>
 #include <type_traits>
 #include <vector>
 #include <xsimd/xsimd.hpp>
@@ -44,6 +44,30 @@ template<typename T> PF_C23CONSTEVAL std::size_t optimal_many_eval_uf() noexcept
     constexpr std::size_t reserved = vreg_bytes <= 16 ? 2 : 3;
     return (nregs - reserved) / 2;
 }
+
+// Optimal unroll factor for horner_many scalar interleaving (dynamic_for).
+// Each lane runs an independent scalar Horner chain needing 1 FP accumulator.
+// Reserve 2 regs for xin + temporaries; divide remaining by 2 for acc + coeff load.
+// Cap at 8 to bound dynamic_for binary-tail code size.
+//   x86-64   (16 FP regs): UF = min((16-2)/2, 8) = 7
+//   AArch64  (32 FP regs): UF = min((32-2)/2, 8) = 8
+constexpr std::size_t optimal_horner_many_uf() noexcept {
+    constexpr std::size_t nregs = poet::vector_register_count();
+    constexpr std::size_t uf = (nregs - 2) / 2;
+    return uf < 8 ? uf : 8;
+}
+
+// Optimal unroll factor for horner_transposed scalar FMA step (dynamic_for).
+// Each lane does 1 FMA: out[i] = fma(out[i], xin[i], col[i]).
+// Lighter than horner_many: accumulator (out[i]) + cached xin[i] = 2 regs/lane,
+// col[i] is a fresh load each k-step. Reserve 1 for loop overhead.
+// Cap at 12 to bound dynamic_for binary-tail code size.
+//   x86-64   (16 FP regs): UF = min((16-1)/2, 12) = 7
+//   AArch64  (32 FP regs): UF = min((32-1)/2, 12) = 12
+// Note: horner_transposed scalar FMA step (out[i] = fma(out[i], xin[i], col[i]))
+// was benchmarked with dynamic_for<UF> for UF in {2,4,7,8}. A plain for loop
+// beat all variants — the body is too light (1 FMA) for dynamic_for overhead to
+// pay off. OoO execution already extracts available ILP from the simple loop.
 
 // detect xsimd batches
 template<typename T> struct is_xsimd_batch : std::false_type {};

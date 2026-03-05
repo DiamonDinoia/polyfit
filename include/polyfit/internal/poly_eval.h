@@ -62,7 +62,6 @@ PF_ALWAYS_INLINE constexpr void horner(
  *
  * @tparam M_total Compile-time number of polynomials (0 for runtime).
  * @tparam N_total Compile-time number of coefficients per polynomial (0 for runtime).
- * @tparam scaling Whether to apply scaling to the input.
  * @tparam OutputType Output value type.
  * @tparam InputType Input value type.
  * @param x The input value at which to evaluate.
@@ -70,14 +69,10 @@ PF_ALWAYS_INLINE constexpr void horner(
  * @param out Pointer to output array (size M).
  * @param M Number of polynomials (used if M_total == 0).
  * @param N Number of coefficients per polynomial (used if N_total == 0).
- * @param low Optional pointer to scaling lower bounds (used if scaling).
- * @param hi Optional pointer to scaling upper bounds (used if scaling).
  */
-template<std::size_t M_total = 0, std::size_t N_total = 0, bool scaling = false, typename OutputType,
-         typename InputType>
+template<std::size_t M_total = 0, std::size_t N_total = 0, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(InputType xin, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
-                                            std::size_t N = 0, const InputType *low = nullptr,
-                                            const InputType *high = nullptr) noexcept;
+                                            std::size_t N = 0) noexcept;
 
 /**
  * @brief Evaluate multiple polynomials at multiple points (transposed layout).
@@ -379,23 +374,21 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
 // horner_many
 //------------------------------------------------------------------------------
 
-template<std::size_t M_total, std::size_t N_total, bool scaling, typename OutputType, typename InputType>
+template<std::size_t M_total, std::size_t N_total, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputType *coeffs, OutputType *out,
-                                            const std::size_t M, const std::size_t N, const InputType *low,
-                                            const InputType *high) noexcept {
-    const std::size_t m_lim = M_total ? M_total : M;
+                                            const std::size_t M, const std::size_t N) noexcept {
     const std::size_t n_lim = N_total ? N_total : N;
 
     if constexpr (M_total != 0) {
         poet::static_for<M_total>([&](auto m) {
-            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
-            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
+            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
         });
     } else {
-        for (std::size_t m = 0; m < m_lim; ++m) {
-            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
-            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
-        }
+        const std::size_t m_lim = M;
+        constexpr auto UF = detail::optimal_horner_many_uf();
+        poet::dynamic_for<UF>(m_lim, [&](auto /*lane*/, std::size_t m) {
+            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
+        });
     }
 }
 

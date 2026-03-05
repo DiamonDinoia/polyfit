@@ -158,7 +158,11 @@
 // Push per-function optimize options that layer on top of user flags.
 // Keep them conservative: enable unroll/vectorize and allow fp-contract.
 #define PF_FAST_EVAL_PUSH _Pragma("GCC push_options")
-#define PF_FAST_EVAL_OPTIMIZE _Pragma("GCC optimize (\"unroll-loops,tree-vectorize,fp-contract=fast\")")
+#define PF_FAST_EVAL_OPTIMIZE \
+    _Pragma("GCC optimize(\"tree-vectorize,fp-contract=fast\")") \
+    _Pragma("GCC optimize(\"-fira-hoist-pressure\")") \
+    _Pragma("GCC optimize(\"-fno-ira-share-spill-slots\")") \
+    _Pragma("GCC optimize(\"-frename-registers\")")
 #ifdef PF_EXTRA_FAST_EVAL
 #define PF_FAST_EVAL_EXTRA _Pragma(PF_EXTRA_FAST_EVAL)
 #else

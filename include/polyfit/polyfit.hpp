@@ -132,7 +132,11 @@ namespace stdex = std::experimental;
 // Push per-function optimize options that layer on top of user flags.
 // Keep them conservative: enable unroll/vectorize and allow fp-contract.
 #define PF_FAST_EVAL_PUSH _Pragma("GCC push_options")
-#define PF_FAST_EVAL_OPTIMIZE _Pragma("GCC optimize (\"unroll-loops,tree-vectorize,fp-contract=fast\")")
+#define PF_FAST_EVAL_OPTIMIZE \
+    _Pragma("GCC optimize(\"tree-vectorize,fp-contract=fast\")") \
+    _Pragma("GCC optimize(\"-fira-hoist-pressure\")") \
+    _Pragma("GCC optimize(\"-fno-ira-share-spill-slots\")") \
+    _Pragma("GCC optimize(\"-frename-registers\")")
 #ifdef PF_EXTRA_FAST_EVAL
 #define PF_FAST_EVAL_EXTRA _Pragma(PF_EXTRA_FAST_EVAL)
 #else
@@ -169,7 +173,7 @@ namespace stdex = std::experimental;
 #include <cmath>
 #include <complex>
 #include <cstdint>
-#include <poet/core/register_info.hpp>
+#include <poet/core/cpu_info.hpp>
 #include <type_traits>
 #include <vector>
 #include <xsimd/xsimd.hpp>
@@ -186,6 +190,23 @@ template<typename T> constexpr std::size_t optimal_horner_uf() noexcept {
     constexpr std::size_t nregs = poet::vector_register_count();
     return (nregs - 3) / 2;
 }
+
+// Optimal unroll factor for horner_many scalar interleaving (dynamic_for).
+// Each lane runs an independent scalar Horner chain needing 1 FP accumulator.
+// Reserve 2 regs for xin + temporaries; divide remaining by 2 for acc + coeff load.
+// Cap at 8 to bound dynamic_for binary-tail code size.
+//   x86-64   (16 FP regs): UF = min((16-2)/2, 8) = 7
+//   AArch64  (32 FP regs): UF = min((32-2)/2, 8) = 8
+constexpr std::size_t optimal_horner_many_uf() noexcept {
+    constexpr std::size_t nregs = poet::vector_register_count();
+    constexpr std::size_t uf = (nregs - 2) / 2;
+    return uf < 8 ? uf : 8;
+}
+
+// Note: horner_transposed scalar FMA step (out[i] = fma(out[i], xin[i], col[i]))
+// was benchmarked with dynamic_for<UF> for UF in {2,4,7,8}. A plain for loop
+// beat all variants — the body is too light (1 FMA) for dynamic_for overhead to
+// pay off. OoO execution already extracts available ILP from the simple loop.
 
 // detect xsimd batches
 template<typename T> struct is_xsimd_batch : std::false_type {};
@@ -1043,7 +1064,6 @@ PF_ALWAYS_INLINE constexpr void horner(
  *
  * @tparam M_total Compile-time number of polynomials (0 for runtime).
  * @tparam N_total Compile-time number of coefficients per polynomial (0 for runtime).
- * @tparam scaling Whether to apply scaling to the input.
  * @tparam OutputType Output value type.
  * @tparam InputType Input value type.
  * @param x The input value at which to evaluate.
@@ -1051,14 +1071,10 @@ PF_ALWAYS_INLINE constexpr void horner(
  * @param out Pointer to output array (size M).
  * @param M Number of polynomials (used if M_total == 0).
  * @param N Number of coefficients per polynomial (used if N_total == 0).
- * @param low Optional pointer to scaling lower bounds (used if scaling).
- * @param hi Optional pointer to scaling upper bounds (used if scaling).
  */
-template<std::size_t M_total = 0, std::size_t N_total = 0, bool scaling = false, typename OutputType,
-         typename InputType>
+template<std::size_t M_total = 0, std::size_t N_total = 0, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(InputType xin, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
-                                            std::size_t N = 0, const InputType *low = nullptr,
-                                            const InputType *high = nullptr) noexcept;
+                                            std::size_t N = 0) noexcept;
 
 /**
  * @brief Evaluate multiple polynomials at multiple points (transposed layout).
@@ -1360,23 +1376,21 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
 // horner_many
 //------------------------------------------------------------------------------
 
-template<std::size_t M_total, std::size_t N_total, bool scaling, typename OutputType, typename InputType>
+template<std::size_t M_total, std::size_t N_total, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputType *coeffs, OutputType *out,
-                                            const std::size_t M, const std::size_t N, const InputType *low,
-                                            const InputType *high) noexcept {
-    const std::size_t m_lim = M_total ? M_total : M;
+                                            const std::size_t M, const std::size_t N) noexcept {
     const std::size_t n_lim = N_total ? N_total : N;
 
     if constexpr (M_total != 0) {
         poet::static_for<M_total>([&](auto m) {
-            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
-            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
+            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
         });
     } else {
-        for (std::size_t m = 0; m < m_lim; ++m) {
-            const auto xm = scaling ? (((InputType{2} * xin) - high[m]) * low[m]) : xin;
-            out[m] = horner<N_total>(xm, coeffs + (m * n_lim), n_lim);
-        }
+        const std::size_t m_lim = M;
+        constexpr auto UF = detail::optimal_horner_many_uf();
+        poet::dynamic_for<UF>(m_lim, [&](auto /*lane*/, std::size_t m) {
+            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
+        });
     }
 }
 

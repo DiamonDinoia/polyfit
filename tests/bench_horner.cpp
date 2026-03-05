@@ -81,7 +81,26 @@ int main() {
                          std::vector<double> out(M);
                          for (auto &c : coeffs) c = dist(rng);
                          double x = dist(rng);
-                         poly_eval::horner_many<0, 0, false, double, double>(x, coeffs.data(), out.data(), M, deg);
+                         poly_eval::horner_many<0, 0, double, double>(x, coeffs.data(), out.data(), M, deg);
+                         ankerl::nanobench::doNotOptimizeAway(out.data());
+                     })
+                .clearContext();
+        }
+    }
+
+    // horner_transposed scalar path (simd_width=0) for various (M, Deg)
+    for (auto deg : degs1d) {
+        for (auto M : Ms) {
+            bench.context("FMAs", std::to_string(M * deg))
+                .batch(M)
+                .run("Dim=1, horner_transposed_scalar M=" + std::to_string(M) + ", Deg=" + std::to_string(deg),
+                     [&] {
+                         std::vector<double> coeffs(deg * M); // transposed layout: N rows × M columns
+                         std::vector<double> out(M);
+                         std::vector<double> x(M);
+                         for (auto &c : coeffs) c = dist(rng);
+                         for (auto &xi : x) xi = dist(rng);
+                         poly_eval::horner_transposed<0, 0, 0>(x.data(), coeffs.data(), out.data(), M, deg);
                          ankerl::nanobench::doNotOptimizeAway(out.data());
                      })
                 .clearContext();

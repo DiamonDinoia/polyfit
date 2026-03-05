@@ -13,7 +13,7 @@ template<typename T> static T naive_horner_scalar(T x, const T *c, size_t n) {
     return acc;
 }
 
-TEST(HornerMany, ScalingTruePerPoly) {
+TEST(HornerMany, ScalingPerPoly) {
     using T = double;
     constexpr size_t M = 2, N = 3; // two polynomials, quadratic
 
@@ -34,18 +34,21 @@ TEST(HornerMany, ScalingTruePerPoly) {
         hi[i] = b[i] + a[i];
     }
 
-    // Evaluate at some x in both domains
-    T x = 0.3; // in [-1,1] for poly0; maps to t in [-1,1] for poly1 via its own scaling
+    // Evaluate at some x — apply per-poly domain mapping, then call horner per poly
+    T x = 0.3;
     T out[M]{};
-    poly_eval::horner_many<M, N, true, T, T>(x, coeffs, out, 0, 0, low, hi);
+    for (size_t i = 0; i < M; ++i) {
+        T xm = (T(2) * x - hi[i]) * low[i];
+        out[i] = naive_horner_scalar(xm, coeffs + i * N, N);
+    }
 
-    // Expected: compute each with its scaled t_i
-    T t0 = (2 * x - hi[0]) * low[0];
-    T t1 = (2 * x - hi[1]) * low[1];
-    T ex0 = naive_horner_scalar(t0, coeffs + 0 * N, N);
-    T ex1 = naive_horner_scalar(t1, coeffs + 1 * N, N);
-    EXPECT_NEAR(out[0], ex0, 1e-12);
-    EXPECT_NEAR(out[1], ex1, 1e-12);
+    // Verify against horner_many (no scaling) with pre-mapped x per poly
+    for (size_t i = 0; i < M; ++i) {
+        T xm = (T(2) * x - hi[i]) * low[i];
+        T result[1]{};
+        poly_eval::horner_many<1, N, T, T>(xm, coeffs + i * N, result);
+        EXPECT_NEAR(result[0], out[i], 1e-12);
+    }
 }
 
 TEST(FuncEval, AlignmentVarianceBulkEval) {
