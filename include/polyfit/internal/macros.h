@@ -92,12 +92,14 @@
 #endif
 
 // PF_IS_CONSTANT_EVALUATED(): portable wrapper for std::is_constant_evaluated().
-// In C++20+ uses the standard API; in C++17 falls back to the compiler builtin
-// (supported by GCC ≥9, Clang ≥9, and MSVC ≥16.5 as an extension).
-// The nested #if is required because __has_builtin is not defined on all compilers,
-// and using it directly in #elif causes MSVC C4067.
-#if __cplusplus >= 202002L
+// In C++20+ uses the standard API; in C++17 falls back to the compiler builtin.
+// MSVC reports __cplusplus as 199711L by default (without /Zc:__cplusplus),
+// so we also check _MSVC_LANG. MSVC ≥16.5 (_MSC_VER ≥ 1925) supports the builtin
+// but may not expose __has_builtin to `defined()`, so we check _MSC_VER directly.
+#if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
 #define PF_IS_CONSTANT_EVALUATED() std::is_constant_evaluated()
+#elif defined(_MSC_VER) && _MSC_VER >= 1925
+#  define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
 #elif defined(__has_builtin)
 #  if __has_builtin(__builtin_is_constant_evaluated)
 #    define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
