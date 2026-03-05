@@ -254,12 +254,8 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::truncat
 
 template<typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const EvalTypes &...evals) {
     /* Copy per‑poly scaling */
-    auto tmp_low = std::array<InputType, kF>{evals.low...};
-    auto tmp_hi = std::array<InputType, kF>{evals.hi...};
-    for (std::size_t i = 0; i < kF; ++i) {
-        low_[i] = tmp_low[i];
-        hi_[i] = tmp_hi[i];
-    }
+    low_ = {evals.low...};
+    hi_ = {evals.hi...};
 
     /* Degree‑dependent storage */
     if constexpr (deg_max_ctime_ == 0) {
@@ -332,10 +328,6 @@ auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept -> std::
     else
         horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
             xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
-
-    if constexpr (kF == kF_pad) {
-        return res; // no padding
-    }
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -529,10 +521,9 @@ template<class Func, std::size_t N_compile>
 template<std::size_t C, typename>
 constexpr FuncEvalND<Func, N_compile>::FuncEvalND(Func f, int n, const InputType &a, const InputType &b)
     : coeffs_flat_(storage_required(detail::validate_positive_degree(n))),
-      coeffs_md_{coeffs_flat_.data(), make_ext(detail::validate_positive_degree(n))} {
-    const auto checked_n = detail::validate_positive_degree(n);
+      coeffs_md_{coeffs_flat_.data(), make_ext(n)} {
     compute_scaling(a, b);
-    initialize(checked_n, f);
+    initialize(n, f);
 }
 
 template<class Func, std::size_t N_compile>

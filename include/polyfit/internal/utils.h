@@ -122,8 +122,7 @@ namespace eft = polyfit::internal::helpers::eft;
 // So, if an address is 8-byte aligned (e.g., 0x...1000), it has 3 trailing zeros.
 // 2^3 = 8.
 template<typename T> constexpr auto countr_zero(T x) noexcept {
-    static_assert(std::is_unsigned_v<T>, "cntz requires an unsigned integral type");
-    static_assert(std::is_unsigned<T>::value, "countr_zero_impl requires an unsigned type");
+    static_assert(std::is_unsigned_v<T>, "countr_zero requires an unsigned integral type");
 #if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
     // C++20: hand work to the standard library
     return std::countr_zero(x);
@@ -299,7 +298,6 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
     if constexpr (std::is_arithmetic_v<Y>) {
         // Compensated path for real types
         auto comp = make_buffer<Y, N>(n);
-        for (auto &v : comp) v = Y(0);
 
         for (std::size_t k = 0; k + 1 < n; ++k) {
             for (std::size_t i = n - 1; i > k; --i) {
@@ -324,8 +322,6 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
         using Scalar = typename Y::value_type;
         auto comp_re = make_buffer<Scalar, N>(n);
         auto comp_im = make_buffer<Scalar, N>(n);
-        for (auto &v : comp_re) v = Scalar(0);
-        for (auto &v : comp_im) v = Scalar(0);
 
         for (std::size_t k = 0; k + 1 < n; ++k) {
             for (std::size_t i = n - 1; i > k; --i) {
@@ -374,12 +370,10 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
     const std::size_t n = alpha.size();
     constexpr std::size_t WN = (N == 0) ? 0 : N + 1;
     auto c = make_buffer<Y, WN>(n + 1);
-    for (auto &v : c) v = Y(0);
 
     if constexpr (std::is_arithmetic_v<Y>) {
         // Compensated path for real types
         auto comp = make_buffer<Y, WN>(n + 1);
-        for (auto &v : comp) v = Y(0);
 
         std::size_t deg = 0;
         for (std::size_t ii = n; ii-- > 0;) {
@@ -405,8 +399,6 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
         using Scalar = typename Y::value_type;
         auto comp_re = make_buffer<Scalar, WN>(n + 1);
         auto comp_im = make_buffer<Scalar, WN>(n + 1);
-        for (auto &v : comp_re) v = Scalar(0);
-        for (auto &v : comp_im) v = Scalar(0);
 
         std::size_t deg = 0;
         for (std::size_t ii = n; ii-- > 0;) {
@@ -531,14 +523,15 @@ PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) 
         points.resize(count);
     }
 
+    if (num_points <= 1) {
+        if (num_points == 1) {
+            points[0] = start;
+        }
+        return points;
+    }
+
     // scalar case
     if constexpr (std::is_arithmetic_v<T>) {
-        if (num_points <= 1) {
-            if (num_points == 1) {
-                points[0] = start;
-            }
-            return points;
-        }
         const T step = (end - start) / static_cast<T>(count - 1);
         for (std::size_t i = 0; i < count; ++i) {
             points[i] = start + (static_cast<T>(i) * step);
@@ -548,12 +541,6 @@ PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) 
     // array case: T must be std::array<Scalar,D>
     else {
         constexpr std::size_t D = std::tuple_size_v<std::remove_cvref_t<T>>;
-        if (num_points <= 1) {
-            if (num_points == 1) {
-                points[0] = start;
-            }
-            return points;
-        }
         using Scalar = std::remove_cv_t<decltype(start[0])>;
         T step{};
         for (std::size_t i = 0; i < D; ++i) {
