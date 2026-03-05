@@ -21,7 +21,7 @@ namespace detail {
 // Each lane: 1 pt_batch + 1 acc_batch = 2 vector registers.
 // Reserve: 1 broadcast + 2 scratch.
 // AVX2/SSE (16 regs) → 6, AVX-512/NEON/SVE (32 regs) → 14.
-template<typename T> constexpr std::size_t optimal_horner_uf() noexcept {
+template<typename T> PF_C23CONSTEVAL std::size_t optimal_horner_uf() noexcept {
     constexpr std::size_t nregs = poet::vector_register_count();
     return (nregs - 3) / 2;
 }
@@ -71,7 +71,7 @@ constexpr PF_ALWAYS_INLINE xsimd::batch<std::complex<T>, A> fma(const xsimd::bat
 template<typename T, typename = std::enable_if_t<!is_xsimd_batch_v<T> && std::is_arithmetic_v<T>>>
 constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
     if constexpr (std::is_floating_point_v<T>) {
-        if (PF_IS_CONSTANT_EVALUATED()) return a * b + c; // unfused; acceptable for compile-time polynomial fitting
+        PF_IF_CONSTEVAL { return a * b + c; } // unfused; acceptable for compile-time polynomial fitting
         return std::fma(a, b, c);
     } else {
         return (a * b) + c;
@@ -82,7 +82,7 @@ constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
 template<typename T>
 constexpr PF_ALWAYS_INLINE std::complex<T> fma(const std::complex<T> &a, const T &b,
                                                const std::complex<T> &c) noexcept {
-    if (PF_IS_CONSTANT_EVALUATED()) return std::complex<T>(a.real() * b + c.real(), a.imag() * b + c.imag());
+    PF_IF_CONSTEVAL { return std::complex<T>(a.real() * b + c.real(), a.imag() * b + c.imag()); }
     return std::complex<T>(std::fma(a.real(), b, c.real()), std::fma(a.imag(), b, c.imag()));
 }
 

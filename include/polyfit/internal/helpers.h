@@ -76,7 +76,7 @@ template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_sum(T a, T b) n
 // so drop the error term and return {a*b, 0} for compile-time polynomial fitting.
 template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
     T p = a * b;
-    if (PF_IS_CONSTANT_EVALUATED()) return {p, T(0)};
+    PF_IF_CONSTEVAL { return {p, T(0)}; }
     return {p, std::fma(a, b, -p)};
 }
 

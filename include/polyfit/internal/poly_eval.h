@@ -295,12 +295,12 @@ PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(const InputType x,
     for (std::size_t k = 1; k < n; ++k) {
         auto [pr, pi_r] = eft::two_prod(acc_re, xv);
         auto [sr, sig_r] = eft::two_sum(pr, c_ptr[k].real());
-        comp_re = std::fma(comp_re, xv, pi_r + sig_r);
+        comp_re = detail::fma(comp_re, xv, pi_r + sig_r);
         acc_re = sr;
 
         auto [pi, pi_i] = eft::two_prod(acc_im, xv);
         auto [si, sig_i] = eft::two_sum(pi, c_ptr[k].imag());
-        comp_im = std::fma(comp_im, xv, pi_i + sig_i);
+        comp_im = detail::fma(comp_im, xv, pi_i + sig_i);
         acc_im = si;
     }
     return {acc_re + comp_re, acc_im + comp_im};

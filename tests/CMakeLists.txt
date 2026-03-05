@@ -165,6 +165,7 @@ add_polyfit_test_matrix(test_utils_bjorck_newton test_utils_bjorck_newton.cpp)
 add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)
 add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.cpp)
 add_polyfit_test_matrix(test_edge_cases test_edge_cases.cpp)
+add_polyfit_test_matrix(test_constexpr test_constexpr.cpp)
 
 if (POLYFIT_ENABLE_COVERAGE)
     find_program(LCOV_EXECUTABLE lcov)
@@ -180,8 +181,8 @@ if (POLYFIT_ENABLE_COVERAGE)
 
         add_custom_target(coverage
                 COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --output-on-failure
-                COMMAND ${LCOV_EXECUTABLE} --capture --directory ${CMAKE_BINARY_DIR} --output-file ${LCOV_INFO} --ignore-errors inconsistent,unused
-                COMMAND ${LCOV_EXECUTABLE} --remove ${LCOV_INFO} "/usr/*" "*/_deps/*" --output-file ${LCOV_FILTERED} --ignore-errors inconsistent,unused
+                COMMAND ${LCOV_EXECUTABLE} --capture --directory ${CMAKE_BINARY_DIR} --output-file ${LCOV_INFO} --ignore-errors inconsistent,unused,mismatch
+                COMMAND ${LCOV_EXECUTABLE} --remove ${LCOV_INFO} "/usr/*" "*/_deps/*" --output-file ${LCOV_FILTERED} --ignore-errors inconsistent,unused,mismatch
                 COMMAND ${GENHTML_EXECUTABLE} --ignore-errors mismatch -o ${COVERAGE_DIR} ${LCOV_FILTERED}
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Running tests and generating coverage report (lcov+genhtml)"

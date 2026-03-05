@@ -76,7 +76,7 @@ template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
 template<bool pts_aligned, bool out_aligned>
 PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept {
-    constexpr auto alignment = xsimd::batch<OutputType>::arch_type::alignment();
+    PF_C23STATIC constexpr auto alignment = xsimd::batch<OutputType>::arch_type::alignment();
 #ifdef PF_OUTER_UNROLL
     PF_C23STATIC constexpr auto unroll_factor = PF_OUTER_UNROLL;
 #else
@@ -184,17 +184,24 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
     //    Guard: the fused Horner evaluation's condition number is bounded by (|alpha|+|beta|)^deg.
     //    Skip fusion when this exceeds the type's useful precision.
     //
-    // std::abs and std::log10 are not constexpr until C++26. Skip domain fusion in
-    // constant-evaluated contexts; the polynomial remains correct but uses per-point mapping.
-    if (!PF_IS_CONSTANT_EVALUATED()) {
+    // Domain fusion: fuse the linear domain mapping into polynomial coefficients.
+    // ce_abs/ce_log10 have constexpr CT implementations; in C++26 std::abs/log10 are
+    // also constexpr so the guard can be removed entirely. For C++17–23, skip at CT
+    // because fuse_linear_map uses std::vector (constexpr in C++20 but with an additional
+    // penalty path via two_prod that reduces accuracy at CT — skip for correctness parity).
+#if __cplusplus >= 202602L
+    {
+#else
+    PF_IF_NOT_CONSTEVAL {
+#endif
         using Scalar = typename value_type_or_identity<InputType>::type;
         const auto alpha = Scalar(2) * static_cast<Scalar>(low);
         const auto beta = -static_cast<Scalar>(hi) * static_cast<Scalar>(low);
         const auto deg = static_cast<int>(monomials.size()) - 1;
         // Evaluation condition guard: (|alpha|+|beta|)^deg must leave sufficient digits
-        const auto cond_base = std::abs(alpha) + std::abs(beta) + Scalar(1);
+        const auto cond_base = detail::math::abs(alpha) + detail::math::abs(beta) + Scalar(1);
         constexpr auto max_log = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
-        if (deg > 0 && Scalar(deg) * std::log10(cond_base) < max_log) {
+        if (deg > 0 && Scalar(deg) * detail::math::log10(cond_base) < max_log) {
             polyfit::internal::helpers::fuse_linear_map(monomials.data(), monomials.size(), alpha, beta);
             low = InputType(0.5);
             hi = InputType(0);

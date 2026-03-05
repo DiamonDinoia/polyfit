@@ -238,7 +238,7 @@ template<typename... EvalTypes> class FuncEvalMany {
     static constexpr std::size_t dyn = stdex::dynamic_extent;
     using Ext = stdex::extents<std::size_t, (deg_max_ctime_ ? deg_max_ctime_ : dyn), kF_pad>;
 
-    AlignedBuffer<OutputType, kF_pad * deg_max_ctime_, kAlignment> coeff_store_{};
+    alignas(kAlignment) AlignedBuffer<OutputType, kF_pad * deg_max_ctime_, kAlignment> coeff_store_{};
     stdex::mdspan<OutputType, Ext> coeffs_{nullptr, 1, kF_pad};
 
     // Per‑polynomial scaling data

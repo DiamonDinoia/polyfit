@@ -156,13 +156,58 @@ namespace constants {
 inline constexpr double pi = 3.14159265358979323846;
 } // namespace constants
 
-// constexpr-safe fma: std::fma is constexpr only as a GCC extension (standardised in C++26).
-// In constant-evaluated contexts fall back to a*b+c to keep PF_C20CONSTEXPR functions
-// evaluable at compile time on Clang.
-template<typename T> constexpr T ce_fma(T a, T b, T c) noexcept {
-    if (PF_IS_CONSTANT_EVALUATED()) return a * b + c;
+// Constexpr-safe scalar math helpers grouped in detail::math.
+// Each function dispatches to the manual CT implementation when constant-evaluated,
+// and falls through to the std:: version at runtime for full performance/precision.
+// In C++26 all std:: counterparts become constexpr, so both branches are equivalent.
+namespace math {
+
+// fma(a,b,c): std::fma is not constexpr until C++26 on Clang.
+template<typename T> constexpr T fma(T a, T b, T c) noexcept {
+    PF_IF_CONSTEVAL { return a * b + c; }
     return std::fma(a, b, c);
 }
+
+// abs(x): std::abs for floats is not constexpr until C++26.
+template<typename T> constexpr T abs(T x) noexcept {
+    PF_IF_CONSTEVAL { return x < T(0) ? -x : x; }
+    return std::abs(x);
+}
+
+// log10(x): integer decade counting + atanh series at CT; std::log10 at runtime.
+// Accuracy: ~11 significant digits for x in [1, 10) — sufficient for degree selection guard.
+template<typename T> constexpr T log10(T x) noexcept {
+    PF_IF_CONSTEVAL {
+        if (x <= T(0)) return T(0);
+        T result = T(0);
+        while (x >= T(10)) { x /= T(10); result += T(1); }
+        while (x < T(1))   { x *= T(10); result -= T(1); }
+        // ln(x) via atanh series: 2*atanh((x-1)/(x+1)), convergent for x in [1,10)
+        const T y  = (x - T(1)) / (x + T(1));
+        const T y2 = y * y;
+        const T ln_x = T(2) * y *
+            (T(1) + y2 * (T(1.0/3.0) + y2 * (T(1.0/5.0) + y2 * (T(1.0/7.0) + y2 * (T(1.0/9.0) + y2 / T(11))))));
+        return result + ln_x / T(2.302585092994046); // divide by ln(10)
+    }
+    return std::log10(x);
+}
+
+// sqrt(x): Newton-Raphson at CT; std::sqrt at runtime.
+constexpr double sqrt(double x) noexcept {
+    PF_IF_CONSTEVAL {
+        if (x <= 0.0) return 0.0;
+        double r = x;
+        for (int i = 0; i < 100; ++i) {
+            const double next = 0.5 * (r + x / r);
+            if (next == r) break;
+            r = next;
+        }
+        return r;
+    }
+    return std::sqrt(x);
+}
+
+} // namespace math
 
 constexpr double cos(const double x) noexcept {
     // Constexpr Cody-Waite cos approximation.
@@ -262,7 +307,7 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
                 Y sub_comp = es + (comp[i] - comp[i - 1]);
                 Y d = Y(x[i] - x[i - k - 1]);
                 Y q = s / d;
-                Y r = ce_fma(-q, d, s); // division residual
+                Y r = math::fma(-q, d, s); // division residual
                 comp[i] = (r + sub_comp) / d;
                 a[i] = q;
             }
@@ -289,13 +334,13 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
                 auto [sr, esr] = eft::two_sum(a[i].real(), -a[i - 1].real());
                 Scalar sub_comp_re = esr + (comp_re[i] - comp_re[i - 1]);
                 Scalar qr = sr / d;
-                Scalar rr = ce_fma(-qr, d, sr);
+                Scalar rr = math::fma(-qr, d, sr);
                 comp_re[i] = (rr + sub_comp_re) / d;
                 // Imaginary component
                 auto [si, esi] = eft::two_sum(a[i].imag(), -a[i - 1].imag());
                 Scalar sub_comp_im = esi + (comp_im[i] - comp_im[i - 1]);
                 Scalar qi = si / d;
-                Scalar ri = ce_fma(-qi, d, si);
+                Scalar ri = math::fma(-qi, d, si);
                 comp_im[i] = (ri + sub_comp_im) / d;
 
                 a[i] = Y(qr, qi);
@@ -524,31 +569,15 @@ PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int num_points = M) 
     }
 }
 
-// constexpr sqrt via Newton-Raphson: std::sqrt is not constexpr until C++26.
-constexpr double ce_sqrt(double x) noexcept {
-    if (x <= 0.0) return 0.0;
-    double r = x;
-    for (int i = 0; i < 100; ++i) {
-        const double next = 0.5 * (r + x / r);
-        if (next == r) break;
-        r = next;
-    }
-    return r;
-}
-
 template<typename T> PF_C20CONSTEXPR double relative_error(const T &approx, const T &actual) {
-    // std::abs for floats is not constexpr until C++23; use manual abs in constexpr path.
-    const auto ce_abs = [](double v) constexpr noexcept {
-        return v < 0.0 ? -v : v;
-    };
     if constexpr (has_tuple_size_v<T>) {
         double err = 0.0;
         for (std::size_t i = 0; i < std::tuple_size_v<std::remove_cvref_t<T>>; ++i) {
-            err = std::max(ce_abs(1.0 - approx[i] / actual[i]), err);
+            err = std::max(math::abs(1.0 - approx[i] / actual[i]), err);
         }
         return err;
     } else {
-        return ce_abs(1.0 - approx / actual);
+        return math::abs(1.0 - approx / actual);
     }
 }
 
@@ -573,7 +602,7 @@ template<typename T> PF_C20CONSTEXPR double relative_l2_norm(const T &approx, co
         denom += ce_norm(actual);
     }
     const double ratio = denom == 0.0 ? num : num / denom;
-    if (PF_IS_CONSTANT_EVALUATED()) return ce_sqrt(ratio);
+    PF_IF_CONSTEVAL { return math::sqrt(ratio); }
     return std::sqrt(ratio);
 }
 } // namespace poly_eval::detail

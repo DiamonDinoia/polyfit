@@ -100,6 +100,24 @@
 #define PF_IS_CONSTANT_EVALUATED() false
 #endif
 
+// C++26: std::fma, std::abs, std::log10, std::sqrt become constexpr.
+#if __cplusplus >= 202602L
+#define PF_C26CONSTEXPR constexpr
+#else
+#define PF_C26CONSTEXPR
+#endif
+
+// C++23 native `if consteval` — cleaner than std::is_constant_evaluated() and
+// works correctly inside consteval functions (std::is_constant_evaluated() always
+// returns false inside a consteval function).
+#if __cplusplus >= 202302L
+#define PF_IF_CONSTEVAL     if consteval
+#define PF_IF_NOT_CONSTEVAL if !consteval
+#else
+#define PF_IF_CONSTEVAL     if (PF_IS_CONSTANT_EVALUATED())
+#define PF_IF_NOT_CONSTEVAL if (!PF_IS_CONSTANT_EVALUATED())
+#endif
+
 // Per-function "fast eval" optimization pragmas.
 // These push per-function optimize pragmas that layer on top of any global
 // compiler flags (so they effectively "push" extra optimizations for hot paths).
