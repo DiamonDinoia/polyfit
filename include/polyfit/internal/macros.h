@@ -92,10 +92,12 @@
 #endif
 
 // PF_IS_CONSTANT_EVALUATED(): portable wrapper for std::is_constant_evaluated().
-// In C++20+ returns true when in a constant-evaluated context; always false in C++17
-// (causing compile-time branches to fold away harmlessly).
+// In C++20+ uses the standard API; in C++17 falls back to the compiler builtin
+// (supported by GCC ≥9 and Clang ≥9 as an extension).
 #if __cplusplus >= 202002L
 #define PF_IS_CONSTANT_EVALUATED() std::is_constant_evaluated()
+#elif __has_builtin(__builtin_is_constant_evaluated)
+#define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
 #else
 #define PF_IS_CONSTANT_EVALUATED() false
 #endif
