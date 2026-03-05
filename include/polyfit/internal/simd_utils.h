@@ -17,22 +17,32 @@
 namespace poly_eval {
 namespace detail {
 
-// Optimal Horner unroll factor derived from vector register pressure.
-// Each lane: 1 pt_batch + 1 acc_batch = 2 vector registers.
-// Reserve: 1 broadcast + 2 scratch.
-// AVX2/SSE (16 regs) → 6, AVX-512/NEON/SVE (32 regs) → 14.
+// Optimal Horner multi-accumulator unroll factor, tuned by vector register count and width.
+// Core Horner loop: UF pt_batches + UF acc_batches + 1 coeff broadcast = 2*UF + 1 regs.
+// Wider vectors make spills more expensive (32B for AVX vs 16B for SSE), so we reserve
+// more headroom for wider ISAs. Benchmarked UF sweep across SSE/AVX2 × float/double:
+//   SSE  (128-bit, 16 regs): UF=8 optimal — 16B spill is cheap    → nregs / 2
+//   AVX2 (256-bit, 16 regs): UF=7 optimal — 32B spill hurts       → (nregs - 1) / 2
+//   AVX-512 (512-bit, 32 regs): extrapolated UF=15                 → (nregs - 1) / 2
 template<typename T> PF_C23CONSTEVAL std::size_t optimal_horner_uf() noexcept {
     constexpr std::size_t nregs = poet::vector_register_count();
-    return (nregs - 3) / 2;
+    constexpr std::size_t vreg_bytes = sizeof(T) * xsimd::batch<T>::size;
+    constexpr std::size_t reserved = vreg_bytes <= 16 ? 0 : 1;
+    return (nregs - reserved) / 2;
 }
 
-// Optimal unroll factor for FuncEvalMany bulk eval.
-// Matches optimal_horner_uf: UF pt + UF acc + 1 broadcast + 2 scratch = 2*UF + 3.
-// Benchmarked: UF=6 beats UF=7 (icache pressure from larger blocks offsets register gain).
-// AVX2/SSE (16 vregs) → 6, AVX-512/NEON/SVE (32 vregs) → 14.
+// Optimal unroll factor for FuncEvalMany bulk eval (domain mapping + strided scatter).
+// Same core budget as optimal_horner_uf, plus extra overhead from domain mapping constants
+// (2.0, hi, low broadcasts during load phase) and strided scatter temporaries.
+// Benchmarked: the extra per-block work shifts the sweet spot down by ~1 vs optimal_horner_uf.
+//   SSE  (128-bit, 16 regs): UF=7    → (nregs - 2) / 2
+//   AVX2 (256-bit, 16 regs): UF=6    → (nregs - 3) / 2
+//   AVX-512 (512-bit, 32 regs): UF=14 → (nregs - 3) / 2
 template<typename T> PF_C23CONSTEVAL std::size_t optimal_many_eval_uf() noexcept {
     constexpr std::size_t nregs = poet::vector_register_count();
-    return (nregs - 3) / 2;
+    constexpr std::size_t vreg_bytes = sizeof(T) * xsimd::batch<T>::size;
+    constexpr std::size_t reserved = vreg_bytes <= 16 ? 2 : 3;
+    return (nregs - reserved) / 2;
 }
 
 // detect xsimd batches
