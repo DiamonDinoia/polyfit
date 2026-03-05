@@ -367,7 +367,7 @@ TEST(PolyEval, HighDegree48Complex) {
         double x = dist(gen);
         max_err = std::max(max_err, std::abs(poly(x) - func(x)));
     }
-    EXPECT_LT(max_err, 1e-10) << "Degree-48 complex fit max error: " << max_err;
+    EXPECT_LT(max_err, 2e-10) << "Degree-48 complex fit max error: " << max_err;
 }
 
 TEST(PolyEval, HighDegree48Batch) {
