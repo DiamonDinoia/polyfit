@@ -386,6 +386,86 @@ TEST(PolyEval, HighDegree48Batch) {
     batch_verify<double>(sin_func, xs, ys, 1e-10);
 }
 
+// ----- Wide-offset domain tests (domain mapping accuracy) -----
+// Fitting on [1000, 2000] exercises the affine map to [-1, 1]:
+//   x_mapped = (2*x - (a+b)) / (b-a)
+// Catastrophic cancellation in the map can lose significant digits when
+// |a+b| >> |b-a|, so these tests verify the full pipeline preserves accuracy.
+// Functions must be smooth enough on the interval for moderate-degree approximation.
+
+TEST(PolyEval, WideDomainRuntimeDegree) {
+    auto func = [](double x) { return std::exp(-x / 1000.0); };
+    const double a = 1000.0, b = 2000.0;
+    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_rel = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+    }
+    EXPECT_LT(max_rel, 1e-13) << "Wide domain [1000,2000] exp(-x/1000) max relative error: " << max_rel;
+}
+
+TEST(PolyEval, WideDomainCompileTimeDegree) {
+    auto func = [](double x) { return std::log(x); };
+    constexpr double a = 1000.0, b = 2000.0;
+    constexpr std::size_t N = 24;
+    auto poly = poly_eval::make_func_eval<N>(func, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_rel = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+    }
+    EXPECT_LT(max_rel, 1e-13) << "Wide domain CT log(x) max relative error: " << max_rel;
+}
+
+TEST(PolyEval, WideDomainBatch) {
+    auto func = [](double x) { return 1.0 / x; };
+    const double a = 1000.0, b = 2000.0;
+    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    std::vector<double> xs(kNumRandomTests), ys(kNumRandomTests);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) xs[i] = dist(gen);
+
+    poly(xs.data(), ys.data(), xs.size());
+    batch_verify<double>(func, xs, ys, 1e-13);
+}
+
+TEST(PolyEval, WideDomainEpsDriven) {
+    auto func = [](double x) { return std::sqrt(x); };
+    const double a = 1000.0, b = 2000.0;
+    constexpr double eps = 1e-12;
+    auto poly = poly_eval::make_func_eval(func, eps, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_rel = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+    }
+    EXPECT_LT(max_rel, eps) << "Wide domain eps-driven sqrt max relative error: " << max_rel;
+}
+
+TEST(PolyEval, WideDomainComplex) {
+    auto func = [](double x) {
+        return std::complex<double>(std::log(x), 1.0 / x);
+    };
+    const double a = 1000.0, b = 2000.0;
+    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_rel = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+    }
+    EXPECT_LT(max_rel, 1e-13) << "Wide domain complex log+i/x max relative error: " << max_rel;
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
