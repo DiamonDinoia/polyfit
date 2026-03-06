@@ -203,10 +203,7 @@ constexpr std::size_t optimal_horner_many_uf() noexcept {
     return uf < 8 ? uf : 8;
 }
 
-// Note: horner_transposed scalar FMA step (out[i] = fma(out[i], xin[i], col[i]))
-// was benchmarked with dynamic_for<UF> for UF in {2,4,7,8}. A plain for loop
-// beat all variants — the body is too light (1 FMA) for dynamic_for overhead to
-// pay off. OoO execution already extracts available ILP from the simple loop.
+// horner_transposed scalar: plain for beats dynamic_for (body too light: 1 FMA).
 
 // detect xsimd batches
 template<typename T> struct is_xsimd_batch : std::false_type {};
@@ -1319,57 +1316,47 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
     using pts_mode = std::conditional_t<pts_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
     using out_mode = std::conditional_t<out_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
 
-    std::size_t i = 0;
-    if (num_points >= block)
-        for (const std::size_t limit = num_points - block; i <= limit; i += block) {
-            xsimd::batch<InputType> pt_batches[UF];
-            xsimd::batch<OutputType> acc_batches[UF];
+    const auto tile_end = detail::round_down<block>(num_points);
+    const auto simd_end = detail::round_down<simd_size>(num_points);
 
-            // Load and init with highest-degree term
-            poet::static_for<UF>([&](auto j) {
-                pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
-                acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
-            });
+    // Horner coefficient loop: CT → static_for (full unrolling), RT → plain for.
+    auto for_k = [&](auto step) {
+        if constexpr (N_monomials != 0)
+            poet::static_for<1, N_monomials>(step);
+        else
+            for (std::size_t k = 1; k < monomials_size; ++k) step(k);
+    };
 
-            // Horner steps
-            if constexpr (N_monomials != 0) {
-                // CT path: full unroll (N is known)
-                poet::static_for<1, N_monomials>([&](auto k) {
-                    const auto ck = xsimd::batch<OutputType>(monomials[k]);
-                    poet::static_for<UF>(
-                        [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
-                });
-            } else {
-                for (std::size_t k = 1; k < monomials_size; ++k) {
-                    const auto ck = xsimd::batch<OutputType>(monomials[k]);
-                    poet::static_for<UF>(
-                        [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
-                }
-            }
+    // Main unrolled SIMD loop: UF batches with shared coeff broadcast
+    for (std::size_t i = 0; i < tile_end; i += block) {
+        xsimd::batch<InputType> pt_batches[UF];
+        xsimd::batch<OutputType> acc_batches[UF];
 
-            // Store results
-            poet::static_for<UF>([&](auto j) { acc_batches[j].store(out + i + j * simd_size, out_mode{}); });
-        }
+        poet::static_for<UF>([&](auto j) {
+            pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
+            acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
+        });
 
-    // Middle: single-batch SIMD for remaining full batches
-    for (; i + simd_size <= num_points; i += simd_size) {
+        for_k([&](auto k) {
+            const auto ck = xsimd::batch<OutputType>(monomials[k]);
+            poet::static_for<UF>(
+                [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
+        });
+
+        poet::static_for<UF>([&](auto j) { acc_batches[j].store(out + i + j * simd_size, out_mode{}); });
+    }
+
+    // Single-batch SIMD remainder
+    for (std::size_t i = tile_end; i < simd_end; i += simd_size) {
         auto pt = map_func(xsimd::load(pts + i, pts_mode{}));
         auto acc = xsimd::batch<OutputType>(monomials[0]);
-        if constexpr (N_monomials != 0) {
-            poet::static_for<1, N_monomials>(
-                [&](auto k) { acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k])); });
-        } else {
-            for (std::size_t k = 1; k < monomials_size; ++k) {
-                acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k]));
-            }
-        }
+        for_k([&](auto k) { acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k])); });
         acc.store(out + i, out_mode{});
     }
 
-    // Final scalar remainder (< simd_size points)
-    for (; i < num_points; ++i) {
+    // Scalar remainder
+    for (std::size_t i = simd_end; i < num_points; ++i)
         out[i] = horner<N_monomials>(map_func(pts[i]), monomials, monomials_size);
-    }
 }
 
 //------------------------------------------------------------------------------
@@ -1701,7 +1688,7 @@ template<typename... EvalTypes> class FuncEvalMany {
     /* Evaluation – scalar or per‑poly inputs */
     std::array<OutputType, kF> operator()(InputType x) const noexcept;
     std::array<OutputType, kF> operator()(const std::array<InputType, kF> &xs) const noexcept;
-    void operator()(const InputType *x, OutputType *out, std::size_t num_points) const noexcept;
+    void operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept;
 
     /* Convenience overloads */
     template<typename... Ts> std::array<OutputType, kF> operator()(InputType first, Ts... rest) const noexcept;
@@ -1739,7 +1726,6 @@ template<typename... EvalTypes> class FuncEvalMany {
     std::array<InputType, kF_pad> hi_{};
 
     // True after truncate() — forces runtime-degree Horner path
-    bool truncated_{false};
 };
 
 /**
@@ -2169,7 +2155,7 @@ template<typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::Func
 template<typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
     : coeff_store_(other.coeff_store_), coeffs_{coeff_store_.data(), other.coeffs_.extents()}, low_(other.low_),
-      hi_(other.hi_), truncated_(other.truncated_) {}
+      hi_(other.hi_) {}
 
 template<typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
@@ -2177,7 +2163,6 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
         coeff_store_ = other.coeff_store_;
         low_ = other.low_;
         hi_ = other.hi_;
-        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -2186,7 +2171,7 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
 template<typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
     : coeff_store_(std::move(other.coeff_store_)), coeffs_{coeff_store_.data(), other.coeffs_.extents()},
-      low_(std::move(other.low_)), hi_(std::move(other.hi_)), truncated_(other.truncated_) {}
+      low_(std::move(other.low_)), hi_(std::move(other.hi_)) {}
 
 template<typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
@@ -2194,7 +2179,6 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other)
         coeff_store_ = std::move(other.coeff_store_);
         low_ = std::move(other.low_);
         hi_ = std::move(other.hi_);
-        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -2214,19 +2198,11 @@ PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
-    for (std::size_t i = 0; i < kF; ++i) xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i];
+    poet::static_for<kF>([&](auto i) { xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i]; });
 
     alignas(kAlignment) std::array<OutputType, kF_pad> res{};
-    if (truncated_)
-        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                         static_cast<std::size_t>(coeffs_.extent(0)));
-    else
-        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
-            xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
-
-    if constexpr (kF == kF_pad) {
-        return res; // no padding
-    }
+    horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
+        xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -2238,15 +2214,11 @@ template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept
     -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
-    for (std::size_t i = 0; i < kF; ++i) xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i];
+    poet::static_for<kF>([&](auto i) { xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i]; });
 
     alignas(kAlignment) std::array<OutputType, kF_pad> res{};
-    if (truncated_)
-        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                         static_cast<std::size_t>(coeffs_.extent(0)));
-    else
-        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
-            xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
+    horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
+        xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -2255,68 +2227,82 @@ PF_FAST_EVAL_END
 
 PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
-void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
+void FuncEvalMany<EvalTypes...>::operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
                                             std::size_t num_points) const noexcept {
-    constexpr std::size_t M = kF;
-    constexpr std::size_t simd_size = xsimd::batch<InputType>::size;
-    const std::size_t n_deg = static_cast<std::size_t>(coeffs_.extent(0));
-    const std::size_t stride = kF_pad;
+    PF_C23STATIC constexpr std::size_t M = kF;
+    PF_C23STATIC constexpr std::size_t simd_size = xsimd::batch<InputType>::size;
+    PF_C23STATIC constexpr std::size_t stride = kF_pad;
 
-    // For each polynomial, evaluate all points using SIMD across points
+    PF_C23STATIC constexpr std::size_t UF = poly_eval::detail::optimal_many_eval_uf<OutputType>();
+    PF_C23STATIC constexpr std::size_t block = simd_size * UF;
+
+    const auto n_deg = static_cast<std::size_t>(coeffs_.extent(0));
+
+    // Horner coefficient loop: CT → static_for (full unrolling), RT → plain for.
+    auto for_k = [&](auto step) {
+        if constexpr (deg_max_ctime_ != 0)
+            poet::static_for<1, deg_max_ctime_>(step);
+        else
+            for (std::size_t k = 1; k < n_deg; ++k) step(k);
+    };
+
     poet::static_for<M>([&](auto m) {
         const auto low_m = low_[m];
         const auto hi_m = hi_[m];
+        const OutputType *col_m = coeffs_.data_handle() + std::size_t(m);
 
-        // Gather this polynomial's coefficients (column m from transposed layout)
-        const OutputType *col = coeffs_.data_handle();
-
-        // SIMD loop: process simd_size points at a time
-        std::size_t i = 0;
-        for (; i + simd_size <= num_points; i += simd_size) {
-            // Load simd_size x-values and apply domain mapping
-            auto xv = xsimd::load_unaligned(x + i);
-            auto xu = xsimd::fms(xsimd::batch<InputType>(InputType(2.0)), xv, xsimd::batch<InputType>(hi_m)) *
-                      xsimd::batch<InputType>(low_m);
-
-            // Horner evaluation across points
-            auto acc = xsimd::batch<OutputType>(col[0 * stride + m]);
-            if constexpr (deg_max_ctime_ != 0) {
-                if (!truncated_) {
-                    poet::static_for<1, deg_max_ctime_>([&](auto k) {
-                        acc =
-                            poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[std::size_t(k) * stride + m]));
-                    });
-                } else {
-                    for (std::size_t k = 1; k < n_deg; ++k)
-                        acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
-                }
-            } else {
-                for (std::size_t k = 1; k < n_deg; ++k)
-                    acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
-            }
-
-            // Scatter to row-major output: out[i*M + m], out[(i+1)*M + m], ...
+        auto scatter = [&](auto acc, std::size_t base) {
             alignas(xsimd::batch<OutputType>::arch_type::alignment()) OutputType tmp[simd_size];
             acc.store_aligned(tmp);
-            for (std::size_t s = 0; s < simd_size; ++s) {
-                out[(i + s) * M + m] = tmp[s];
-            }
+            poet::static_for<simd_size>([&](auto s) {
+                out[(base + std::size_t(s)) * M + m] = tmp[s];
+            });
+        };
+
+        const auto two_vec = xsimd::batch<InputType>(InputType(2.0));
+        const auto hi_vec = xsimd::batch<InputType>(hi_m);
+        const auto low_vec = xsimd::batch<InputType>(low_m);
+        auto map_simd = [&](auto xv) { return xsimd::fms(two_vec, xv, hi_vec) * low_vec; };
+
+        const auto tile_end = poly_eval::detail::round_down<block>(num_points);
+        const auto simd_end = poly_eval::detail::round_down<simd_size>(num_points);
+
+        for (std::size_t i = 0; i < tile_end; i += block) {
+            xsimd::batch<InputType> pt[UF];
+            xsimd::batch<OutputType> acc[UF];
+
+            poet::static_for<UF>([&](auto j) {
+                pt[j] = map_simd(xsimd::load_unaligned(x + i + j * simd_size));
+                acc[j] = xsimd::batch<OutputType>(col_m[0]);
+            });
+
+            for_k([&](auto k) {
+                const auto ck = xsimd::batch<OutputType>(col_m[std::size_t(k) * stride]);
+                poet::static_for<UF>([&](auto j) { acc[j] = detail::fma(acc[j], pt[j], ck); });
+            });
+
+            poet::static_for<UF>([&](auto j) { scatter(acc[j], i + j * simd_size); });
         }
 
-        // Scalar remainder
-        for (; i < num_points; ++i) {
+        for (std::size_t i = tile_end; i < simd_end; i += simd_size) {
+            auto xu = map_simd(xsimd::load_unaligned(x + i));
+            auto acc = xsimd::batch<OutputType>(col_m[0]);
+
+            for_k([&](auto k) {
+                acc = detail::fma(acc, xu, xsimd::batch<OutputType>(col_m[std::size_t(k) * stride]));
+            });
+
+            scatter(acc, i);
+        }
+
+        for (std::size_t i = simd_end; i < num_points; ++i) {
             auto xu = (InputType(2.0) * x[i] - hi_m) * low_m;
-            OutputType acc = col[0 * stride + m];
-            if constexpr (deg_max_ctime_ != 0) {
-                if (!truncated_) {
-                    poet::static_for<1, deg_max_ctime_>(
-                        [&](auto k) { acc = poly_eval::detail::fma(acc, xu, col[std::size_t(k) * stride + m]); });
-                } else {
-                    for (std::size_t k = 1; k < n_deg; ++k) acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
-                }
-            } else {
-                for (std::size_t k = 1; k < n_deg; ++k) acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]);
-            }
+            OutputType acc = col_m[0];
+
+            for_k([&](auto k) {
+                acc = detail::fma(acc, xu, col_m[std::size_t(k) * stride]);
+            });
+
             out[i * M + m] = acc;
         }
     });
@@ -2374,7 +2360,6 @@ PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(typename value_type_or
     }
     if (new_deg < coeffs_.extent(0)) {
         coeffs_ = decltype(coeffs_){coeff_store_.data(), new_deg, kF_pad};
-        truncated_ = true;
     }
 }
 
@@ -2387,7 +2372,7 @@ constexpr auto FuncEvalMany<EvalTypes...>::extract_real(const std::array<OutputT
         return full; // no padding
     }
     std::array<OutputType, kF> out{};
-    for (std::size_t i = 0; i < kF; ++i) out[i] = full[i];
+    poet::static_for<kF>([&](auto i) { out[i] = full[i]; });
     return out;
 }
 

@@ -317,57 +317,47 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
     using pts_mode = std::conditional_t<pts_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
     using out_mode = std::conditional_t<out_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
 
-    std::size_t i = 0;
-    if (num_points >= block)
-        for (const std::size_t limit = num_points - block; i <= limit; i += block) {
-            xsimd::batch<InputType> pt_batches[UF];
-            xsimd::batch<OutputType> acc_batches[UF];
+    const auto tile_end = detail::round_down<block>(num_points);
+    const auto simd_end = detail::round_down<simd_size>(num_points);
 
-            // Load and init with highest-degree term
-            poet::static_for<UF>([&](auto j) {
-                pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
-                acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
-            });
+    // Horner coefficient loop: CT → static_for (full unrolling), RT → plain for.
+    auto for_k = [&](auto step) {
+        if constexpr (N_monomials != 0)
+            poet::static_for<1, N_monomials>(step);
+        else
+            for (std::size_t k = 1; k < monomials_size; ++k) step(k);
+    };
 
-            // Horner steps
-            if constexpr (N_monomials != 0) {
-                // CT path: full unroll (N is known)
-                poet::static_for<1, N_monomials>([&](auto k) {
-                    const auto ck = xsimd::batch<OutputType>(monomials[k]);
-                    poet::static_for<UF>(
-                        [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
-                });
-            } else {
-                for (std::size_t k = 1; k < monomials_size; ++k) {
-                    const auto ck = xsimd::batch<OutputType>(monomials[k]);
-                    poet::static_for<UF>(
-                        [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
-                }
-            }
+    // Main unrolled SIMD loop: UF batches with shared coeff broadcast
+    for (std::size_t i = 0; i < tile_end; i += block) {
+        xsimd::batch<InputType> pt_batches[UF];
+        xsimd::batch<OutputType> acc_batches[UF];
 
-            // Store results
-            poet::static_for<UF>([&](auto j) { acc_batches[j].store(out + i + j * simd_size, out_mode{}); });
-        }
+        poet::static_for<UF>([&](auto j) {
+            pt_batches[j] = map_func(xsimd::load(pts + i + j * simd_size, pts_mode{}));
+            acc_batches[j] = xsimd::batch<OutputType>(monomials[0]);
+        });
 
-    // Middle: single-batch SIMD for remaining full batches
-    for (; i + simd_size <= num_points; i += simd_size) {
+        for_k([&](auto k) {
+            const auto ck = xsimd::batch<OutputType>(monomials[k]);
+            poet::static_for<UF>(
+                [&](auto j) { acc_batches[j] = detail::fma(acc_batches[j], pt_batches[j], ck); });
+        });
+
+        poet::static_for<UF>([&](auto j) { acc_batches[j].store(out + i + j * simd_size, out_mode{}); });
+    }
+
+    // Single-batch SIMD remainder
+    for (std::size_t i = tile_end; i < simd_end; i += simd_size) {
         auto pt = map_func(xsimd::load(pts + i, pts_mode{}));
         auto acc = xsimd::batch<OutputType>(monomials[0]);
-        if constexpr (N_monomials != 0) {
-            poet::static_for<1, N_monomials>(
-                [&](auto k) { acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k])); });
-        } else {
-            for (std::size_t k = 1; k < monomials_size; ++k) {
-                acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k]));
-            }
-        }
+        for_k([&](auto k) { acc = detail::fma(acc, pt, xsimd::batch<OutputType>(monomials[k])); });
         acc.store(out + i, out_mode{});
     }
 
-    // Final scalar remainder (< simd_size points)
-    for (; i < num_points; ++i) {
+    // Scalar remainder
+    for (std::size_t i = simd_end; i < num_points; ++i)
         out[i] = horner<N_monomials>(map_func(pts[i]), monomials, monomials_size);
-    }
 }
 
 //------------------------------------------------------------------------------

@@ -274,7 +274,7 @@ template<typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::Func
 template<typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
     : coeff_store_(other.coeff_store_), coeffs_{coeff_store_.data(), other.coeffs_.extents()}, low_(other.low_),
-      hi_(other.hi_), truncated_(other.truncated_) {}
+      hi_(other.hi_) {}
 
 template<typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
@@ -282,7 +282,6 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
         coeff_store_ = other.coeff_store_;
         low_ = other.low_;
         hi_ = other.hi_;
-        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -291,7 +290,7 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &o
 template<typename... EvalTypes>
 PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
     : coeff_store_(std::move(other.coeff_store_)), coeffs_{coeff_store_.data(), other.coeffs_.extents()},
-      low_(std::move(other.low_)), hi_(std::move(other.hi_)), truncated_(other.truncated_) {}
+      low_(std::move(other.low_)), hi_(std::move(other.hi_)) {}
 
 template<typename... EvalTypes>
 PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
@@ -299,7 +298,6 @@ PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other)
         coeff_store_ = std::move(other.coeff_store_);
         low_ = std::move(other.low_);
         hi_ = std::move(other.hi_);
-        truncated_ = other.truncated_;
         coeffs_ = decltype(coeffs_){coeff_store_.data(), other.coeffs_.extents()};
     }
     return *this;
@@ -319,15 +317,11 @@ PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
-    for (std::size_t i = 0; i < kF; ++i) xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i];
+    poet::static_for<kF>([&](auto i) { xu[i] = xsimd::fms(InputType(2.0), x, hi_[i]) * low_[i]; });
 
     alignas(kAlignment) std::array<OutputType, kF_pad> res{};
-    if (truncated_)
-        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                         static_cast<std::size_t>(coeffs_.extent(0)));
-    else
-        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
-            xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
+    horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
+        xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -339,15 +333,11 @@ template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, kF> &xs) const noexcept
     -> std::array<OutputType, kF> {
     alignas(kAlignment) std::array<InputType, kF_pad> xu{};
-    for (std::size_t i = 0; i < kF; ++i) xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i];
+    poet::static_for<kF>([&](auto i) { xu[i] = xsimd::fms(InputType(2.0), xs[i], hi_[i]) * low_[i]; });
 
     alignas(kAlignment) std::array<OutputType, kF_pad> res{};
-    if (truncated_)
-        horner_transposed<kF_pad, 0, vector_width, true>(xu.data(), coeffs_.data_handle(), res.data(), kF_pad,
-                                                         static_cast<std::size_t>(coeffs_.extent(0)));
-    else
-        horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
-            xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
+    horner_transposed<kF_pad, deg_max_ctime_, vector_width, true>(
+        xu.data(), coeffs_.data_handle(), res.data(), kF_pad, static_cast<std::size_t>(coeffs_.extent(0)));
     return extract_real(res);
 }
 PF_FAST_EVAL_END
@@ -356,83 +346,84 @@ PF_FAST_EVAL_END
 
 PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
-void FuncEvalMany<EvalTypes...>::operator()(const InputType *x, OutputType *out,
+void FuncEvalMany<EvalTypes...>::operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
                                             std::size_t num_points) const noexcept {
-    constexpr std::size_t M = kF;
-    constexpr std::size_t simd_size = xsimd::batch<InputType>::size;
-    const std::size_t n_deg = static_cast<std::size_t>(coeffs_.extent(0));
-    const std::size_t stride = kF_pad;
+    PF_C23STATIC constexpr std::size_t M = kF;
+    PF_C23STATIC constexpr std::size_t simd_size = xsimd::batch<InputType>::size;
+    PF_C23STATIC constexpr std::size_t stride = kF_pad;
 
-    // Multi-accumulator Horner: UF independent chains per coefficient step for ILP.
-    // UF tuned to vector register pressure via poet::vector_register_count().
-    constexpr std::size_t UF = detail::optimal_many_eval_uf<OutputType>();
-    constexpr std::size_t block = simd_size * UF;
+    // UF independent Horner chains for ILP, tuned to vector register pressure.
+    // Explicit multi-accumulator: shared coeff broadcast across UF lanes per k-step.
+    PF_C23STATIC constexpr std::size_t UF = detail::optimal_many_eval_uf<OutputType>();
+    PF_C23STATIC constexpr std::size_t block = simd_size * UF;
+
+    const auto n_deg = static_cast<std::size_t>(coeffs_.extent(0));
+
+    // Horner coefficient loop: CT → static_for (full unrolling), RT → plain for.
+    auto for_k = [&](auto step) {
+        if constexpr (deg_max_ctime_ != 0)
+            poet::static_for<1, deg_max_ctime_>(step);
+        else
+            for (std::size_t k = 1; k < n_deg; ++k) step(k);
+    };
 
     poet::static_for<M>([&](auto m) {
         const auto low_m = low_[m];
         const auto hi_m = hi_[m];
-        const OutputType *col = coeffs_.data_handle();
+        const OutputType *col_m = coeffs_.data_handle() + std::size_t(m);
 
-        // Horner coefficient dispatch: CT-unrolled or runtime loop.
-        auto for_each_coeff = [&](auto body) {
-            if constexpr (deg_max_ctime_ != 0) {
-                if (!truncated_) {
-                    poet::static_for<1, deg_max_ctime_>([&](auto k) { body(std::size_t(k)); });
-                    return;
-                }
-            }
-            for (std::size_t k = 1; k < n_deg; ++k) body(k);
-        };
-
-        // Scatter a SIMD batch to strided row-major output.
         auto scatter = [&](auto acc, std::size_t base) {
             alignas(xsimd::batch<OutputType>::arch_type::alignment()) OutputType tmp[simd_size];
             acc.store_aligned(tmp);
-            for (std::size_t s = 0; s < simd_size; ++s)
-                out[(base + s) * M + m] = tmp[s];
+            poet::static_for<simd_size>([&](auto s) {
+                out[(base + std::size_t(s)) * M + m] = tmp[s];
+            });
         };
 
-        // Domain mapping helpers.
         const auto two_vec = xsimd::batch<InputType>(InputType(2.0));
         const auto hi_vec = xsimd::batch<InputType>(hi_m);
         const auto low_vec = xsimd::batch<InputType>(low_m);
         auto map_simd = [&](auto xv) { return xsimd::fms(two_vec, xv, hi_vec) * low_vec; };
 
-        // Main unrolled SIMD loop: UF batches per iteration for ILP
-        std::size_t i = 0;
-        if (num_points >= block)
-            for (const std::size_t limit = num_points - block; i <= limit; i += block) {
-                xsimd::batch<InputType> pt[UF];
-                xsimd::batch<OutputType> acc[UF];
+        const auto tile_end = detail::round_down<block>(num_points);
+        const auto simd_end = detail::round_down<simd_size>(num_points);
 
-                poet::static_for<UF>([&](auto j) {
-                    pt[j] = map_simd(xsimd::load_unaligned(x + i + j * simd_size));
-                    acc[j] = xsimd::batch<OutputType>(col[0 * stride + m]);
-                });
+        for (std::size_t i = 0; i < tile_end; i += block) {
+            xsimd::batch<InputType> pt[UF];
+            xsimd::batch<OutputType> acc[UF];
 
-                for_each_coeff([&](std::size_t k) {
-                    const auto ck = xsimd::batch<OutputType>(col[k * stride + m]);
-                    poet::static_for<UF>([&](auto j) { acc[j] = poly_eval::detail::fma(acc[j], pt[j], ck); });
-                });
-
-                poet::static_for<UF>([&](auto j) { scatter(acc[j], i + j * simd_size); });
-            }
-
-        // Single-batch SIMD remainder
-        for (; i + simd_size <= num_points; i += simd_size) {
-            auto xu = map_simd(xsimd::load_unaligned(x + i));
-            auto acc = xsimd::batch<OutputType>(col[0 * stride + m]);
-            for_each_coeff([&](std::size_t k) {
-                acc = poly_eval::detail::fma(acc, xu, xsimd::batch<OutputType>(col[k * stride + m]));
+            poet::static_for<UF>([&](auto j) {
+                pt[j] = map_simd(xsimd::load_unaligned(x + i + j * simd_size));
+                acc[j] = xsimd::batch<OutputType>(col_m[0]);
             });
+
+            for_k([&](auto k) {
+                const auto ck = xsimd::batch<OutputType>(col_m[std::size_t(k) * stride]);
+                poet::static_for<UF>([&](auto j) { acc[j] = detail::fma(acc[j], pt[j], ck); });
+            });
+
+            poet::static_for<UF>([&](auto j) { scatter(acc[j], i + j * simd_size); });
+        }
+
+        for (std::size_t i = tile_end; i < simd_end; i += simd_size) {
+            auto xu = map_simd(xsimd::load_unaligned(x + i));
+            auto acc = xsimd::batch<OutputType>(col_m[0]);
+
+            for_k([&](auto k) {
+                acc = detail::fma(acc, xu, xsimd::batch<OutputType>(col_m[std::size_t(k) * stride]));
+            });
+
             scatter(acc, i);
         }
 
-        // Scalar remainder
-        for (; i < num_points; ++i) {
+        for (std::size_t i = simd_end; i < num_points; ++i) {
             auto xu = (InputType(2.0) * x[i] - hi_m) * low_m;
-            OutputType acc = col[0 * stride + m];
-            for_each_coeff([&](std::size_t k) { acc = poly_eval::detail::fma(acc, xu, col[k * stride + m]); });
+            OutputType acc = col_m[0];
+
+            for_k([&](auto k) {
+                acc = detail::fma(acc, xu, col_m[std::size_t(k) * stride]);
+            });
+
             out[i * M + m] = acc;
         }
     });
@@ -490,7 +481,6 @@ PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(typename value_type_or
     }
     if (new_deg < coeffs_.extent(0)) {
         coeffs_ = decltype(coeffs_){coeff_store_.data(), new_deg, kF_pad};
-        truncated_ = true;
     }
 }
 
@@ -503,7 +493,7 @@ constexpr auto FuncEvalMany<EvalTypes...>::extract_real(const std::array<OutputT
         return full; // no padding
     }
     std::array<OutputType, kF> out{};
-    for (std::size_t i = 0; i < kF; ++i) out[i] = full[i];
+    poet::static_for<kF>([&](auto i) { out[i] = full[i]; });
     return out;
 }
 
