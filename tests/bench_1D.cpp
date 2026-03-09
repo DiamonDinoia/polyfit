@@ -29,13 +29,14 @@ void run_bench(const std::string &label, Bench &bench, F func, typename poly_eva
     }
     std::vector<V> out(num_points);
 
-    bench.run(label + " constexpr fit", [&] { doNotOptimizeAway(poly_eval::make_func_eval<8, 0>(func, a, b)); });
+    bench.run(label + " constexpr fit",
+              [&] { doNotOptimizeAway(poly_eval::make_func_eval<8>(func, a, b, poly_eval::iters<0>{})); });
 
     bench.run(label + " degree fit", [&] { doNotOptimizeAway(poly_eval::make_func_eval(func, 8, a, b)); });
 
     bench.run(label + " eps fit", [&] { doNotOptimizeAway(poly_eval::make_func_eval(func, 1e-6, a, b)); });
 
-    const auto fe = poly_eval::make_func_eval<8, 0>(func, a, b);
+    const auto fe = poly_eval::make_func_eval<8>(func, a, b, poly_eval::iters<0>{});
     bench.run(label + " eval", [&] {
         auto r = fe(pts[0]);
         doNotOptimizeAway(r);

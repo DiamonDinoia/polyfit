@@ -18,6 +18,7 @@
 
 #include "helpers.h"
 #include "macros.h"
+#include "tags.h"
 
 #if __cplusplus < 202002L
 namespace std {
@@ -27,7 +28,7 @@ template<typename T> using remove_cvref_t = std::remove_cv_t<std::remove_referen
 
 namespace poly_eval {
 
-template<class Func, std::size_t, std::size_t> class FuncEval;
+template<class Func, std::size_t, std::size_t, FusionMode = FusionMode::auto_> class FuncEval;
 // -----------------------------------------------------------------------------
 // Buffer: Conditional type alias for std::vector or std::array
 // -----------------------------------------------------------------------------
@@ -450,6 +451,16 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
         std::copy_n(c.begin(), N, result.begin());
         return result;
     }
+}
+
+// Convenience overloads for std::vector (runtime-sized, N=0) that deduce X/Y.
+template<class X, class Y>
+PF_C20CONSTEXPR std::vector<Y> bjorck_pereyra(const std::vector<X> &x, const std::vector<Y> &y) {
+    return bjorck_pereyra<0, X, Y>(x, y);
+}
+template<class X, class Y>
+PF_C20CONSTEXPR std::vector<Y> newton_to_monomial(const std::vector<Y> &alpha, const std::vector<X> &nodes) {
+    return newton_to_monomial<0, X, Y>(alpha, nodes);
 }
 
 #if defined(__GNUC__) && !defined(__clang__)

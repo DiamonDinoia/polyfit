@@ -17,6 +17,17 @@
 namespace poly_eval {
 namespace detail {
 
+// Round down x to the nearest multiple of N. Uses bitmask for power-of-2 N,
+// otherwise falls back to division (compile-time constant → multiply-shift).
+template<std::size_t N>
+PF_ALWAYS_INLINE constexpr std::size_t round_down(std::size_t x) noexcept {
+    static_assert(N > 0);
+    if constexpr ((N & (N - 1)) == 0)
+        return x & ~(N - 1);
+    else
+        return (x / N) * N;
+}
+
 // Optimal Horner multi-accumulator unroll factor, tuned by vector register count and width.
 // Core Horner loop: UF pt_batches + UF acc_batches + 1 coeff broadcast = 2*UF + 1 regs.
 // Wider vectors make spills more expensive (32B for AVX vs 16B for SSE), so we reserve
@@ -57,17 +68,8 @@ constexpr std::size_t optimal_horner_many_uf() noexcept {
     return uf < 8 ? uf : 8;
 }
 
-// Optimal unroll factor for horner_transposed scalar FMA step (dynamic_for).
-// Each lane does 1 FMA: out[i] = fma(out[i], xin[i], col[i]).
-// Lighter than horner_many: accumulator (out[i]) + cached xin[i] = 2 regs/lane,
-// col[i] is a fresh load each k-step. Reserve 1 for loop overhead.
-// Cap at 12 to bound dynamic_for binary-tail code size.
-//   x86-64   (16 FP regs): UF = min((16-1)/2, 12) = 7
-//   AArch64  (32 FP regs): UF = min((32-1)/2, 12) = 12
-// Note: horner_transposed scalar FMA step (out[i] = fma(out[i], xin[i], col[i]))
-// was benchmarked with dynamic_for<UF> for UF in {2,4,7,8}. A plain for loop
-// beat all variants — the body is too light (1 FMA) for dynamic_for overhead to
-// pay off. OoO execution already extracts available ILP from the simple loop.
+// horner_transposed scalar: plain for beats dynamic_for (body too light: 1 FMA).
+
 
 // detect xsimd batches
 template<typename T> struct is_xsimd_batch : std::false_type {};

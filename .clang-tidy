@@ -67,7 +67,9 @@ Checks: "*,
         -bugprone-narrowing-conversions,
         -cppcoreguidelines-narrowing-conversions,
         -cppcoreguidelines-rvalue-reference-param-not-moved,
-        -modernize-use-using"
+        -modernize-use-using,
+        -performance-avoid-endl,
+        -bugprone-exception-escape"
 
 WarningsAsErrors: ''
 HeaderFilterRegex: 'include/polyfit/'

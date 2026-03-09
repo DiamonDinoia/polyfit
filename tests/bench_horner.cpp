@@ -222,7 +222,7 @@ int main() {
     double turbo_ghz = 0;
     for (auto const &rec : simd_records) {
         double freq = rec.cyc_per_pt / rec.ns_per_pt;
-        if (freq > turbo_ghz) turbo_ghz = freq;
+        turbo_ghz = std::max(turbo_ghz, freq);
     }
     // The TSC-based cycles undercount at turbo.  Scale to actual core cycles.
     double tsc_ghz = turbo_ghz; // TSC freq ≈ cyc/ns

@@ -27,37 +27,40 @@ PF_ALWAYS_INLINE constexpr int validate_positive_degree(const int n) {
 // FuncEval Implementation (Runtime)
 // -----------------------------------------------------------------------------
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<std::size_t CurrentN, typename>
-PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const int n, const InputType a,
-                                                                             const InputType b, const InputType *pts)
+PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::FuncEval(Func F, const int n,
+                                                                                      const InputType a,
+                                                                                      const InputType b,
+                                                                                      const InputType *pts)
     : low(InputType(1) / (b - a)), hi(b + a) {
     monomials.resize(static_cast<std::size_t>(detail::validate_positive_degree(n)));
     initialize_monomials(F, pts);
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<std::size_t CurrentN, typename>
-PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time>::FuncEval(Func F, const InputType a,
-                                                                             const InputType b, const InputType *pts)
+PF_C20CONSTEXPR FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::FuncEval(Func F, const InputType a,
+                                                                                      const InputType b,
+                                                                                      const InputType *pts)
     : low(InputType(1) / (b - a)), hi(b + a) {
     static_assert(CurrentN > 0, "Polynomial degree must be positive (template N > 0)");
     initialize_monomials(F, pts);
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<bool>
-constexpr typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType PF_ALWAYS_INLINE
-FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(const InputType pt) const noexcept {
+constexpr typename FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::OutputType PF_ALWAYS_INLINE
+FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::operator()(const InputType pt) const noexcept {
     const auto xi = map_from_domain(pt);
     return horner<N_compile_time>(xi, monomials.data(), monomials.size()); // Pass data pointer and size
 }
 
 // Batch evaluation implementation using SIMD and unrolling
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<int OuterUnrollFactor, bool pts_aligned, bool out_aligned>
-PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::horner_polyeval(
+PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::horner_polyeval(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept {
     return horner<N_compile_time, pts_aligned, out_aligned, OuterUnrollFactor>(
         pts, out, num_points, monomials.data(), monomials.size(),
@@ -72,9 +75,9 @@ template<typename F, typename... Args> PF_NO_INLINE static auto noinline(F &&f, 
 }
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<bool pts_aligned, bool out_aligned>
-PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time>::operator()(
+PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::operator()(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept {
     PF_C23STATIC constexpr auto alignment = xsimd::batch<OutputType>::arch_type::alignment();
 #ifdef PF_OUTER_UNROLL
@@ -130,29 +133,37 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, N_compile_time, Iters_compile_tim
 }
 PF_FAST_EVAL_END
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-PF_C20CONSTEXPR const Buffer<typename FuncEval<Func, N_compile_time, Iters_compile_time>::OutputType, N_compile_time> &
-FuncEval<Func, N_compile_time, Iters_compile_time>::coeffs() const noexcept {
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
+PF_C20CONSTEXPR const Buffer<typename FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::OutputType,
+                             N_compile_time> &
+FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::coeffs() const noexcept {
     return monomials;
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<class T>
 PF_ALWAYS_INLINE constexpr T
-FuncEval<Func, N_compile_time, Iters_compile_time>::map_to_domain(const T T_arg) const noexcept {
+FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::map_to_domain(const T T_arg) const noexcept {
     return polyfit::internal::helpers::map_to_domain_scalar(T_arg, low, hi);
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 template<class T>
 PF_ALWAYS_INLINE constexpr T
-FuncEval<Func, N_compile_time, Iters_compile_time>::map_from_domain(const T T_arg) const noexcept {
-    return polyfit::internal::helpers::map_from_domain_scalar(T_arg, low, hi);
+FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::map_from_domain(const T T_arg) const noexcept {
+    if constexpr (Fusion == FusionMode::always)
+        return T_arg;
+    else if constexpr (Fusion == FusionMode::never)
+        return polyfit::internal::helpers::map_from_domain_scalar(T_arg, low, hi);
+    else {
+        if (fused_) return T_arg;
+        return polyfit::internal::helpers::map_from_domain_scalar(T_arg, low, hi);
+    }
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initialize_monomials(Func F,
-                                                                                              const InputType *pts) {
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
+PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::initialize_monomials(
+    Func F, const InputType *pts) {
     // 1) allocate
     auto grid = make_buffer<InputType, N_compile_time>(monomials.size());
     auto samples = make_buffer<OutputType, N_compile_time>(monomials.size());
@@ -178,41 +189,43 @@ PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::initial
     // 4) optional refine
     refine(grid, samples);
 
-    // 5) fuse domain mapping into coefficients: p(t) → q(x) = p(alpha*x + beta)
-    //    where alpha = 2*low, beta = -hi*low. After this, evaluation skips per-point mapping.
-    //    Uses compensated arithmetic (twoProd+twoSum) so coefficient precision is O(n^2*eps^2).
-    //    Guard: the fused Horner evaluation's condition number is bounded by (|alpha|+|beta|)^deg.
-    //    Skip fusion when this exceeds the type's useful precision.
-    //
-    // Domain fusion: fuse the linear domain mapping into polynomial coefficients.
-    // ce_abs/ce_log10 have constexpr CT implementations; in C++26 std::abs/log10 are
-    // also constexpr so the guard can be removed entirely. For C++17–23, skip at CT
-    // because fuse_linear_map uses std::vector (constexpr in C++20 but with an additional
-    // penalty path via two_prod that reduces accuracy at CT — skip for correctness parity).
+    // 5) Domain fusion: fuse the linear domain mapping into polynomial coefficients.
+    //    p(t) → q(x) = p(alpha*x + beta) where alpha = 2*low, beta = -hi*low.
+    //    After this, evaluation skips per-point mapping.
+    if constexpr (Fusion != FusionMode::never) {
 #if __cplusplus >= 202602L
-    {
+        {
 #else
-    PF_IF_NOT_CONSTEVAL {
+        PF_IF_NOT_CONSTEVAL {
 #endif
-        using Scalar = typename value_type_or_identity<InputType>::type;
-        const auto alpha = Scalar(2) * static_cast<Scalar>(low);
-        const auto beta = -static_cast<Scalar>(hi) * static_cast<Scalar>(low);
-        const auto deg = static_cast<int>(monomials.size()) - 1;
-        // Evaluation condition guard: (|alpha|+|beta|)^deg must leave sufficient digits
-        const auto cond_base = detail::math::abs(alpha) + detail::math::abs(beta) + Scalar(1);
-        constexpr auto max_log = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
-        if (deg > 0 && Scalar(deg) * detail::math::log10(cond_base) < max_log) {
-            polyfit::internal::helpers::fuse_linear_map(monomials.data(), monomials.size(), alpha, beta);
-            low = InputType(0.5);
-            hi = InputType(0);
+            using Scalar = typename value_type_or_identity<InputType>::type;
+            const auto alpha = Scalar(2) * static_cast<Scalar>(low);
+            const auto beta = -static_cast<Scalar>(hi) * static_cast<Scalar>(low);
+            const auto deg = static_cast<int>(monomials.size()) - 1;
+
+            bool should_fuse;
+            if constexpr (Fusion == FusionMode::always) {
+                should_fuse = true;
+            } else { // FusionMode::auto_
+                const auto cond_base = detail::math::abs(alpha) + detail::math::abs(beta) + Scalar(1);
+                constexpr auto max_log = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
+                should_fuse = (deg > 0 && Scalar(deg) * detail::math::log10(cond_base) < max_log);
+            }
+
+            if (should_fuse) {
+                polyfit::internal::helpers::fuse_linear_map(monomials.data(), monomials.size(), alpha, beta);
+                low = InputType(0.5);
+                hi = InputType(0);
+                if constexpr (Fusion == FusionMode::auto_) fused_ = true;
+            }
         }
     }
 }
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
 PF_C20CONSTEXPR void
-FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputType, N_compile_time> &x_cheb_,
-                                                           const Buffer<OutputType, N_compile_time> &y_cheb_) {
+FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::refine(const Buffer<InputType, N_compile_time> &x_cheb_,
+                                                                    const Buffer<OutputType, N_compile_time> &y_cheb_) {
     const auto n = monomials.size();
     std::reverse(monomials.begin(), monomials.end()); // to Horner order once
 
@@ -239,8 +252,8 @@ FuncEval<Func, N_compile_time, Iters_compile_time>::refine(const Buffer<InputTyp
 
 // ------------------------------ truncate -------------------------------
 
-template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time>
-PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time>::truncate(
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time, FusionMode Fusion>
+PF_C20CONSTEXPR void FuncEval<Func, N_compile_time, Iters_compile_time, Fusion>::truncate(
     typename value_type_or_identity<OutputType>::type eps) noexcept {
     if constexpr (N_compile_time == 0) {
         // monomials are in Horner order: [0]=highest degree, [size-1]=constant
@@ -710,67 +723,69 @@ constexpr void FuncEvalND<Func, N_compile>::for_each_index(const std::array<int,
 }
 
 // -----------------------------------------------------------------------------
-// make_func_eval API implementations (Runtime, C++20 compatible)
+// make_func_eval API implementations (tag-based, C++17+)
 // -----------------------------------------------------------------------------
+
 // Compile-time degree (1D or ND)
-template<std::size_t N_compile_time, std::size_t Iters_compile_time, class Func>
+template<std::size_t N_compile_time, class Func, class... Tags,
+         std::enable_if_t<(N_compile_time > 0) && detail::all_tags_v<Tags...>, int>>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b,
-                                                  const typename function_traits<Func>::arg0_type *pts) {
+                                                  typename function_traits<Func>::arg0_type b, Tags...) {
     using InputType = typename function_traits<Func>::arg0_type;
+    constexpr std::size_t I = detail::extract_tag<iters, 1, Tags...>();
+    constexpr FusionMode fm = detail::extract_fusion_v<Tags...>;
     if constexpr (has_tuple_size_v<std::remove_cvref_t<InputType>>) {
-        // ND
         return FuncEvalND<Func, N_compile_time>(F, a, b);
     } else {
-        // 1D
-        return FuncEval<Func, N_compile_time, Iters_compile_time>(F, a, b, pts);
+        return FuncEval<Func, N_compile_time, I, fm>(F, a, b);
     }
 }
 
 // Runtime degree (1D or ND)
-template<std::size_t Iters_compile_time, class Func, typename IntType,
-         std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>>, int>>
+template<class Func, typename IntType, class... Tags,
+         std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>> && detail::all_tags_v<Tags...>, int>>
 [[nodiscard]] PF_C20CONSTEXPR auto
 make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
-               typename function_traits<Func>::arg0_type b,
-               const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts) {
+               typename function_traits<Func>::arg0_type b, Tags...) {
     using InputType = typename function_traits<Func>::arg0_type;
     using RawInputType = std::remove_cvref_t<InputType>;
+    constexpr std::size_t I = detail::extract_tag<iters, 1, Tags...>();
+    constexpr FusionMode fm = detail::extract_fusion_v<Tags...>;
 
     if constexpr (has_tuple_size_v<RawInputType>) {
-        // ND - pass by value for tuple types to avoid reference issues
         return FuncEvalND<Func, 0>(F, detail::validate_positive_degree(static_cast<int>(n)), a, b);
     } else {
-        // 1D
-        return FuncEval<Func, 0, Iters_compile_time>(F, detail::validate_positive_degree(static_cast<int>(n)), a, b,
-                                                     pts);
+        return FuncEval<Func, 0, I, fm>(F, detail::validate_positive_degree(static_cast<int>(n)), a, b);
     }
 }
 
-template<std::size_t N_compile_time, class Func,
-         std::enable_if_t<has_tuple_size_v<std::remove_cvref_t<typename function_traits<Func>::arg0_type>>, int>>
-[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b) {
-    return FuncEvalND<Func, N_compile_time>(F, a, b);
-}
-
 // Runtime error tolerance (1D or ND) — fit once at MaxN, then truncate
-template<std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters_compile_time, class Func,
-         typename FloatType, std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int>>
+template<class Func, typename FloatType, class... Tags,
+         std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>> && detail::all_tags_v<Tags...>, int>>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b) {
+                                                  typename function_traits<Func>::arg0_type b, Tags...) {
     using RawInputType = std::remove_cvref_t<typename function_traits<Func>::arg0_type>;
+    constexpr std::size_t MaxN_val = detail::extract_tag<max_degree, 32, Tags...>();
+    constexpr std::size_t NumEvalPoints_val = detail::extract_tag<eval_pts, 100, Tags...>();
+    constexpr std::size_t I = detail::extract_tag<iters, 1, Tags...>();
+    constexpr FusionMode fm = detail::extract_fusion_v<Tags...>;
+
     using evaluator_t =
-        std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, 0>, FuncEval<Func, 0, Iters_compile_time>>;
-    const auto eval_pts = detail::linspace(a, b, int(NumEvalPoints_val));
+        std::conditional_t<has_tuple_size_v<RawInputType>, FuncEvalND<Func, 0>, FuncEval<Func, 0, I, fm>>;
+    const auto eval_points = detail::linspace(a, b, int(NumEvalPoints_val));
 
     // 1. Fit once at MaxN
-    evaluator_t evaluator(F, int(MaxN_val), a, b);
+    evaluator_t evaluator = [&] {
+        if constexpr (has_tuple_size_v<RawInputType>)
+            return evaluator_t(F, int(MaxN_val), a, b);
+        else
+            return evaluator_t(F, int(MaxN_val), a, b);
+    }();
 
     // Helper to compute max error across eval points
     auto compute_max_err = [&]() {
         double max_err = 0.0;
-        for (const auto &pt : eval_pts) {
+        for (const auto &pt : eval_points) {
             max_err = std::max(detail::relative_l2_norm(F(pt), evaluator(pt)), max_err);
         }
         return max_err;
@@ -781,7 +796,7 @@ template<std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters_
         auto candidate = evaluator;
         candidate.truncate(static_cast<typename value_type_or_identity<typename evaluator_t::OutputType>::type>(eps));
         double err = 0.0;
-        for (const auto &pt : eval_pts) err = std::max(detail::relative_l2_norm(F(pt), candidate(pt)), err);
+        for (const auto &pt : eval_points) err = std::max(detail::relative_l2_norm(F(pt), candidate(pt)), err);
         if (err <= eps) return candidate;
     }
 
@@ -792,20 +807,20 @@ template<std::size_t MaxN_val, std::size_t NumEvalPoints_val, std::size_t Iters_
                              ", MaxN=" + std::to_string(MaxN_val) + ", max_err=" + std::to_string(compute_max_err()));
 }
 
-template<std::size_t N_compile_time, std::size_t Iters_compile_time, typename Func,
-         std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>>, int>>
+// Function pointer overload
+template<std::size_t N_compile_time, class... Tags, typename Func,
+         std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>> && detail::all_tags_v<Tags...>,
+                          int>>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
-                                                  typename function_traits<Func *>::arg0_type b) {
+                                                  typename function_traits<Func *>::arg0_type b, Tags...) {
     using InputType = typename function_traits<Func *>::arg0_type;
+    constexpr std::size_t I = detail::extract_tag<iters, 1, Tags...>();
+    constexpr FusionMode fm = detail::extract_fusion_v<Tags...>;
     if constexpr (has_tuple_size_v<std::remove_cvref_t<InputType>>) {
-        // ND
-        auto func_wrapper = [f](const InputType &in) {
-            return f(in);
-        };
+        auto func_wrapper = [f](const InputType &in) { return f(in); };
         return FuncEvalND<decltype(func_wrapper), N_compile_time>(func_wrapper, a, b);
     } else {
-        // 1D
-        return FuncEval<Func *, N_compile_time, Iters_compile_time>(f, a, b, nullptr);
+        return FuncEval<Func *, N_compile_time, I, fm>(f, a, b, nullptr);
     }
 }
 
@@ -820,9 +835,9 @@ template<double eps_val, auto a, auto b, std::size_t MaxN_val, std::size_t NumEv
     // Recursive constexpr search for minimal degree
     constexpr auto degree = [F] {
         constexpr auto compute_error = [F](const auto &evaluator) {
-            constexpr auto eval_pts = detail::linspace<static_cast<int>(NumEvalPoints_val)>(a, b);
+            constexpr auto ep = detail::linspace<static_cast<int>(NumEvalPoints_val)>(a, b);
             double max_err = 0.0;
-            for (const auto &pt : eval_pts) {
+            for (const auto &pt : ep) {
                 const auto actual = F(pt);
                 const auto approx = evaluator.template operator()<false>(pt);
                 max_err = std::max(detail::relative_l2_norm(actual, approx), max_err);

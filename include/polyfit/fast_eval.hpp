@@ -14,6 +14,7 @@ namespace stdex = std::experimental;
 
 #include "internal/macros.h"
 #include "internal/poly_eval.h"
+#include "internal/tags.h"
 
 //
 // Public API overview:
@@ -53,7 +54,9 @@ template<typename... EvalTypes> class FuncEvalMany;
  * @tparam Iters_compile_time Number of refinement iterations performed after
  *                            the initial fit (defaults to 1).
  */
-template<class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_time = 1> class FuncEval {
+template<class Func, std::size_t N_compile_time, std::size_t Iters_compile_time,
+         FusionMode Fusion>
+class FuncEval {
   public:
     using InputType = typename function_traits<Func>::arg0_type;
     using OutputType = typename function_traits<Func>::result_type;
@@ -133,6 +136,7 @@ template<class Func, std::size_t N_compile_time = 0, std::size_t Iters_compile_t
 
   private:
     InputType low, hi;
+    PF_NO_UNIQUE_ADDRESS std::conditional_t<Fusion == FusionMode::auto_, bool, std::true_type> fused_{};
     Buffer<OutputType, N_compile_time> monomials;
 
     PF_C20CONSTEXPR void initialize_monomials(Func F, const InputType *pts);
@@ -208,7 +212,7 @@ template<typename... EvalTypes> class FuncEvalMany {
     /* Evaluation – scalar or per‑poly inputs */
     std::array<OutputType, kF> operator()(InputType x) const noexcept;
     std::array<OutputType, kF> operator()(const std::array<InputType, kF> &xs) const noexcept;
-    void operator()(const InputType *x, OutputType *out, std::size_t num_points) const noexcept;
+    void operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out, std::size_t num_points) const noexcept;
 
     /* Convenience overloads */
     template<typename... Ts> std::array<OutputType, kF> operator()(InputType first, Ts... rest) const noexcept;
@@ -245,8 +249,6 @@ template<typename... EvalTypes> class FuncEvalMany {
     std::array<InputType, kF_pad> low_{};
     std::array<InputType, kF_pad> hi_{};
 
-    // True after truncate() — forces runtime-degree Horner path
-    bool truncated_{false};
 };
 
 /**
@@ -319,65 +321,33 @@ template<class Func, std::size_t N_compile = 0> class FuncEvalND {
     static constexpr void for_each_index(const std::array<int, Rank> &ext, F &&body);
 };
 
-// Compile-time degree (1D or ND)
-/**
- * @brief Factory creating a `FuncEval` or `FuncEvalND` with compile-time degree.
- *
- * This overload fixes the polynomial degree at compile-time (if `N_compile_time > 0`).
- * @tparam N_compile_time Compile-time degree (0 means runtime degree elsewhere).
- * @tparam Iters_compile_time Number of refinement iterations.
- * @param F Callable to approximate.
- * @param a Domain low endpoint.
- * @param b Domain high endpoint.
- * @param pts Optional pointer to evaluation points used for fitting.
- */
-template<std::size_t N_compile_time, std::size_t Iters_compile_time = 1, class Func>
+// Compile-time degree (1D or ND) — optional trailing tags: iters<N>{}, fusion::*{}
+template<std::size_t N_compile_time, class Func, class... Tags,
+         std::enable_if_t<(N_compile_time > 0) && detail::all_tags_v<Tags...>, int> = 0>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b,
-                                                  const typename function_traits<Func>::arg0_type *pts = nullptr);
+                                                  typename function_traits<Func>::arg0_type b, Tags...);
 
-// Runtime degree (1D or ND, any integral type)
-/**
- * @brief Factory creating a runtime-degree `FuncEval`/`FuncEvalND`.
- *
- * @tparam Iters_compile_time Number of refinement iterations.
- * @tparam Func Callable type.
- * @tparam IntType Integral type used for `n`.
- * @param F Callable to approximate.
- * @param n Requested polynomial degree (runtime).
- * @param a Domain low endpoint.
- * @param b Domain high endpoint.
- * @param pts Optional pointer to evaluation points used for fitting.
- */
-template<std::size_t Iters_compile_time = 1, class Func, typename IntType,
-         std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>>, int> = 0>
+// Runtime degree (1D or ND) — optional trailing tags: iters<N>{}, fusion::*{}
+template<class Func, typename IntType, class... Tags,
+         std::enable_if_t<std::is_integral_v<std::remove_cvref_t<IntType>> && detail::all_tags_v<Tags...>, int> = 0>
 [[nodiscard]] PF_C20CONSTEXPR auto
 make_func_eval(Func F, IntType n, typename function_traits<Func>::arg0_type a,
-               typename function_traits<Func>::arg0_type b,
-               const std::remove_reference_t<typename function_traits<Func>::arg0_type> *pts = nullptr);
+               typename function_traits<Func>::arg0_type b, Tags...);
 
-// Runtime error tolerance (1D or ND, any floating-point type)
-/**
- * @brief Factory selecting degree by an error tolerance.
- *
- * The function will attempt degrees up to `MaxN_val` and evaluate using
- * `NumEvalPoints_val` points, returning an evaluator meeting `eps` accuracy
- * where found.
- */
-template<std::size_t MaxN_val = 32, std::size_t NumEvalPoints_val = 100, std::size_t Iters_compile_time = 1, class Func,
-         typename FloatType, std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>>, int> = 0>
+// Runtime error tolerance (1D or ND) — optional trailing tags: max_degree<N>{}, eval_pts<N>{}, iters<N>{}, fusion::*{}
+template<class Func, typename FloatType, class... Tags,
+         std::enable_if_t<std::is_floating_point_v<std::remove_cvref_t<FloatType>> && detail::all_tags_v<Tags...>,
+                          int> = 0>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, FloatType eps, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b);
+                                                  typename function_traits<Func>::arg0_type b, Tags...);
 
-template<std::size_t N_compile_time, class Func,
-         std::enable_if_t<has_tuple_size_v<std::remove_cvref_t<typename function_traits<Func>::arg0_type>>, int> = 0>
-[[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func F, typename function_traits<Func>::arg0_type a,
-                                                  typename function_traits<Func>::arg0_type b);
-
-template<std::size_t N_compile_time, std::size_t Iters_compile_time = 0, typename Func,
-         std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>>, int> = 0>
+// Function pointer overload — optional trailing tags
+template<std::size_t N_compile_time, class... Tags, typename Func,
+         std::enable_if_t<std::is_function_v<std::remove_pointer_t<std::decay_t<Func>>> && detail::all_tags_v<Tags...>,
+                          int> = 0>
 [[nodiscard]] PF_C20CONSTEXPR auto make_func_eval(Func *f, typename function_traits<Func *>::arg0_type a,
-                                                  typename function_traits<Func *>::arg0_type b);
+                                                  typename function_traits<Func *>::arg0_type b, Tags...);
+
 #if __cplusplus >= 202002L
 
 template<std::size_t N_compile_time, auto a, auto b, class Func> [[nodiscard]] constexpr auto make_func_eval(Func F) {

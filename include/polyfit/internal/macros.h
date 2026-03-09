@@ -83,6 +83,15 @@
 #define PF_ASSUME(cond) ((void)0)
 #endif
 
+// Portable [[no_unique_address]]: C++20 attribute, MSVC needs its own spelling.
+#if defined(_MSC_VER)
+#define PF_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif __cplusplus >= 202002L
+#define PF_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#else
+#define PF_NO_UNIQUE_ADDRESS
+#endif
+
 // The eps-based constexpr make_func_eval uses a function parameter in an
 // if-constexpr condition — a GCC extension that Clang strictly rejects.
 #if __cplusplus >= 202002L && defined(__GNUC__) && !defined(__clang__)

@@ -60,7 +60,7 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     constexpr auto n = 12;
     constexpr size_t iters = 1;
     constexpr auto eps = 2.5e-4;
-    const auto poly = poly_eval::make_func_eval<iters>(float_func, n, a, b);
+    const auto poly = poly_eval::make_func_eval(float_func, n, a, b, poly_eval::iters<iters>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<float> dist(a, b);
@@ -110,7 +110,8 @@ TEST(PolyEval, ErrorDrivenRuntimeEpsRandom) {
     constexpr size_t MaxN = 16;
     constexpr size_t EvalPts = 100;
     constexpr size_t Iters = 1;
-    auto poly = poly_eval::make_func_eval<MaxN, EvalPts, Iters>(double_func, eps, a, b);
+    auto poly = poly_eval::make_func_eval(double_func, eps, a, b, poly_eval::max_degree<MaxN>{},
+                                          poly_eval::eval_pts<EvalPts>{}, poly_eval::iters<Iters>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -199,7 +200,7 @@ TEST(PolyEval, FullCompileTimeRandom) {
     constexpr double a = -1.0, b = 1.0;
     constexpr size_t Degree = 5;
     constexpr size_t ItersCT = 2;
-    constexpr auto poly = poly_eval::make_func_eval<Degree, ItersCT>(double_constexpr_func, a, b);
+    constexpr auto poly = poly_eval::make_func_eval<Degree>(double_constexpr_func, a, b, poly_eval::iters<ItersCT>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -246,7 +247,8 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
     constexpr size_t MaxN = 32;
     constexpr size_t EvalPts = 100;
     constexpr size_t Iters = 0;
-    constexpr auto poly = poly_eval::make_func_eval<eps, a, b, MaxN, EvalPts, Iters>(complex_constexpr_func);
+    constexpr auto poly =
+        poly_eval::make_func_eval<eps, a, b, MaxN, EvalPts, Iters>(complex_constexpr_func);
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
@@ -464,6 +466,123 @@ TEST(PolyEval, WideDomainComplex) {
         max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
     }
     EXPECT_LT(max_rel, 1e-13) << "Wide domain complex log+i/x max relative error: " << max_rel;
+}
+
+// ----- Direct-domain interpolation (no [-1,1] mapping) comparison -----
+// Demonstrates the accuracy catastrophe when interpolating directly on a
+// wide-offset domain like [1000, 2000] without mapping to [-1, 1].
+// The monomial basis {1, x, x^2, ...} with x ~ 1500 has condition number
+// ~ 1500^deg, destroying all precision at moderate degrees.
+
+TEST(PolyEval, DirectDomainVsMappedAccuracy) {
+    auto func = [](double x) { return std::exp(-x / 1000.0); };
+    const double a = 1000.0, b = 2000.0;
+    constexpr std::size_t N = 16;
+
+    // --- Approach 1: with domain mapping (the normal API) ---
+    auto poly_mapped = poly_eval::make_func_eval(func, static_cast<int>(N), a, b);
+
+    // --- Approach 2: direct interpolation on [a, b] without mapping ---
+    // Place Chebyshev nodes directly in [a, b]
+    std::vector<double> nodes(N), samples(N);
+    for (std::size_t k = 0; k < N; ++k) {
+        double t = std::cos((2.0 * double(k) + 1.0) * M_PI / (2.0 * double(N)));
+        nodes[k] = 0.5 * ((b - a) * t + (b + a)); // Chebyshev node in [a, b]
+        samples[k] = func(nodes[k]);
+    }
+    auto newton = poly_eval::detail::bjorck_pereyra(nodes, samples);
+    auto mono = poly_eval::detail::newton_to_monomial(newton, nodes);
+
+    // Evaluate both at random points
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err_mapped = 0.0, max_err_direct = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        double exact = func(x);
+        double err_mapped = std::abs(poly_mapped(x) - exact);
+        double err_direct = std::abs(poly_eval::horner(x, mono.data(), mono.size()) - exact);
+        max_err_mapped = std::max(max_err_mapped, err_mapped);
+        max_err_direct = std::max(max_err_direct, err_direct);
+    }
+
+    // The mapped version should be accurate
+    EXPECT_LT(max_err_mapped, 1e-13)
+        << "Mapped max abs error: " << max_err_mapped;
+
+    // The direct (unmapped) version should be MUCH worse — many orders of magnitude
+    // At degree 16 with nodes at ~1500, monomial conditioning ~ 1500^16 ~ 10^50,
+    // so we expect total loss of precision.
+    EXPECT_GT(max_err_direct, max_err_mapped * 1e3)
+        << "Direct interpolation should be much worse than mapped.\n"
+        << "  mapped max error:  " << max_err_mapped << "\n"
+        << "  direct max error:  " << max_err_direct;
+
+    // Print for human inspection
+    std::printf("\n  [DirectDomainVsMapped] N=%zu, domain=[%.0f, %.0f]\n", N, a, b);
+    std::printf("    Mapped ([-1,1]) max abs error: %.2e\n", max_err_mapped);
+    std::printf("    Direct (no map) max abs error: %.2e\n", max_err_direct);
+    std::printf("    Ratio direct/mapped: %.1fx worse\n", max_err_direct / max_err_mapped);
+}
+
+// ----- Fusion mode tests -----
+
+TEST(PolyEval, FusionNeverSkipsFusion) {
+    // Use [0, pi] where the domain map is non-trivial (not identity like [-1,1])
+    auto func = [](double x) { return std::sin(x); };
+    const double a = 0.0, b = poly_eval::detail::constants::pi;
+    auto poly_never = poly_eval::make_func_eval<16>(func, a, b, poly_eval::fuse_never{});
+    auto poly_auto = poly_eval::make_func_eval<16>(func, a, b);
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err_never = 0.0, max_err_auto = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_err_never = std::max(max_err_never, poly_eval::detail::relative_l2_norm(poly_never(x), func(x)));
+        max_err_auto = std::max(max_err_auto, poly_eval::detail::relative_l2_norm(poly_auto(x), func(x)));
+    }
+    EXPECT_LT(max_err_never, 1e-10);
+    EXPECT_LT(max_err_auto, 1e-10);
+    EXPECT_NE(max_err_never, max_err_auto)
+        << "fuse_never and auto should take different code paths on non-trivial domains";
+}
+
+TEST(PolyEval, FusionAlwaysForcesOnNarrowDomain) {
+    auto func = [](double x) { return std::cos(x); };
+    auto poly_always = poly_eval::make_func_eval<8>(func, 0.0, 2.0, poly_eval::fuse_always{});
+    auto poly_auto = poly_eval::make_func_eval<8>(func, 0.0, 2.0);
+    std::uniform_real_distribution<double> dist(0.0, 2.0);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        EXPECT_DOUBLE_EQ(poly_always(x), poly_auto(x)) << "x=" << x;
+    }
+}
+
+TEST(PolyEval, FusionAlwaysOnWideDomainLosesAccuracy) {
+    auto func = [](double x) { return std::exp(-x / 1000.0); };
+    const double a = 1000.0, b = 2000.0;
+    auto poly_auto = poly_eval::make_func_eval(func, 32, a, b);
+    auto poly_force = poly_eval::make_func_eval(func, 32, a, b, poly_eval::fuse_always{});
+
+    std::uniform_real_distribution<double> dist(a, b);
+    double max_err_auto = 0.0, max_err_force = 0.0;
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        max_err_auto = std::max(max_err_auto, poly_eval::detail::relative_l2_norm(poly_auto(x), func(x)));
+        max_err_force = std::max(max_err_force, poly_eval::detail::relative_l2_norm(poly_force(x), func(x)));
+    }
+    EXPECT_LT(max_err_auto, 1e-13);
+    EXPECT_GT(max_err_force, max_err_auto)
+        << "auto: " << max_err_auto << ", force: " << max_err_force;
+}
+
+TEST(PolyEval, TagOrderIndependence) {
+    auto func = [](double x) { return std::sin(x); };
+    auto p1 = poly_eval::make_func_eval<16>(func, -1.0, 1.0, poly_eval::iters<2>{}, poly_eval::fuse_never{});
+    auto p2 = poly_eval::make_func_eval<16>(func, -1.0, 1.0, poly_eval::fuse_never{}, poly_eval::iters<2>{});
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        EXPECT_DOUBLE_EQ(p1(x), p2(x)) << "x=" << x;
+    }
 }
 
 int main(int argc, char **argv) {
