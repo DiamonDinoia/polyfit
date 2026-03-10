@@ -162,14 +162,6 @@ branch.
 
 ![1D fitting performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/fitting_performance.svg)
 
-### Cross-compiler overview
-
-![Cross-compiler relative performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/cross_compiler_overview.svg)
-
-### Average speedup vs gcc-14
-
-![Average speedup](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/average_improvement.svg)
-
 Raw numbers: [`summary.md`](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/summary.md)
 
 ## Build examples and tests
