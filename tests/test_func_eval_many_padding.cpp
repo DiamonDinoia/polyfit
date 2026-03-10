@@ -1,4 +1,4 @@
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 #include <gtest/gtest.h>
 
 TEST(FuncEvalMany, PackedMatchesIndividual) {

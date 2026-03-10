@@ -2,7 +2,7 @@
 #include <cmath>
 #include <gtest/gtest.h>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 using namespace poly_eval;
 

@@ -1,0 +1,155 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    name: Benchmark (${{ matrix.toolchain }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [gcc-14, gcc-15, llvm-20, llvm-21]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup C++ toolchain
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: ${{ matrix.toolchain }}
+          cmake: true
+          ninja: true
+          cache-tools: true
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build/bench \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-mavx2 -mfma" \
+            -DPOLYFIT_BUILD_TESTS=ON \
+            -DPOLYFIT_BUILD_EXAMPLES=OFF \
+            -DPOLYFIT_STRICT_WARNINGS=OFF \
+            -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF
+
+      - name: Build benchmarks
+        run: |
+          cmake --build build/bench --target \
+            bench_horner_cxx17 bench_horner_cxx20 \
+            bench1D_cxx17 bench1D_cxx20 \
+            benchMany_cxx17 benchMany_cxx20 \
+            bench_ND_cxx17 bench_ND_cxx20 \
+            -j4
+
+      - name: Run benchmarks
+        shell: bash
+        run: |
+          COMPILER="${{ matrix.toolchain }}"
+          mkdir -p results/${COMPILER}
+          for bench in \
+            bench_horner_cxx17 bench_horner_cxx20 \
+            bench1D_cxx17 bench1D_cxx20 \
+            benchMany_cxx17 benchMany_cxx20 \
+            bench_ND_cxx17 bench_ND_cxx20; do
+            echo "--- Running ${bench} ---"
+            ./build/bench/tests/${bench} | tee results/${COMPILER}/${bench}.txt
+          done
+
+      - name: Parse results
+        shell: bash
+        run: |
+          COMPILER="${{ matrix.toolchain }}"
+          for bench in \
+            bench_horner_cxx17 bench_horner_cxx20 \
+            bench1D_cxx17 bench1D_cxx20 \
+            benchMany_cxx17 benchMany_cxx20 \
+            bench_ND_cxx17 bench_ND_cxx20; do
+            python3 scripts/parse_bench.py \
+              results/${COMPILER}/${bench}.txt \
+              results/${COMPILER}/${bench}.json
+          done
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-${{ matrix.toolchain }}
+          path: results/${{ matrix.toolchain }}/
+          retention-days: 30
+
+  charts:
+    name: Generate Charts
+    runs-on: ubuntu-24.04
+    needs: benchmark
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-results-*
+          path: all-results/
+          merge-multiple: false
+
+      - name: Install Python dependencies
+        run: pip install matplotlib numpy
+
+      - name: Generate charts and analysis
+        shell: bash
+        run: |
+          mkdir -p benchmark-results
+          python3 scripts/generate_charts.py all-results/ benchmark-results/
+          python3 scripts/analyze_bench.py all-results/ benchmark-results/
+
+      - name: Upload benchmark results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results/
+          retention-days: 90
+
+      - name: Publish to benchmark-results branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Copy generated results to a temp dir
+          mkdir -p /tmp/bench-publish
+          cp -r benchmark-results/. /tmp/bench-publish/
+
+          # Switch to orphan branch (create if not exists)
+          if git ls-remote --exit-code origin benchmark-results; then
+            git fetch origin benchmark-results
+            git checkout benchmark-results
+            git pull --ff-only origin benchmark-results || true
+          else
+            git checkout --orphan benchmark-results
+            git rm -rf .
+          fi
+
+          # Copy results in
+          cp -r /tmp/bench-publish/. .
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to benchmark results."
+          else
+            git commit -m "chore: update benchmark results [skip ci]"
+            git push origin benchmark-results
+          fi

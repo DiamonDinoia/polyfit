@@ -1,0 +1,4 @@
+-P ubuntu-24.04=ghcr.io/catthehacker/ubuntu:act-24.04
+-P macos-14=ghcr.io/catthehacker/ubuntu:act-24.04
+-P windows-2022=ghcr.io/catthehacker/ubuntu:act-24.04
+--artifact-server-path /tmp/act-artifacts

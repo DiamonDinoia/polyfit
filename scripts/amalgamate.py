@@ -6,8 +6,9 @@ Usage:
 
 Defaults:
   --root    .                                  (repo root)
-  --input   include/polyfit/fast_eval.hpp      (public umbrella header)
-  --output  include/polyfit/polyfit.hpp        (generated single header)
+  --input   include/polyfit/polyeval.hpp       (public API header)
+  --output  include/polyfit/internal/polyfit_amalgamated.hpp
+                                             (generated single header)
 
 Only headers resolved within ROOT/include/polyfit are inlined.
 System headers (<...>) and external project headers (xsimd, poet, mdspan)
@@ -147,8 +148,9 @@ def build_single_header(root: Path, input_path: Path, output_path: Path) -> None
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=".", help="Repository root directory")
-    parser.add_argument("--input", default="include/polyfit/fast_eval.hpp", help="Entry-point header")
-    parser.add_argument("--output", default="include/polyfit/polyfit.hpp", help="Output single-header path")
+    parser.add_argument("--input", default="include/polyfit/polyeval.hpp", help="Entry-point header")
+    parser.add_argument("--output", default="include/polyfit/internal/polyfit_amalgamated.hpp",
+                        help="Output single-header path")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()

@@ -16,103 +16,15 @@
 #include <vector>
 #include <xsimd/xsimd.hpp>
 
+#include "api_types.hpp"
 #include "helpers.h"
 #include "macros.h"
-#include "tags.h"
 
 #if __cplusplus < 202002L
 namespace std {
 template<typename T> using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 } // namespace std
 #endif
-
-namespace poly_eval {
-
-template<class Func, std::size_t, std::size_t, FusionMode = FusionMode::auto_> class FuncEval;
-// -----------------------------------------------------------------------------
-// Buffer: Conditional type alias for std::vector or std::array
-// -----------------------------------------------------------------------------
-template<typename T, std::size_t N_compile_time_val>
-using Buffer = std::conditional_t<N_compile_time_val == 0, std::vector<T>, std::array<T, N_compile_time_val>>;
-
-// Create a Buffer<T,N>, resizing to runtime_size when N==0 (dynamic).
-template<typename T, std::size_t N> constexpr Buffer<T, N> make_buffer(std::size_t runtime_size) {
-    Buffer<T, N> buf{};
-    if constexpr (N == 0) buf.resize(runtime_size);
-    return buf;
-}
-
-// -----------------------------------------------------------------------------
-// function_traits: Helper to deduce input and output types from a callable
-// -----------------------------------------------------------------------------
-template<typename T> struct function_traits : function_traits<decltype(&std::remove_cvref_t<T>::operator())> {};
-
-template<typename R, typename Arg> struct function_traits<R (*)(Arg)> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
-
-// std::function<R(Arg)>
-template<typename R, typename Arg> struct function_traits<std::function<R(Arg)>> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
-
-// pointer to const member (for lambdas with const operator())
-template<typename F, typename R, typename Arg> struct function_traits<R (F::*)(Arg) const> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
-
-// pointer to non‐const member (if you ever need it)
-template<typename F, typename R, typename Arg> struct function_traits<R (F::*)(Arg)> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
-
-template<typename R, typename T> struct function_traits<R (*)(const T &)> {
-    using result_type = R;
-    using arg0_type = T;
-};
-
-template<typename T, typename = void> struct is_tuple_like : std::false_type {};
-
-template<typename T>
-struct is_tuple_like<T, std::void_t<decltype(std::tuple_size_v<std::remove_cvref_t<T>>)>> : std::true_type {};
-
-#if __cpp_concepts >= 201907L
-template<typename T>
-concept tuple_like = is_tuple_like<T>::value;
-#endif
-
-// Convenience: size-or-zero that never hard-errors
-template<typename T, typename = void> struct tuple_size_or_zero : std::integral_constant<std::size_t, 0> {};
-
-template<typename T>
-struct tuple_size_or_zero<T, std::void_t<decltype(std::tuple_size_v<std::remove_cvref_t<T>>)>>
-    : std::integral_constant<std::size_t, std::tuple_size_v<std::remove_cvref_t<T>>> {};
-
-template<typename T> struct is_func_eval : std::false_type {};
-template<typename... Args> struct is_func_eval<FuncEval<Args...>> : std::true_type {};
-} // namespace poly_eval
-
-template<typename T> struct is_complex : std::false_type {};
-template<typename T> struct is_complex<std::complex<T>> : std::true_type {};
-template<typename T> inline constexpr bool is_complex_v = is_complex<std::remove_cv_t<T>>::value;
-
-// —— detect whether T has a std::tuple_size<T>::value member (e.g. std::array, tuple, etc.)
-template<typename, typename = void> struct has_tuple_size : std::false_type {};
-template<typename T> struct has_tuple_size<T, std::void_t<decltype(std::tuple_size<T>::value)>> : std::true_type {};
-template<typename T> inline constexpr bool has_tuple_size_v = has_tuple_size<std::remove_cv_t<T>>::value;
-
-// Safely get value_type for containers, or return T for scalars.
-template<typename T, typename = void> struct value_type_or_identity {
-    using type = T;
-};
-
-template<typename T> struct value_type_or_identity<T, std::void_t<typename T::value_type>> {
-    using type = typename T::value_type;
-};
 
 namespace poly_eval::detail {
 
@@ -175,7 +87,7 @@ template<typename T> constexpr T abs(T x) noexcept {
 }
 
 // log10(x): integer decade counting + atanh series at CT; std::log10 at runtime.
-// Accuracy: ~11 significant digits for x in [1, 10) — sufficient for degree selection guard.
+// Accuracy: ~11 significant digits for x in [1, 10) — sufficient for coefficient-count selection guard.
 template<typename T> constexpr T log10(T x) noexcept {
     PF_IF_CONSTEVAL {
         if (x <= T(0)) return T(0);
@@ -214,9 +126,9 @@ constexpr double cos(const double x) noexcept {
     // Uses a*b+c instead of std::fma for MSVC constexpr compatibility.
     // NOTE: do NOT dispatch to std::cos at runtime in C++20. The Cody-Waite
     // values produce consistent Chebyshev nodes that avoid near-cancellation in
-    // the Björck-Pereyra divided differences at high degrees (≥ 44). std::cos
-    // returns values that differ by up to 1 ULP, which is enough to cause
-    // accuracy degradation at high polynomial degrees.
+    // the Björck-Pereyra divided differences at large coefficient counts
+    // (around 44 and above). std::cos returns values that differ by up to
+    // 1 ULP, which is enough to cause accuracy degradation in large fits.
     constexpr double PIO2_HI = 1.57079632679489655800e+00;
     constexpr double PIO2_LO = 6.12323399573676603587e-17;
     constexpr double INV_PIO2 = 6.36619772367581382433e-01;
@@ -364,7 +276,7 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorck_pereyra(const Buffer<X, N> &x, const Buffer<
 }
 
 // stand-alone Newton→monomial conversion
-// The inner loop touches c[deg] where deg can reach n, so the workspace
+// The inner loop touches c[order] where the order can reach n, so the workspace
 // needs n+1 entries; only c[0..n-1] are meaningful in the result.
 template<std::size_t N, class X, class Y>
 PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
@@ -376,10 +288,10 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
         // Compensated path for real types
         auto comp = make_buffer<Y, WN>(n + 1);
 
-        std::size_t deg = 0;
+        std::size_t order = 0;
         for (std::size_t ii = n; ii-- > 0;) {
-            ++deg;
-            for (std::size_t j = deg; j >= 1; --j) {
+            ++order;
+            for (std::size_t j = order; j >= 1; --j) {
                 auto [p, ep] = eft::two_prod(Y(nodes[ii]), c[j]);
                 Y p_comp = Y(nodes[ii]) * comp[j];
                 auto [s, es] = eft::two_sum(c[j - 1], -p);
@@ -401,11 +313,11 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
         auto comp_re = make_buffer<Scalar, WN>(n + 1);
         auto comp_im = make_buffer<Scalar, WN>(n + 1);
 
-        std::size_t deg = 0;
+        std::size_t order = 0;
         for (std::size_t ii = n; ii-- > 0;) {
-            ++deg;
+            ++order;
             Scalar node = Scalar(nodes[ii]);
-            for (std::size_t j = deg; j >= 1; --j) {
+            for (std::size_t j = order; j >= 1; --j) {
                 // Real component
                 auto [pr, epr] = eft::two_prod(node, c[j].real());
                 Scalar pr_comp = node * comp_re[j];
@@ -435,10 +347,10 @@ PF_C20CONSTEXPR Buffer<Y, N> newton_to_monomial(const Buffer<Y, N> &alpha, const
         for (std::size_t k = 0; k <= n; ++k) c[k] += Y(comp_re[k], comp_im[k]);
     } else {
         // Fallback: uncompensated
-        std::size_t deg = 0;
+        std::size_t order = 0;
         for (std::size_t ii = n; ii-- > 0;) {
-            ++deg;
-            for (std::size_t j = deg; j >= 1; --j) c[j] = c[j - 1] - (nodes[ii] * c[j]);
+            ++order;
+            for (std::size_t j = order; j >= 1; --j) c[j] = c[j - 1] - (nodes[ii] * c[j]);
             c[0] = (-nodes[ii] * c[0]) + alpha[ii];
         }
     }

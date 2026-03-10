@@ -6,45 +6,50 @@ This document summarizes the public API of polyfit and the responsibilities of t
 
 - make_func_eval(...)
   - Overloads support:
-    - Compile-time degree: make_func_eval<N>(func, a, b)
-    - Runtime fixed degree: make_func_eval(func, n, a, b)
+    - Compile-time coefficient count: make_func_eval<N>(func, a, b)
+    - Runtime fixed coefficient count: make_func_eval(func, nCoeffs, a, b)
     - Runtime adaptive (epsilon): make_func_eval(func, eps, a, b)
     - ND / vector-valued functions use std::array-like inputs/outputs
   - Behavior:
     - Samples f on Chebyshev nodes, fits via Björck–Pereyra Newton interpolation → monomial conversion. No Vandermonde matrix is formed.
     - Returns a callable evaluator (FuncEval or FuncEvalND) that evaluates with Horner's method.
     - For C++20 constexpr overloads, fitting may occur at compile time.
-  - Key template parameters on the returned FuncEval:
-    - `N_compile_time`: polynomial degree known at compile time (0 = runtime degree).
-    - `Iters_compile_time`: number of iterative refinement passes (default 1). Increase to 2–3 for high-degree polynomials where residual error matters.
+  - Key template parameters on the returned `FuncEval`:
+    - compile-time coefficient count: number of monomial coefficients known at compile time (`0` = runtime coefficient count)
+    - refinement iterations: number of iterative refinement passes (default `1`); increase to `2-3` when residual error matters
+  - Runtime `eps` overload:
+    - Searches coefficient counts from `1` to `MaxN` and returns the first evaluator whose checked error is within `eps`.
 
 ## Main types
 
-- poly_eval::FuncEval<Func, N_compile_time = 0, Iters_compile_time = 1>
+- poly_eval::FuncEval<Func, NCoeffsCt = 0, RefineIters = 1>
   - 1D polynomial evaluator, supports:
-    - N_compile_time > 0: fixed compile-time degree
-    - N_compile_time == 0: runtime degree (n passed to constructor)
+    - `NCoeffsCt > 0`: fixed compile-time coefficient count
+    - `NCoeffsCt == 0`: runtime-sized coefficient storage (`nCoeffs` passed to the constructor)
   - Key members:
     - operator()(InputType) — scalar evaluation
     - operator()(const InputType* pts, OutputType* out, std::size_t num) — bulk SIMD evaluation
-    - coeffs() — access monomial coefficients (monomial basis, highest degree first)
-    - truncate(eps) — remove trailing coefficients whose absolute value is ≤ eps, reducing effective degree
+    - coeffs() — access monomial coefficients (monomial basis, highest-order term first)
+    - nCoeffs() — current coefficient count
+    - truncate(eps) — remove leading coefficients whose absolute value is ≤ eps, reducing evaluation work
 
-- poly_eval::FuncEvalND<Func, N_compile_time = 0>
+- poly_eval::FuncEvalND<Func, NCoeffsCt = 0>
   - N‑D variant using mdspan extents for storage.
   - Use for functions taking tuple-like / std::array inputs.
+  - `nCoeffsPerAxis()` reports the coefficient count used along each axis.
 
 - poly_eval::FuncEvalMany<EvalTypes...>
   - Packs several FuncEval instances for SIMD-friendly batched evaluation.
-  - All packed evaluators must use the same degree mode:
-    - all compile-time degree, or
-    - all runtime degree.
-    Mixing runtime and compile-time degree evaluators in one pack is unsupported.
+  - All packed evaluators must use the same coefficient-count mode:
+    - all compile-time coefficient count, or
+    - all runtime coefficient count.
+    Mixing runtime and compile-time coefficient count evaluators in one pack is unsupported.
   - Key members:
     - operator()(InputType x) — evaluates all packed polynomials at x; returns an array of outputs
     - operator()(InputType first, Ts... rest) — variadic overload; evaluates each packed polynomial at its corresponding argument
     - operator()(const std::tuple<Ts...>&) — tuple overload; elements of the tuple are forwarded to the corresponding polynomial
     - operator()(const InputType* pts, OutputType* out, std::size_t n) — bulk evaluation across many points using SIMD
+    - nCoeffs() — current shared coefficient count
     - truncate(eps) — delegates to each packed evaluator's truncate(eps)
 
 ## Config / macros
@@ -61,7 +66,7 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 
 ## Coefficient Order
 
-- 1D evaluators and helpers expect monomial coefficients in reversed order for Horner's method (highest degree first).
+- 1D evaluators and helpers expect monomial coefficients in Horner order (highest-order term first).
 - Internal fitting converts Newton-form coefficients to monomial form and reverses the order before evaluation.
 - When interacting with low-level APIs such as `horner`, pass coefficients as `[c_N, c_{N-1}, …, c_0]`.
 
@@ -69,13 +74,14 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 
 ### Compensated Fitting Pipeline
 
-- **Björck–Pereyra** (Newton divided differences) and **newton_to_monomial** (monomial conversion) both use error-free transformations (EFT) and compensated summation, achieving near-machine-precision fitting even at high polynomial degrees.
-- **Compensated Horner** is used in the iterative refinement step to prevent divergence when evaluating high-degree polynomials during residual correction.
+- **Björck–Pereyra** (Newton divided differences) and **newton_to_monomial** (monomial conversion) use compensated arithmetic for arithmetic and complex coefficient types.
+- **Compensated Horner** is used in the iterative refinement step to prevent divergence when evaluating large fits during residual correction.
+- Compensation is selective, not universal: compile-time fitting uses reduced compensation where constexpr restrictions apply, and unsupported coefficient types fall back to ordinary arithmetic.
 
 ### Truncation
 
-- `FuncEval::truncate(eps)` removes trailing coefficients with absolute value ≤ eps.
-- Called automatically by the adaptive (`epsilon`) overload of `make_func_eval` after the degree search converges, so the evaluator operates at the minimal degree that satisfies the error bound.
+- `FuncEval::truncate(eps)` removes leading coefficients with absolute value ≤ eps.
+- The adaptive (`epsilon`) overload finds the first coefficient count that satisfies the error bound; it does not rely on automatic truncation afterward.
 
 ## MSVC Compatibility
 
@@ -101,7 +107,7 @@ Macros used by the implementation are internal. See include/polyfit/internal/mac
 ## Notes & recommendations
 
 - Use compile-time overloads when possible to generate the fastest evaluators.
-- For adaptive fitting, provide a sensible MaxN (default in code) and NumEvalPoints when customizing.
+- For adaptive fitting, provide a sensible `maxNCoeffs` limit and evaluation grid size when customizing.
 - For multidimensional functions, prefer std::array-based inputs/outputs for clarity.
 
 ## Examples
@@ -131,6 +137,6 @@ double out1 = packed(0.5)[1]; // value for second polynomial
 Padding and SIMD notes:
 
 - If the number of packed polynomials is not a multiple of the SIMD width,
-  the implementation pads coefficients to the next vector width (`kF_pad`).
+  the implementation pads coefficients to the next vector width (`kFPad`).
 - Use the bulk `operator()(const InputType *x, OutputType *out, std::size_t)`
   overload to drive efficient vectorized evaluation across many points.

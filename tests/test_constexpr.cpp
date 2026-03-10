@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 #include "polyfit/internal/utils.h"
 
 namespace m = poly_eval::detail::math;
@@ -52,7 +52,7 @@ static_assert(m::sqrt(2.0) > 1.41 && m::sqrt(2.0) < 1.42, "sqrt(2) ~= 1.414"); /
 static constexpr auto ct_poly = poly_eval::make_func_eval<4>(
     [](double x) { return x * x + 1.0; }, -1.0, 1.0);
 
-static_assert(decltype(ct_poly)::kDegreeCompileTime == 4, "FuncEval CT: kDegreeCompileTime");
+static_assert(decltype(ct_poly)::kNCoeffsCompileTime == 4, "FuncEval CT: kNCoeffsCompileTime");
 static_assert(poly_eval::detail::relative_l2_norm(ct_poly(0.0), 1.0) < 1e-12,
               "FuncEval CT: eval at x=0 should approximate x^2+1=1");
 #endif

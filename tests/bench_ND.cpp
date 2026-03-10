@@ -3,13 +3,13 @@
 #include <iostream>
 #include <random>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 #include <nanobench.h>
 
 // -----------------------------------------------------------------------------
 // Mathematical setup:
 //   F : ℝ^InDim → ℝ^OutDim is our analytic function (sum of cosines).
-//   We build a degree-D interpolant \tilde F on [-1,1]^InDim.
+//   We build an N-coefficient-per-axis interpolant \tilde F on [-1,1]^InDim.
 //   We then pick a single random x ∈ [-1,1]^InDim; nanobench will repeatedly
 //   call \tilde F(x) to measure throughput.
 // -----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ template<typename Array, typename OutPut = Array> constexpr auto sumCos(const Ar
 // -----------------------------------------------------------------------------
 // Benchmark helper: throughput of evaluating the interpolant at one point
 // -----------------------------------------------------------------------------
-template<std::size_t InDim, std::size_t OutDim, std::size_t Degree>
+template<std::size_t InDim, std::size_t OutDim, std::size_t nCoeffsCt>
 void benchEvalSingle(const std::string &label, ankerl::nanobench::Bench &bench) {
     using Input = std::array<double, InDim>;
     using Output = std::array<double, OutDim>;
@@ -45,7 +45,7 @@ void benchEvalSingle(const std::string &label, ankerl::nanobench::Bench &bench) 
     a.fill(-1.0);
     Input b{};
     b.fill(1.0);
-    auto approx = poly_eval::make_func_eval<Degree>(sumCos<Input, Output>, a, b);
+    auto approx = poly_eval::make_func_eval<nCoeffsCt>(sumCos<Input, Output>, a, b);
 
     // 3) let nanobench call approx(x) repeatedly
     bench.run(label, [&] { ankerl::nanobench::doNotOptimizeAway(approx(x)); });
@@ -54,7 +54,7 @@ void benchEvalSingle(const std::string &label, ankerl::nanobench::Bench &bench) 
 // -----------------------------------------------------------------------------
 // Benchmark helper: time to construct (fit) the interpolant
 // -----------------------------------------------------------------------------
-template<std::size_t InDim, std::size_t OutDim, std::size_t Degree>
+template<std::size_t InDim, std::size_t OutDim, std::size_t nCoeffsCt>
 void benchBuildSingle(const std::string &label, ankerl::nanobench::Bench &bench) {
     using Input = std::array<double, InDim>;
     using Output = std::array<double, OutDim>;
@@ -65,7 +65,7 @@ void benchBuildSingle(const std::string &label, ankerl::nanobench::Bench &bench)
     b.fill(1.0);
 
     bench.run(label + " build", [&] {
-        ankerl::nanobench::doNotOptimizeAway(poly_eval::make_func_eval<Degree>(sumCos<Input, Output>, a, b));
+        ankerl::nanobench::doNotOptimizeAway(poly_eval::make_func_eval<nCoeffsCt>(sumCos<Input, Output>, a, b));
     });
 }
 

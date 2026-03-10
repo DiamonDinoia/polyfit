@@ -1,0 +1,41 @@
+PROJECT_NAME           = "polyfit"
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "Fast header-only polynomial fitting and evaluation (C++17/20)"
+OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/docs
+
+INPUT                  = @CMAKE_SOURCE_DIR@/include/polyfit/polyfit.hpp \
+                         @CMAKE_SOURCE_DIR@/include/polyfit/polyeval.hpp
+RECURSIVE              = NO
+EXCLUDE_PATTERNS       = */internal/*
+FILE_PATTERNS          = *.h *.hpp
+
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXCLUDE_SYMBOLS        = poly_eval::make_func_eval \
+                         poly_eval::make_func_eval_many \
+                         poly_eval::function_traits \
+                         std
+
+PREDEFINED             = PF_C20CONSTEXPR= \
+                         PF_ALWAYS_INLINE= \
+                         PF_NO_INLINE= \
+                         PF_RESTRICT= \
+                         __DOXYGEN__= \
+                         DOXYGEN_SHOULD_SKIP_THIS
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+
+BUILTIN_STL_SUPPORT    = YES
+HAVE_DOT               = NO

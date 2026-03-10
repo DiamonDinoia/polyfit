@@ -5,7 +5,7 @@
 #include <tuple>
 #include <vector>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 //------------------------------------------------------------------------------
 // Type-parameterized test suite for FuncEvalMany with group sizes
@@ -24,20 +24,20 @@ static double rand_uniform() {
 static double func(double x) { return std::cos(x); }
 
 // Helper to build a FuncEvalMany<N>
-template<std::size_t N, std::size_t... Is> auto make_group_impl(std::index_sequence<Is...>) {
+template<std::size_t N, std::size_t... Is> auto makeGroupImpl(std::index_sequence<Is...>) {
     const auto make_one = [] {
         return poly_eval::make_func_eval(func, 16, -1.0, 1.0);
     };
     return poly_eval::make_func_eval_many((static_cast<void>(Is), make_one())...);
 }
-template<std::size_t N> auto make_group() { return make_group_impl<N>(std::make_index_sequence<N>{}); }
+template<std::size_t N> auto makeGroup() { return makeGroupImpl<N>(std::make_index_sequence<N>{}); }
 
 // Test fixture: N is captured via integral_constant
 template<typename IC> class FastEvalManyTest : public ::testing::Test {
   public:
     static constexpr std::size_t N = IC::value;
-    using Group = decltype(make_group<N>());
-    Group group = make_group<N>();
+    using Group = decltype(makeGroup<N>());
+    Group group = makeGroup<N>();
 };
 
 using GroupSizes = ::testing::Types<std::integral_constant<std::size_t, 2>, std::integral_constant<std::size_t, 3>,
@@ -45,10 +45,10 @@ using GroupSizes = ::testing::Types<std::integral_constant<std::size_t, 2>, std:
                                     std::integral_constant<std::size_t, 12>, std::integral_constant<std::size_t, 16>>;
 TYPED_TEST_SUITE(FastEvalManyTest, GroupSizes);
 
-// Introspection: size() and degree()
+// Introspection: size() and coefficient count
 TYPED_TEST(FastEvalManyTest, Introspection) {
     EXPECT_EQ(this->group.size(), this->N);
-    EXPECT_EQ(this->group.degree(), 16u);
+    EXPECT_EQ(this->group.nCoeffs(), 16u);
 }
 
 // Pointer overload, small batch (N points)
@@ -117,9 +117,9 @@ TYPED_TEST(FastEvalManyTest, Tuple) {
 // ----- SIMD constant assertions -----
 
 TEST(FuncEvalManySIMD, CorrectConstants) {
-    using Group2 = decltype(make_group<2>());
-    using Group3 = decltype(make_group<3>());
-    using Group5 = decltype(make_group<5>());
+    using Group2 = decltype(makeGroup<2>());
+    using Group3 = decltype(makeGroup<3>());
+    using Group5 = decltype(makeGroup<5>());
 
     constexpr auto simd_w = xsimd::batch<double>::size;
 
@@ -127,24 +127,24 @@ TEST(FuncEvalManySIMD, CorrectConstants) {
     EXPECT_EQ(Group2::kSimd, simd_w);
     EXPECT_EQ(Group3::kSimd, simd_w);
 
-    // kF_pad should be kF rounded up to kSimd
-    EXPECT_EQ(Group2::kF_pad, ((2 + simd_w - 1) / simd_w) * simd_w);
-    EXPECT_EQ(Group3::kF_pad, ((3 + simd_w - 1) / simd_w) * simd_w);
-    EXPECT_EQ(Group5::kF_pad, ((5 + simd_w - 1) / simd_w) * simd_w);
+    // kFPad should be kF rounded up to kSimd
+    EXPECT_EQ(Group2::kFPad, ((2 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group3::kFPad, ((3 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group5::kFPad, ((5 + simd_w - 1) / simd_w) * simd_w);
 
-    // vector_width should equal kSimd
-    EXPECT_EQ(Group2::vector_width, simd_w);
+    // vectorWidth should equal kSimd
+    EXPECT_EQ(Group2::vectorWidth, simd_w);
 }
 
 // ----- FuncEvalMany truncation tests -----
 
 TEST(FuncEvalManyTruncate, BasicTruncation) {
-    auto group = make_group<4>();
-    EXPECT_EQ(group.degree(), 16u);
+    auto group = makeGroup<4>();
+    EXPECT_EQ(group.nCoeffs(), 16u);
 
-    // Truncate with a generous threshold — should reduce degree
+    // Truncate with a generous threshold — should reduce the coefficient count
     group.truncate(1e-8);
-    EXPECT_LE(group.degree(), 16u);
+    EXPECT_LE(group.nCoeffs(), 16u);
 
     // Verify accuracy is maintained
     double x = 0.3;
@@ -154,7 +154,7 @@ TEST(FuncEvalManyTruncate, BasicTruncation) {
 }
 
 TEST(FuncEvalManyTruncate, PreservesAccuracy) {
-    auto group = make_group<3>();
+    auto group = makeGroup<3>();
 
     // Truncate with a tight threshold
     group.truncate(1e-14);
@@ -170,8 +170,8 @@ TEST(FuncEvalManyTruncate, PreservesAccuracy) {
 // Non-SIMD-multiple sizes should still work correctly with padding
 TEST(FuncEvalManySIMD, NonMultipleSizes) {
     // Size 3 and 5 are not multiples of typical SIMD widths (2 or 4)
-    auto group3 = make_group<3>();
-    auto group5 = make_group<5>();
+    auto group3 = makeGroup<3>();
+    auto group5 = makeGroup<5>();
 
     double x = 0.42;
     auto out3 = group3(x);

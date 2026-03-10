@@ -15,47 +15,50 @@ namespace polyfit::internal::helpers {
 
 // Scalar mapping to canonical domain [-1,1]
 template<class ArgT, class ScalarT>
-PF_ALWAYS_INLINE constexpr ArgT map_to_domain_scalar(const ArgT arg, const ScalarT low, const ScalarT hi) noexcept {
+constexpr ArgT map_to_domain_scalar(const ArgT arg, const ScalarT inv_span, const ScalarT sum_endpoints) noexcept {
     if constexpr (std::is_arithmetic_v<ArgT>) {
-        return static_cast<ArgT>(ArgT(0.5) * ((arg / static_cast<ArgT>(low)) + static_cast<ArgT>(hi)));
+        return static_cast<ArgT>(ArgT(0.5) *
+                                 ((arg / static_cast<ArgT>(inv_span)) + static_cast<ArgT>(sum_endpoints)));
     } else {
-        return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(low)) + ArgT(hi)));
+        return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(inv_span)) + ArgT(sum_endpoints)));
     }
 }
 
 // Scalar/batch mapping from canonical domain back to original
 template<class ArgT, class ScalarT>
-PF_ALWAYS_INLINE constexpr ArgT map_from_domain_scalar(const ArgT arg, const ScalarT low, const ScalarT hi) noexcept {
-    return poly_eval::detail::fma(ArgT(2), arg, -ArgT(hi)) * ArgT(low);
+PF_ALWAYS_INLINE constexpr ArgT map_from_domain_scalar(const ArgT arg, const ScalarT inv_span,
+                                                       const ScalarT sum_endpoints) noexcept {
+    return poly_eval::detail::fma(ArgT(2), arg, -ArgT(sum_endpoints)) * ArgT(inv_span);
 }
 
 // Array (std::array) mapping overloads
 template<class T, std::size_t N>
-PF_ALWAYS_INLINE constexpr std::array<T, N> map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &low,
-                                                                const std::array<T, N> &hi) noexcept {
+constexpr std::array<T, N> map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &inv_span,
+                                               const std::array<T, N> &sum_endpoints) noexcept {
     std::array<T, N> out{};
     for (std::size_t d = 0; d < N; ++d) {
-        out[d] = map_to_domain_scalar<T, T>(t[d], low[d], hi[d]);
+        out[d] = map_to_domain_scalar<T, T>(t[d], inv_span[d], sum_endpoints[d]);
     }
     return out;
 }
 
 template<class T, std::size_t N>
 PF_ALWAYS_INLINE constexpr std::array<T, N>
-map_from_domain_array(const std::array<T, N> &x, const std::array<T, N> &low, const std::array<T, N> &hi) noexcept {
+map_from_domain_array(const std::array<T, N> &x, const std::array<T, N> &inv_span,
+                      const std::array<T, N> &sum_endpoints) noexcept {
     std::array<T, N> out{};
     for (std::size_t d = 0; d < N; ++d) {
-        out[d] = map_from_domain_scalar<T, T>(x[d], low[d], hi[d]);
+        out[d] = map_from_domain_scalar<T, T>(x[d], inv_span[d], sum_endpoints[d]);
     }
     return out;
 }
 
 template<class T, std::size_t N>
-PF_ALWAYS_INLINE constexpr void compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
-                                                      std::array<T, N> &low, std::array<T, N> &high) noexcept {
+constexpr void compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
+                                     std::array<T, N> &inv_span, std::array<T, N> &sum_endpoints) noexcept {
     for (std::size_t dim = 0; dim < N; ++dim) {
-        low[dim] = T(1) / (to[dim] - from[dim]);
-        high[dim] = (to[dim] + from[dim]);
+        inv_span[dim] = T(1) / (to[dim] - from[dim]);
+        sum_endpoints[dim] = (to[dim] + from[dim]);
     }
 }
 
@@ -65,7 +68,7 @@ PF_ALWAYS_INLINE constexpr void compute_scaling_array(const std::array<T, N> &fr
 namespace eft {
 
 // twoSum: s + e = a + b exactly (Knuth/Moller)
-template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
+template<class T> constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
     T s = a + b;
     T v = s - a;
     return {s, (a - (s - v)) + (b - v)};
@@ -74,7 +77,7 @@ template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_sum(T a, T b) n
 // twoProd via FMA: p + e = a * b exactly
 // In constant-evaluated contexts std::fma is not constexpr on Clang (until C++26),
 // so drop the error term and return {a*b, 0} for compile-time polynomial fitting.
-template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
+template<class T> constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
     T p = a * b;
     PF_IF_CONSTEVAL { return {p, T(0)}; }
     return {p, std::fma(a, b, -p)};
@@ -84,7 +87,7 @@ template<class T> PF_ALWAYS_INLINE constexpr std::pair<T, T> two_prod(T a, T b) 
 
 //------------------------------------------------------------------------------
 // Fuse linear domain mapping into polynomial coefficients (in-place).
-// Given polynomial p(t) in Horner order (highest degree first), computes
+// Given polynomial p(t) in Horner order (highest-order term first), computes
 // q(x) = p(alpha*x + beta) so that evaluation no longer needs per-point mapping.
 //
 // Uses compensated (error-free) arithmetic in the Taylor shift and alpha scaling

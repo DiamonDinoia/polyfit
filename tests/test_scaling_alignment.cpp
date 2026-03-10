@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 using std::size_t;
 
@@ -17,7 +17,7 @@ TEST(HornerMany, ScalingPerPoly) {
     using T = double;
     constexpr size_t M = 2, N = 3; // two polynomials, quadratic
 
-    // Define coefficients in reversed order per polynomial: [c2, c1, c0]
+    // Define coefficients in highest-order-first layout per polynomial: [c2, c1, c0]
     // p0(t) = 1 + 2 t + 3 t^2
     // p1(t) = -1 + 0.5 t
     T coeffs[M * N] = {

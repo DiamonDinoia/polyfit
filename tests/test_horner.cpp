@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 #include <poet/poet.hpp>
 
@@ -50,7 +50,7 @@ template<size_t Dim> auto multi_indices(size_t Deg) {
     return out;
 }
 
-// Vandermonde baseline with reversed-degree layout
+// Vandermonde baseline with highest-order-first coefficient layout
 template<typename T, size_t Dim>
 std::array<T, Dim> vander_eval(const std::array<T, Dim> &x, const std::vector<T> &coeffs, size_t Deg) {
     auto monoms = multi_indices<Dim>(Deg);

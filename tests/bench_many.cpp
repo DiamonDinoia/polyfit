@@ -3,21 +3,21 @@
 #include <random>
 #include <vector>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 // Helper to build a FuncEvalMany with N identical sin evaluators
-template<std::size_t N, std::size_t... Is> static auto make_group_impl(std::index_sequence<Is...>) {
-    auto make_one = [] {
+template<std::size_t N, std::size_t... Is> static auto makeGroupImpl(std::index_sequence<Is...>) {
+    auto makeOne = [] {
         return poly_eval::make_func_eval([](double x) { return std::sin(x); }, 16, -1.0, 1.0);
     };
-    return poly_eval::make_func_eval_many((static_cast<void>(Is), make_one())...);
+    return poly_eval::make_func_eval_many((static_cast<void>(Is), makeOne())...);
 }
 
-template<std::size_t N> static auto make_group() { return make_group_impl<N>(std::make_index_sequence<N>{}); }
+template<std::size_t N> static auto makeGroup() { return makeGroupImpl<N>(std::make_index_sequence<N>{}); }
 
 // Benchmark the “many” (tuple-packed) version
-template<std::size_t N> static void bench_group(const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
-    auto group = make_group<N>();
+template<std::size_t N> static void benchGroup(const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
+    auto group = makeGroup<N>();
     bench.run(std::to_string(N) + " funcs", [&] {
         for (double x : pts) {
             auto tup = group(x);
@@ -27,19 +27,18 @@ template<std::size_t N> static void bench_group(const std::vector<double> &pts, 
 }
 
 // Helper to build an array of N independent sin evaluators
-template<std::size_t N, std::size_t... Is> static auto make_funcs_impl(std::index_sequence<Is...>) {
-    auto make_one = [] {
+template<std::size_t N, std::size_t... Is> static auto makeFuncsImpl(std::index_sequence<Is...>) {
+    auto makeOne = [] {
         return poly_eval::make_func_eval([](double x) { return std::sin(x); }, 16, -1.0, 1.0);
     };
-    // build std::array of N copies
-    return std::array{(static_cast<void>(Is), make_one())...};
+    return std::array{(static_cast<void>(Is), makeOne())...};
 }
 
-template<std::size_t N> static auto make_funcs() { return make_funcs_impl<N>(std::make_index_sequence<N>{}); }
+template<std::size_t N> static auto makeFuncs() { return makeFuncsImpl<N>(std::make_index_sequence<N>{}); }
 
 // Benchmark the “non-many” version: loop over each func and eval x
-template<std::size_t N> static void bench_non_many(const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
-    auto funcs = make_funcs<N>();
+template<std::size_t N> static void benchNonMany(const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
+    auto funcs = makeFuncs<N>();
     bench.run(std::to_string(N) + " funcs (non-many)", [&] {
         for (double x : pts) {
             for (auto &f : funcs) {
@@ -50,20 +49,19 @@ template<std::size_t N> static void bench_non_many(const std::vector<double> &pt
     });
 }
 
-// Compile-time dispatcher up to MaxN, invoking both benchmarks
-template<std::size_t MaxN>
-static bool dispatch(std::size_t n, const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
-    if constexpr (MaxN == 0) {
+// Compile-time dispatcher up to MaxNCoeffs, invoking both benchmarks
+template<std::size_t MaxNCoeffs>
+static bool dispatchBySize(std::size_t nCoeffs, const std::vector<double> &pts, ankerl::nanobench::Bench &bench) {
+    if constexpr (MaxNCoeffs == 0) {
         return false;
     } else {
-        if (n == MaxN) {
+        if (nCoeffs == MaxNCoeffs) {
             // tuple-packed “many” version
-            bench_group<MaxN>(pts, bench);
-            // simple array-iteration version
-            bench_non_many<MaxN>(pts, bench);
+            benchGroup<MaxNCoeffs>(pts, bench);
+            benchNonMany<MaxNCoeffs>(pts, bench);
             return true;
         }
-        return dispatch<MaxN - 1>(n, pts, bench);
+        return dispatchBySize<MaxNCoeffs - 1>(nCoeffs, pts, bench);
     }
 }
 
@@ -84,8 +82,8 @@ int main(int /*argc*/, char ** /*argv*/) {
         .batch(num_points);
 
     // 3. run benchmarks for N = 1 .. 16
-    for (std::size_t n = 1; n <= 16; ++n) {
-        dispatch<16>(n, pts, bench); // always succeeds for 1–16
+    for (std::size_t nCoeffs = 1; nCoeffs <= 16; ++nCoeffs) {
+        dispatchBySize<16>(nCoeffs, pts, bench); // always succeeds for 1–16
     }
 
     return 0;

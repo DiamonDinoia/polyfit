@@ -23,7 +23,7 @@ namespace poly_eval {
  * @tparam OutputType Output value type.
  * @tparam InputType Input value type.
  * @param x The input value at which to evaluate the polynomial.
- * @param c_ptr Pointer to the coefficients array (reversed order: highest degree first).
+ * @param c_ptr Pointer to the coefficients array (highest-order term first).
  * @param c_size Number of coefficients (used if N_total == 0).
  * @return The evaluated polynomial value at x.
  */
@@ -33,7 +33,7 @@ PF_ALWAYS_INLINE constexpr OutputType horner(InputType xin, const OutputType *c_
 /**
  * @brief Evaluate a polynomial at multiple points using SIMD-accelerated Horner's method.
  *
- * Coefficients are in reversed order (highest degree first).
+ * Coefficients are in Horner order (highest-order term first).
  *
  * @tparam N_monomials Compile-time number of monomials (0 for runtime).
  * @tparam pts_aligned Whether input points are SIMD-aligned.
@@ -45,7 +45,7 @@ PF_ALWAYS_INLINE constexpr OutputType horner(InputType xin, const OutputType *c_
  * @param pts Pointer to input points array.
  * @param out Pointer to output array.
  * @param num_points Number of points to evaluate.
- * @param monomials Pointer to coefficients array (reversed order).
+ * @param monomials Pointer to coefficients array (highest-order term first).
  * @param monomials_size Number of coefficients.
  * @param map_func Function to map/transform each input point (default: identity).
  */
@@ -98,17 +98,17 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
 /**
  * @brief Evaluate a multivariate polynomial using N-dimensional Horner's method.
  *
- * @tparam DegCT Compile-time degree (0 for runtime).
+ * @tparam NCoeffsCt Compile-time coefficient count (0 for runtime).
  * @tparam OutT Output type (e.g., scalar or std::array).
  * @tparam InVec Input vector type (e.g., std::array).
  * @tparam Mdspan Coefficient tensor type (e.g., mdspan).
  * @param x Input vector of variables.
  * @param coeffs Coefficient tensor (last dimension is output dimension).
- * @param deg_rt Runtime degree (used if DegCT == 0).
+ * @param nCoeffsRt Runtime coefficient count (used if NCoeffsCt == 0).
  * @return Evaluated polynomial value(s).
  */
-template<std::size_t DegCT = 0, bool SIMD = true, typename OutT, typename InVec, typename Mdspan>
-PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt);
+template<std::size_t NCoeffsCt = 0, bool SIMD = true, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int nCoeffsRt);
 
 //------------------------------------------------------------------------------
 // detail namespace
@@ -136,9 +136,9 @@ struct scalar_t {};
 struct simd_t {};
 
 // Scalar overload — fully constexpr (no xsimd types)
-template<std::size_t Level, std::size_t Dim, std::size_t DegCT, typename OutT, typename InVec, typename Mdspan>
+template<std::size_t Level, std::size_t Dim, std::size_t NCoeffsCt, typename OutT, typename InVec, typename Mdspan>
 PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(scalar_t, const InVec &x, const Mdspan &coeffs,
-                                               std::array<std::size_t, Dim> &idx, int deg_rt) {
+                                               std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT = std::tuple_size_v<OutT>;
 
@@ -149,7 +149,7 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(scalar_t, const InVec &x, const M
 
         OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, DegCT, OutT>(scalar_t{}, x, coeffs, idx, deg_rt);
+            inner = horner_nd_impl<Level - 1, Dim, NCoeffsCt, OutT>(scalar_t{}, x, coeffs, idx, nCoeffsRt);
         } else {
             poet::static_for<OUT>([&](auto i) { inner[i] = detail::call_coeffs<Dim>(coeffs, idx, i); });
         }
@@ -157,18 +157,18 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(scalar_t, const InVec &x, const M
         poet::static_for<OUT>([&](auto i) { res[i] = std::fma(res[i], x[axis], inner[i]); });
     };
 
-    if constexpr (DegCT != 0) {
-        poet::static_for<DegCT>([&](auto k) { step(k); });
+    if constexpr (NCoeffsCt != 0) {
+        poet::static_for<NCoeffsCt>([&](auto k) { step(k); });
     } else {
-        for (int k = 0; k < deg_rt; ++k) step(static_cast<std::size_t>(k));
+        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
     }
     return res;
 }
 
 // SIMD overload — uses xsimd batch operations
-template<std::size_t Level, std::size_t Dim, std::size_t DegCT, typename OutT, typename InVec, typename Mdspan>
+template<std::size_t Level, std::size_t Dim, std::size_t NCoeffsCt, typename OutT, typename InVec, typename Mdspan>
 PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs, std::array<std::size_t, Dim> &idx,
-                                     int deg_rt) {
+                                     int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT = std::tuple_size_v<OutT>;
 
@@ -181,7 +181,7 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeff
         idx[axis] = k;
         alignas(batch::arch_type::alignment()) OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, DegCT, OutT>(simd_t{}, x, coeffs, idx, deg_rt);
+            inner = horner_nd_impl<Level - 1, Dim, NCoeffsCt, OutT>(simd_t{}, x, coeffs, idx, nCoeffsRt);
         } else {
             poet::static_for<OUT>([&](auto i) { inner[i] = call_coeffs<Dim>(coeffs, idx, i); });
         }
@@ -196,10 +196,10 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeff
         });
     };
 
-    if constexpr (DegCT != 0) {
-        poet::static_for<DegCT>([&](auto k) { step(k); });
+    if constexpr (NCoeffsCt != 0) {
+        poet::static_for<NCoeffsCt>([&](auto k) { step(k); });
     } else {
-        for (int k = 0; k < deg_rt; ++k) step(static_cast<std::size_t>(k));
+        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
     }
     return res;
 }
@@ -212,13 +212,11 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeff
 
 // Real overload (general OutputType)
 template<std::size_t N_total = 0, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr OutputType compensated_horner(InputType x, const OutputType *c_ptr,
-                                                         std::size_t c_size = 0) noexcept;
+constexpr OutputType compensated_horner(InputType x, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
 
 // Complex overload (more specialized, preferred by partial ordering)
 template<std::size_t N_total = 0, typename T, typename InputType>
-PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(InputType x, const std::complex<T> *c_ptr,
-                                                              std::size_t c_size = 0) noexcept;
+constexpr std::complex<T> compensated_horner(InputType x, const std::complex<T> *c_ptr, std::size_t c_size = 0) noexcept;
 
 } // namespace poly_eval
 
@@ -263,8 +261,7 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
 
 // Real overload
 template<std::size_t N_total, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr OutputType compensated_horner(const InputType x, const OutputType *c_ptr,
-                                                         const std::size_t c_size) noexcept {
+constexpr OutputType compensated_horner(const InputType x, const OutputType *c_ptr, const std::size_t c_size) noexcept {
     namespace eft = polyfit::internal::helpers::eft;
     const std::size_t n = N_total != 0 ? N_total : c_size;
     OutputType acc = c_ptr[0];
@@ -280,8 +277,7 @@ PF_ALWAYS_INLINE constexpr OutputType compensated_horner(const InputType x, cons
 
 // Complex overload: component-wise compensation
 template<std::size_t N_total, typename T, typename InputType>
-PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(const InputType x, const std::complex<T> *c_ptr,
-                                                              const std::size_t c_size) noexcept {
+constexpr std::complex<T> compensated_horner(const InputType x, const std::complex<T> *c_ptr, const std::size_t c_size) noexcept {
     namespace eft = polyfit::internal::helpers::eft;
     const std::size_t n = N_total != 0 ? N_total : c_size;
     T acc_re = c_ptr[0].real(), acc_im = c_ptr[0].imag();
@@ -302,7 +298,7 @@ PF_ALWAYS_INLINE constexpr std::complex<T> compensated_horner(const InputType x,
 }
 
 //------------------------------------------------------------------------------
-// SIMD Horner (coeffs reversed)
+// SIMD Horner
 //------------------------------------------------------------------------------
 
 template<std::size_t N_monomials, bool pts_aligned, bool out_aligned, int UNROLL, typename InputType,
@@ -484,12 +480,12 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
 // ND Horner front-end
 //------------------------------------------------------------------------------
 
-template<std::size_t DegCT, bool SIMD, typename OutT, typename InVec, typename Mdspan>
-PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int deg_rt) {
+template<std::size_t NCoeffsCt, bool SIMD, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int nCoeffsRt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
-    return detail::horner_nd_impl<Dim, Dim, DegCT, OutT>(std::conditional_t<SIMD, detail::simd_t, detail::scalar_t>{},
-                                                         x, coeffs, idx, deg_rt);
+    return detail::horner_nd_impl<Dim, Dim, NCoeffsCt, OutT>(
+        std::conditional_t<SIMD, detail::simd_t, detail::scalar_t>{}, x, coeffs, idx, nCoeffsRt);
 }
 
 } // namespace poly_eval

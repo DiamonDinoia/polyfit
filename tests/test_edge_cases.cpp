@@ -4,7 +4,7 @@
 #include <limits>
 #include <vector>
 
-#include "polyfit/fast_eval.hpp"
+#include "polyfit/polyfit.hpp"
 
 // --------------------------------------------------------------------------
 // Edge cases: batch evaluation with num_points=0 and num_points=1
@@ -35,15 +35,12 @@ TEST(EdgeCases, BatchEvalSinglePoint) {
 // --------------------------------------------------------------------------
 
 TEST(EdgeCases, DegenerateDomainAEqualsB) {
-    // When a == b the domain mapping involves division by zero (1/(b-a)).
-    // The evaluator constructs but produces Inf/NaN on evaluation.
     auto identity = [](double x) {
         return x;
     };
-    auto poly = poly_eval::make_func_eval(identity, 4, 1.0, 1.0);
-    const double result = poly(1.0);
-    EXPECT_TRUE(std::isinf(result) || std::isnan(result))
-        << "Expected inf or NaN for degenerate domain, got " << result;
+    EXPECT_THROW((void)poly_eval::make_func_eval(identity, 4, 1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::make_func_eval<4>(identity, 1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::make_func_eval(identity, 1e-6, 1.0, 1.0), std::invalid_argument);
 }
 
 // --------------------------------------------------------------------------

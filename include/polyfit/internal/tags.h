@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 
 namespace poly_eval {
@@ -8,7 +9,7 @@ namespace poly_eval {
 // ---------------------------------------------------------------------------
 // Fusion control
 // ---------------------------------------------------------------------------
-enum class FusionMode { auto_, always, never };
+enum class FusionMode : std::uint8_t { auto_, always, never };
 
 struct fuse_auto   : std::integral_constant<FusionMode, FusionMode::auto_>  {};
 struct fuse_always : std::integral_constant<FusionMode, FusionMode::always> {};
@@ -18,8 +19,8 @@ struct fuse_never  : std::integral_constant<FusionMode, FusionMode::never>  {};
 // Value-carrying tags
 // ---------------------------------------------------------------------------
 template<std::size_t N> struct iters {};
-template<std::size_t N> struct max_degree {};
-template<std::size_t N> struct eval_pts {};
+template<std::size_t N> struct maxNCoeffs {};
+template<std::size_t N> struct evalPts {};
 
 namespace detail {
 
@@ -28,8 +29,8 @@ namespace detail {
 // ---------------------------------------------------------------------------
 template<class T> struct is_polyfit_tag : std::false_type {};
 template<std::size_t N> struct is_polyfit_tag<iters<N>> : std::true_type {};
-template<std::size_t N> struct is_polyfit_tag<max_degree<N>> : std::true_type {};
-template<std::size_t N> struct is_polyfit_tag<eval_pts<N>> : std::true_type {};
+template<std::size_t N> struct is_polyfit_tag<maxNCoeffs<N>> : std::true_type {};
+template<std::size_t N> struct is_polyfit_tag<evalPts<N>> : std::true_type {};
 template<> struct is_polyfit_tag<fuse_auto> : std::true_type {};
 template<> struct is_polyfit_tag<fuse_always> : std::true_type {};
 template<> struct is_polyfit_tag<fuse_never> : std::true_type {};
