@@ -5,16 +5,12 @@ include(PolyfitWarnings)
 include(PolyfitSanitizers)
 include(PolyfitStaticAnalysis)
 
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-std=c++20" COMPILER_SUPPORTS_CXX20)
-if (COMPILER_SUPPORTS_CXX20)
-    message(STATUS "Enabling C++20")
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-else()
-    message(WARNING "Compiler does NOT support C++20; using default C++ standard")
-endif()
+# Use CMake's native standard abstraction — it translates to the right flag
+# per compiler (/std:c++20 on MSVC, -std=c++20 on GCC/Clang).
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(COMPILER_SUPPORTS_CXX20 TRUE)
 
 # 1. List source files
 set(SOURCES

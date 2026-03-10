@@ -51,6 +51,7 @@ function(polyfit_enable_warnings target)
   set(_warnings_msvc
     /W4
     /permissive-
+    /Zc:__cplusplus  # report correct __cplusplus value instead of always 199711L
     /external:anglebrackets  # treat angle-bracket includes as external
     /external:W0             # suppress all warnings in external headers
     /wd4702  # unreachable code — false positive with if constexpr branches
