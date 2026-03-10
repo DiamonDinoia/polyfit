@@ -32,8 +32,8 @@ def parse_nanobench_text(text: str) -> list[dict]:
         # parts[0] is empty (before first |), parts[-1] is empty (after last |)
         parts = [p for p in parts if p != ""]
 
-        # Header row: contains "ns/op"
-        if "ns/op" in parts[0]:
+        # Header row: first cell starts with "ns/" (e.g. "ns/op", "ns/eval")
+        if parts[0].startswith("ns/"):
             header_seen = True
             continue
         if not header_seen:
