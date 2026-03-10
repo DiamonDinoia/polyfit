@@ -486,8 +486,7 @@ TEST(PolyEval, DirectDomainVsMappedAccuracy) {
     // Place Chebyshev nodes directly in [a, b]
     std::vector<double> nodes(N), samples(N);
     for (std::size_t k = 0; k < N; ++k) {
-        constexpr double kPi = 3.14159265358979323846;
-        double t = std::cos((2.0 * double(k) + 1.0) * kPi / (2.0 * double(N)));
+        double t = std::cos((2.0 * double(k) + 1.0) * poly_eval::detail::constants::pi / (2.0 * double(N)));
         nodes[k] = 0.5 * ((b - a) * t + (b + a)); // Chebyshev node in [a, b]
         samples[k] = func(nodes[k]);
     }
