@@ -2,3 +2,7 @@ cmake-*/
 build-*/
 .idea/
 build/
+
+# Generated files — produced at build time, not stored in the repo
+docs/api/
+include/polyfit/internal/polyfit_amalgamated.hpp
