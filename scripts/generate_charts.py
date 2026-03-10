@@ -57,44 +57,57 @@ def load_results(results_dir: Path) -> dict[str, dict[str, list[dict]]]:
     return data
 
 
-def _extract_numeric_label(name: str) -> float:
-    """Try to extract a leading number from a benchmark name (e.g. degree)."""
-    import re
-    m = re.search(r"\d+", name)
-    return float(m.group()) if m else float("nan")
+import re as _re
+
+
+def _ncoeffs(name: str) -> int:
+    m = _re.search(r"nCoeffs=(\d+)", name)
+    return int(m.group(1)) if m else 0
 
 
 def plot_horner_performance(data: dict, out_dir: Path) -> None:
-    """ns/op by benchmark variant for horner benches across cxx17/cxx20."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=False)
-    fig.suptitle("Horner Evaluation Performance", fontsize=14, fontweight="bold")
+    """Scalar vs SIMD-aligned Horner: ns/eval per point across coefficient counts."""
+    # Use cxx17 data; cxx17 and cxx20 results are indistinguishable at runtime.
+    bench_key = "bench_horner_cxx17"
+    compilers = [c for c in data if bench_key in data[c]]
+    if not compilers:
+        print("Skipping horner_performance: no data")
+        return
 
-    for ax, std in zip(axes, ["cxx17", "cxx20"]):
-        bench_key = f"bench_horner_{std}"
-        ax.set_title(f"C++{std[3:]}")
-        ax.set_xlabel("Benchmark")
-        ax.set_ylabel("ns / op")
+    variants = [
+        ("Scalar Horner",       lambda n: "scalar-runtime" in n),
+        ("SIMD Horner (aligned)", lambda n: "simd-aligned" in n),
+    ]
 
-        compilers = [c for c in data if bench_key in data[c]]
-        if not compilers:
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle("Horner Evaluation — ns / eval per point", fontsize=14, fontweight="bold")
+
+    for ax, (title, match) in zip(axes, variants):
+        first_rows = data[compilers[0]][bench_key]
+        names = sorted(
+            [r["name"] for r in first_rows if match(r["name"])],
+            key=_ncoeffs,
+        )
+        if not names:
             ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             continue
 
-        # Gather all benchmark names from first compiler
-        first = compilers[0]
-        names = [r["name"] for r in data[first][bench_key]]
-        x = np.arange(len(names))
-        width = 0.8 / max(len(compilers), 1)
+        labels = [f"N={_ncoeffs(n)}" for n in names]
+        x = np.arange(len(labels))
+        width = 0.8 / len(compilers)
 
         for i, compiler in enumerate(compilers):
-            rows = {r["name"]: r for r in data[compiler].get(bench_key, [])}
-            vals = [rows.get(n, {}).get("ns_per_op", float("nan")) for n in names]
+            rows_map = {r["name"]: r["ns_per_op"] for r in data[compiler].get(bench_key, [])}
+            vals = [rows_map.get(n, float("nan")) for n in names]
             color = COMPILER_COLORS.get(compiler, DEFAULT_COLORS[i % len(DEFAULT_COLORS)])
             ax.bar(x + i * width, vals, width, label=compiler, color=color, alpha=0.85)
 
+        ax.set_title(title)
+        ax.set_xlabel("Coefficient count")
+        ax.set_ylabel("ns / eval")
         ax.set_xticks(x + width * (len(compilers) - 1) / 2)
-        ax.set_xticklabels(names, rotation=45, ha="right", fontsize=8)
-        ax.legend(fontsize=8)
+        ax.set_xticklabels(labels, fontsize=10)
+        ax.legend(fontsize=9)
         ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
@@ -105,35 +118,53 @@ def plot_horner_performance(data: dict, out_dir: Path) -> None:
 
 
 def plot_fitting_performance(data: dict, out_dir: Path) -> None:
-    """Fitting time across compilers for 1D benches."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=False)
-    fig.suptitle("1D Fitting Performance", fontsize=14, fontweight="bold")
+    """Fitting and evaluation performance for the double type (cxx17)."""
+    bench_key = "bench1D_cxx17"
+    compilers = [c for c in data if bench_key in data[c]]
+    if not compilers:
+        print("Skipping fitting_performance: no data")
+        return
 
-    for ax, std in zip(axes, ["cxx17", "cxx20"]):
-        bench_key = f"bench1D_{std}"
-        ax.set_title(f"C++{std[3:]}")
-        ax.set_xlabel("Benchmark")
-        ax.set_ylabel("ns / op")
+    # Groups: (subplot title, y-label, name filter)
+    groups = [
+        ("Fitting (double)",    "ns / fit",  lambda n: n.startswith("double") and "fit" in n),
+        ("Evaluation (double)", "ns / eval", lambda n: n.startswith("double") and "eval" in n),
+    ]
+    # Short display labels
+    short = {
+        "double constexpr fit":      "constexpr",
+        "double coefficient-count fit": "fixed-N",
+        "double eps fit":            "eps",
+        "double eval":               "eval",
+        "double eval_many":          "eval_many",
+    }
 
-        compilers = [c for c in data if bench_key in data[c]]
-        if not compilers:
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle("1D Fitting and Evaluation — double", fontsize=14, fontweight="bold")
+
+    for ax, (title, ylabel, match) in zip(axes, groups):
+        first_rows = data[compilers[0]][bench_key]
+        names = [r["name"] for r in first_rows if match(r["name"])]
+        if not names:
             ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             continue
 
-        first = compilers[0]
-        names = [r["name"] for r in data[first][bench_key]]
-        x = np.arange(len(names))
-        width = 0.8 / max(len(compilers), 1)
+        labels = [short.get(n, n) for n in names]
+        x = np.arange(len(labels))
+        width = 0.8 / len(compilers)
 
         for i, compiler in enumerate(compilers):
-            rows = {r["name"]: r for r in data[compiler].get(bench_key, [])}
-            vals = [rows.get(n, {}).get("ns_per_op", float("nan")) for n in names]
+            rows_map = {r["name"]: r["ns_per_op"] for r in data[compiler].get(bench_key, [])}
+            vals = [rows_map.get(n, float("nan")) for n in names]
             color = COMPILER_COLORS.get(compiler, DEFAULT_COLORS[i % len(DEFAULT_COLORS)])
             ax.bar(x + i * width, vals, width, label=compiler, color=color, alpha=0.85)
 
+        ax.set_title(title)
+        ax.set_xlabel("Operation")
+        ax.set_ylabel(ylabel)
         ax.set_xticks(x + width * (len(compilers) - 1) / 2)
-        ax.set_xticklabels(names, rotation=45, ha="right", fontsize=8)
-        ax.legend(fontsize=8)
+        ax.set_xticklabels(labels, fontsize=10)
+        ax.legend(fontsize=9)
         ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
