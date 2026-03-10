@@ -5,34 +5,49 @@ include(PolyfitWarnings)
 include(PolyfitSanitizers)
 include(PolyfitStaticAnalysis)
 
-# Use CMake's native standard abstraction — it translates to the right flag
-# per compiler (/std:c++20 on MSVC, -std=c++20 on GCC/Clang).
-set(CMAKE_CXX_STANDARD 20)
+# Runtime examples need C++17. Compile-time examples need C++20.
+# Default to C++17; compiletime targets get CXX_STANDARD 20 set individually below.
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(COMPILER_SUPPORTS_CXX20 TRUE)
+
+# Canonical C++20 detection: CMake populates CMAKE_CXX_COMPILE_FEATURES per
+# compiler without requiring compiler-specific flags like -std=c++20 or /std:c++20.
+if("cxx_std_20" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+    set(COMPILER_SUPPORTS_CXX20 TRUE)
+else()
+    set(COMPILER_SUPPORTS_CXX20 FALSE)
+    message(STATUS "Compiler does not support C++20; compile-time examples will be skipped")
+endif()
 
 # 1. List source files
 set(SOURCES
         runtime_1D_fixed.cpp
         runtime_1D_eps.cpp
-        compiletime_1D_fixed.cpp
         runtime_ND_fixed.cpp
         runtime_ND_eps.cpp
         many_polys_example.cpp
 )
-# The constexpr eps overload uses a GCC extension (function parameter in
-# if-constexpr condition) that Clang and MSVC reject.
-if (COMPILER_SUPPORTS_CXX20 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    list(APPEND SOURCES compiletime_1D_eps.cpp)
+set(SOURCES_CXX20)
+if(COMPILER_SUPPORTS_CXX20)
+    list(APPEND SOURCES_CXX20 compiletime_1D_fixed.cpp)
+    # The constexpr eps overload uses a GCC extension (function parameter in
+    # if-constexpr condition) that Clang and MSVC reject.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        list(APPEND SOURCES_CXX20 compiletime_1D_eps.cpp)
+    endif()
 endif()
 
 # 2. Generate one executable target per source, collect their names:
 set(EXAMPLE_TARGETS "")
-foreach(src IN LISTS SOURCES)
+foreach(src IN LISTS SOURCES SOURCES_CXX20)
     get_filename_component(name ${src} NAME_WE)
     add_executable(${name} ${src})
     target_link_libraries(${name} PRIVATE polyfit::polyfit)
+    if(src IN_LIST SOURCES_CXX20)
+        set_property(TARGET ${name} PROPERTY CXX_STANDARD 20)
+        set_property(TARGET ${name} PROPERTY CXX_STANDARD_REQUIRED ON)
+    endif()
     if (POLYFIT_STRICT_WARNINGS)
         polyfit_enable_warnings(${name})
     endif ()
