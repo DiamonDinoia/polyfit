@@ -129,27 +129,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Copy generated results to a temp dir
-          mkdir -p /tmp/bench-publish
-          cp -r benchmark-results/. /tmp/bench-publish/
+          # Build a fresh orphan commit and force-push to benchmark-results.
+          # Using a temp branch avoids ambiguity between the benchmark-results/
+          # output directory and the benchmark-results remote branch.
+          git checkout --orphan _bench_publish
+          git rm -rf . 2>/dev/null || true
 
-          # Switch to orphan branch (create if not exists)
-          if git ls-remote --exit-code origin benchmark-results; then
-            git fetch origin benchmark-results
-            git checkout benchmark-results
-            git pull --ff-only origin benchmark-results || true
-          else
-            git checkout --orphan benchmark-results
-            git rm -rf .
-          fi
-
-          # Copy results in
-          cp -r /tmp/bench-publish/. .
+          cp -r benchmark-results/. .
 
           git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to benchmark results."
-          else
-            git commit -m "chore: update benchmark results [skip ci]"
-            git push origin benchmark-results
-          fi
+          git commit -m "chore: update benchmark results [skip ci]"
+          git push origin HEAD:benchmark-results --force
