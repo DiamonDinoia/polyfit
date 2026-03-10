@@ -52,6 +52,162 @@ This document summarizes the public API of polyfit and the responsibilities of t
     - nCoeffs() — current shared coefficient count
     - truncate(eps) — delegates to each packed evaluator's truncate(eps)
 
+## Configuration tags
+
+All `make_func_eval` overloads accept an optional, order-independent pack of
+tag arguments after the domain endpoints. Tags customise fitting behaviour
+without changing the function signature.
+
+```cpp
+// Any subset, any order:
+auto poly = poly_eval::make_func_eval(f, nCoeffs, a, b,
+    poly_eval::iters<2>{},
+    poly_eval::fuse_never{});
+```
+
+### `iters<N>` — iterative refinement passes
+
+**Default:** `iters<1>`
+
+Each pass re-evaluates the current polynomial at the Chebyshev nodes using
+compensated Horner, computes residuals `f(xᵢ) − p(xᵢ)`, fits a correction
+polynomial to those residuals, and adds it to the coefficients. This converges
+the fit toward machine precision when the initial Björck–Pereyra solve leaves a
+non-trivial residual (typically at high polynomial degree or near-degenerate
+domains).
+
+For `nCoeffs > 32` two extra passes are added automatically regardless of `N`,
+because compensated residuals are needed to prevent divergence at high degree.
+
+| Coefficient count | Recommended `N` |
+|---|---|
+| ≤ 40 | 1 (default) |
+| 40 – 80 | 2 |
+| 80 – 128 | 3 |
+
+```cpp
+// High-degree fit: more refinement passes
+auto poly = poly_eval::make_func_eval(f, 64, -1.0, 1.0,
+    poly_eval::iters<3>{});
+```
+
+---
+
+### `maxNCoeffs<N>` — search limit for the epsilon overload
+
+**Default:** `maxNCoeffs<32>`
+**Applies to:** `make_func_eval(f, eps, a, b, ...)` only.
+
+The epsilon overload tries coefficient counts 1, 2, … up to `N` and returns
+the first evaluator whose maximum error on the evaluation grid is within `eps`.
+If no count satisfies the bound, it returns the evaluator with the smallest
+observed error.
+
+Increase `N` when the default ceiling of 32 is not enough to reach the target
+accuracy. Decrease it to cap runtime cost when an approximate fit is acceptable.
+
+```cpp
+// Allow up to 64 coefficients to hit 1e-14 error
+auto poly = poly_eval::make_func_eval(f, 1e-14, -1.0, 1.0,
+    poly_eval::maxNCoeffs<64>{});
+```
+
+---
+
+### `evalPts<N>` — error-checking grid size for the epsilon overload
+
+**Default:** `evalPts<100>`
+**Applies to:** `make_func_eval(f, eps, a, b, ...)` only.
+
+The epsilon overload checks the fitted polynomial against `N` equispaced points
+in `[a, b]` to estimate the approximation error. The default of 100 is
+sufficient for smooth functions. Increase it for functions with sharp features
+that might be missed by a coarse grid.
+
+```cpp
+// Dense grid to catch a near-discontinuity
+auto poly = poly_eval::make_func_eval(f, 1e-8, -1.0, 1.0,
+    poly_eval::evalPts<500>{},
+    poly_eval::maxNCoeffs<48>{});
+```
+
+---
+
+### `fuse_auto` / `fuse_always` / `fuse_never` — domain fusion
+
+**Default:** `fuse_auto`
+
+Domain fusion bakes the linear mapping `[a, b] → [−1, 1]` directly into the
+polynomial coefficients at construction time. The evaluator stores the
+transformed polynomial `q(x) = p(α·x + β)` so that evaluating at a point `x`
+requires no per-point division or affine operation — just the Horner recurrence
+on `x` directly.
+
+| Tag | Behaviour |
+|---|---|
+| `fuse_auto` | Fuse when the domain's condition number is small enough to avoid coefficient blow-up (see below). |
+| `fuse_always` | Always fuse, regardless of numerical properties. |
+| `fuse_never` | Never fuse; apply the domain mapping at every evaluation point. |
+
+**When `fuse_auto` decides to fuse** — it checks:
+
+```
+cond = |α| + |β| + 1   (where α = 2/(b−a), β = −(b+a)/(b−a))
+fuse  iff  (nCoeffs − 1) · log₁₀(cond) < digits₁₀(T) − 3
+```
+
+For double this threshold is roughly `log₁₀(cond) < 12 / (nCoeffs − 1)`.
+Narrow domains near `[−1, 1]` almost always fuse; wide or heavily offset
+domains (e.g. `[1000, 2000]`) may not fuse at high degree.
+
+**When to override:**
+
+Use `fuse_never` when:
+- The domain is wide or offset and you intend to call `truncate(eps)` after
+  fitting — fusion changes coefficient magnitudes and makes the truncation
+  threshold meaningless relative to the original polynomial scale.
+- You need reproducible coefficients independent of domain scaling.
+
+Use `fuse_always` when:
+- The domain is narrow (e.g. `[−0.1, 0.1]`) and you want to guarantee zero
+  per-point overhead even for small `nCoeffs` where `auto` might not fuse.
+
+```cpp
+// Wide offset domain: let auto decide (will likely skip fusion)
+auto poly1 = poly_eval::make_func_eval(f, 12, 1000.0, 2000.0);
+
+// Force no fusion — preserve coefficient scale for truncation
+auto poly2 = poly_eval::make_func_eval(f, 12, 1000.0, 2000.0,
+    poly_eval::fuse_never{});
+poly2.truncate(1e-10);
+
+// Force fusion on a narrow domain where auto might hedge
+auto poly3 = poly_eval::make_func_eval<16>(f, -0.1, 0.1,
+    poly_eval::fuse_always{});
+```
+
+---
+
+### Combining tags
+
+All tags are order-independent and composable:
+
+```cpp
+auto poly = poly_eval::make_func_eval(f, 1e-12, -1.0, 1.0,
+    poly_eval::maxNCoeffs<64>{},
+    poly_eval::evalPts<200>{},
+    poly_eval::iters<2>{},
+    poly_eval::fuse_never{});
+```
+
+Tags also work with the compile-time overload:
+
+```cpp
+auto poly = poly_eval::make_func_eval<32>(f, -1.0, 1.0,
+    poly_eval::iters<2>{},
+    poly_eval::fuse_always{});
+```
+
 ## Config / macros
 
 Macros used by the implementation are internal. See include/polyfit/internal/macros.h for internal definitions (these are not part of the public API):

@@ -135,6 +135,31 @@ int main() {
 }
 ```
 
+### Customising fitting behaviour with tags
+
+All `make_func_eval` overloads accept optional tag arguments (in any order)
+after the domain endpoints:
+
+| Tag | Default | Effect |
+|---|---|---|
+| `iters<N>` | `iters<1>` | Iterative refinement passes. Increase to 2–3 for high-degree fits (≥ 40 coefficients). |
+| `maxNCoeffs<N>` | `maxNCoeffs<32>` | Upper bound on coefficient count searched by the epsilon overload. |
+| `evalPts<N>` | `evalPts<100>` | Error-checking grid size used by the epsilon overload. |
+| `fuse_auto` | ✓ default | Bake domain mapping into coefficients when numerically safe. |
+| `fuse_always` | | Always bake domain mapping into coefficients (zero per-point overhead). |
+| `fuse_never` | | Never bake; apply mapping at every evaluation point. |
+
+```cpp
+// High-degree fit with tight error target and explicit options
+auto poly = poly_eval::make_func_eval(f, 1e-12, -1.0, 1.0,
+    poly_eval::maxNCoeffs<64>{},   // search up to degree 64
+    poly_eval::evalPts<200>{},     // dense error-check grid
+    poly_eval::iters<2>{},         // two refinement passes
+    poly_eval::fuse_never{});      // keep coefficients in original scale
+```
+
+See [docs/API.md](docs/API.md) for full details on each tag.
+
 More examples: `examples/`
 
 Full API reference: [docs/API.md](docs/API.md)
