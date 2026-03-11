@@ -20,8 +20,8 @@ TEST(Utils, BjorckNewtonRoundtrip) {
     bx_buf.assign(nodes.begin(), nodes.end());
     by_buf.assign(values.begin(), values.end());
 
-    auto newton = detail::bjorck_pereyra<0, X, Y>(bx_buf, by_buf);
-    auto mono = detail::newton_to_monomial<0, X, Y>(newton, bx_buf);
+    auto newton = detail::bjorckPereyra<0, X, Y>(bx_buf, by_buf);
+    auto mono = detail::newtonToMonomial<0, X, Y>(newton, bx_buf);
 
     // Evaluate monomial coefficients at original nodes and compare
     for (std::size_t i = 0; i < nodes.size(); ++i) {
@@ -64,8 +64,8 @@ TEST(Utils, BjorckNewtonHighDegreeAccuracy) {
         values[i] = val;
     }
 
-    auto newton = detail::bjorck_pereyra<0, double, double>(nodes, values);
-    auto mono = detail::newton_to_monomial<0, double, double>(newton, nodes);
+    auto newton = detail::bjorckPereyra<0, double, double>(nodes, values);
+    auto mono = detail::newtonToMonomial<0, double, double>(newton, nodes);
 
     double maxErr = 0.0;
     for (std::size_t k = 0; k < nCoeffs; ++k) {

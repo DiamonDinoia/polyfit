@@ -15,7 +15,7 @@ static auto cos_func = [](double x) {
 };
 
 TEST(EdgeCases, BatchEvalZeroPoints) {
-    auto poly = poly_eval::make_func_eval(cos_func, 8, -1.0, 1.0);
+    auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     std::vector<double> xs;
     std::vector<double> ys;
     // Should be a no-op without crashing
@@ -23,7 +23,7 @@ TEST(EdgeCases, BatchEvalZeroPoints) {
 }
 
 TEST(EdgeCases, BatchEvalSinglePoint) {
-    auto poly = poly_eval::make_func_eval(cos_func, 16, -1.0, 1.0);
+    auto poly = poly_eval::fit(cos_func, 16, -1.0, 1.0);
     double x = 0.5;
     double y = 0.0;
     poly(&x, &y, 1);
@@ -38,9 +38,9 @@ TEST(EdgeCases, DegenerateDomainAEqualsB) {
     auto identity = [](double x) {
         return x;
     };
-    EXPECT_THROW((void)poly_eval::make_func_eval(identity, 4, 1.0, 1.0), std::invalid_argument);
-    EXPECT_THROW((void)poly_eval::make_func_eval<4>(identity, 1.0, 1.0), std::invalid_argument);
-    EXPECT_THROW((void)poly_eval::make_func_eval(identity, 1e-6, 1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(identity, 4, 1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit<4>(identity, 1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(identity, 1e-6, 1.0, 1.0), std::invalid_argument);
 }
 
 // --------------------------------------------------------------------------
@@ -50,7 +50,7 @@ TEST(EdgeCases, DegenerateDomainAEqualsB) {
 TEST(EdgeCases, VerySmallDomain) {
     constexpr double center = 1.0;
     constexpr double half = 1e-12;
-    auto poly = poly_eval::make_func_eval(cos_func, 8, center - half, center + half);
+    auto poly = poly_eval::fit(cos_func, 8, center - half, center + half);
     const double mid = center;
     EXPECT_NEAR(poly(mid), std::cos(mid), 1e-14);
 }
@@ -60,7 +60,7 @@ TEST(EdgeCases, VerySmallDomain) {
 // --------------------------------------------------------------------------
 
 TEST(SpecialValues, NaNInputProducesNaN) {
-    auto poly = poly_eval::make_func_eval(cos_func, 8, -1.0, 1.0);
+    auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     const double nan_val = std::numeric_limits<double>::quiet_NaN();
     const double result = poly(nan_val);
     // NaN propagation: evaluating at NaN should produce NaN
@@ -68,7 +68,7 @@ TEST(SpecialValues, NaNInputProducesNaN) {
 }
 
 TEST(SpecialValues, InfinityInputProducesInfOrNaN) {
-    auto poly = poly_eval::make_func_eval(cos_func, 8, -1.0, 1.0);
+    auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     const double inf_val = std::numeric_limits<double>::infinity();
     const double result = poly(inf_val);
     // Evaluating at infinity should produce inf or NaN (not a finite wrong answer)
@@ -76,7 +76,7 @@ TEST(SpecialValues, InfinityInputProducesInfOrNaN) {
 }
 
 TEST(SpecialValues, NaNBatchInputProducesNaN) {
-    auto poly = poly_eval::make_func_eval(cos_func, 8, -1.0, 1.0);
+    auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     const double nan_val = std::numeric_limits<double>::quiet_NaN();
     double out = 0.0;
     poly(&nan_val, &out, 1);

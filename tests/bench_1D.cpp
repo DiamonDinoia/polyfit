@@ -9,34 +9,33 @@
 using namespace ankerl::nanobench;
 
 std::mt19937_64 rng(42);
-// A single templated bench function: T is the input/output type, F is the functor.
-template<typename F>
-void runBench(const std::string &label, Bench &bench, F func, typename poly_eval::function_traits<F>::arg0_type a,
-               typename poly_eval::function_traits<F>::arg0_type b, size_t num_points = 1024) {
-    using T = decltype(a);
-    using V = typename poly_eval::function_traits<F>::result_type;
 
-    // Prepare random points and output buffer
+template<typename F>
+void runBench(const std::string &label, Bench &bench, F func, typename poly_eval::FunctionTraits<F>::arg0_type a,
+              typename poly_eval::FunctionTraits<F>::arg0_type b, size_t numPoints = 1024) {
+    using T = decltype(a);
+    using V = typename poly_eval::FunctionTraits<F>::result_type;
+
     std::uniform_real_distribution<T> dist(a, b);
     std::vector<T> pts;
-    pts.reserve(num_points);
-    for (size_t i = 0; i < num_points; ++i) {
+    pts.reserve(numPoints);
+    for (size_t i = 0; i < numPoints; ++i) {
         if constexpr (std::is_floating_point_v<T>) {
             pts.push_back(dist(rng));
         } else {
             pts.emplace_back(dist(rng), dist(rng));
         }
     }
-    std::vector<V> out(num_points);
+    std::vector<V> out(numPoints);
 
     bench.run(label + " constexpr fit",
-              [&] { doNotOptimizeAway(poly_eval::make_func_eval<8>(func, a, b, poly_eval::iters<0>{})); });
+              [&] { doNotOptimizeAway(poly_eval::fit<8>(func, a, b, poly_eval::Iters<0>{})); });
 
-    bench.run(label + " coefficient-count fit", [&] { doNotOptimizeAway(poly_eval::make_func_eval(func, 8, a, b)); });
+    bench.run(label + " coefficient-count fit", [&] { doNotOptimizeAway(poly_eval::fit(func, 8, a, b)); });
 
-    bench.run(label + " eps fit", [&] { doNotOptimizeAway(poly_eval::make_func_eval(func, 1e-6, a, b)); });
+    bench.run(label + " eps fit", [&] { doNotOptimizeAway(poly_eval::fit(func, 1e-6, a, b)); });
 
-    const auto fe = poly_eval::make_func_eval<8>(func, a, b, poly_eval::iters<0>{});
+    const auto fe = poly_eval::fit<8>(func, a, b, poly_eval::Iters<0>{});
     bench.run(label + " eval", [&] {
         auto r = fe(pts[0]);
         doNotOptimizeAway(r);

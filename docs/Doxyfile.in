@@ -17,8 +17,8 @@ GENERATE_LATEX         = NO
 EXTRACT_ALL            = NO
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = YES
-EXCLUDE_SYMBOLS        = poly_eval::make_func_eval \
-                         poly_eval::make_func_eval_many \
+EXCLUDE_SYMBOLS        = poly_eval::fit \
+                         poly_eval::pack \
                          poly_eval::function_traits \
                          std
 

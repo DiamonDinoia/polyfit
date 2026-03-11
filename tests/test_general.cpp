@@ -33,7 +33,7 @@ double computeMaxRelativeError(TrueF f_true, ApproxF f_approx, Domain low, Domai
         }
         const auto true_val = f_true(pt);
         const auto approx_val = f_approx(pt);
-        double err = poly_eval::detail::relative_error(approx_val, true_val);
+        double err = poly_eval::detail::relativeError(approx_val, true_val);
         maxErr = std::max(maxErr, err);
     }
     return maxErr;
@@ -50,10 +50,10 @@ TEST(FuncEval1D, FixedNCoeffsVsAdaptiveRelativeError) {
 
     // Fixed coefficient count
     constexpr int nCoeffsFixed = 16;
-    auto fe_fixed = poly_eval::make_func_eval(f, nCoeffsFixed, a, b);
+    auto fe_fixed = poly_eval::fit(f, nCoeffsFixed, a, b);
     // Adaptive
     constexpr double eps = 1e-6;
-    auto fe_adapt = poly_eval::make_func_eval(f, eps, a, b);
+    auto fe_adapt = poly_eval::fit(f, eps, a, b);
 
     double maxRelFixed = computeMaxRelativeError([&](double x) { return f(x); },
                                                       [&](double x) { return fe_fixed(x); }, a, b, num_samples);
@@ -78,10 +78,10 @@ TEST(FuncEval2D, FixedNCoeffsVsAdaptiveRelativeError) {
 
     // Fixed coefficient count
     constexpr int nCoeffsFixed = 16;
-    auto fe_fixed = poly_eval::make_func_eval(f, nCoeffsFixed, low, high);
+    auto fe_fixed = poly_eval::fit(f, nCoeffsFixed, low, high);
     // Adaptive
     double eps = 1e-7;
-    auto fe_adapt = poly_eval::make_func_eval(f, eps, low, high);
+    auto fe_adapt = poly_eval::fit(f, eps, low, high);
 
     double maxRelFixed = computeMaxRelativeError(
         [&](const In &pt) { return f(pt); }, [&](const In &pt) { return fe_fixed(pt); }, low, high, num_samples);

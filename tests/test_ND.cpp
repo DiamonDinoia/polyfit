@@ -27,36 +27,27 @@ template<typename Array, typename OutPut = Array> constexpr auto sumCos(const Ar
 std::mt19937 gen(42);
 std::uniform_real_distribution<double> dist(-1.0, 1.0);
 
-// -----------------------------------------------------------------------------
-// Helper template that runs a complete Chebyshev correctness test for the
-// compile‑time combination <InDim,OutDim,nCoeffs>.
-// -----------------------------------------------------------------------------
-
-template<std::size_t inDim, std::size_t outDim, std::size_t nCoeffsCt> void runMonomialTest() {
-    using Input = std::array<double, inDim>;
-    using Output = std::array<double, outDim>;
-    const double tol = std::pow(10.0, -static_cast<double>(nCoeffsCt - 3));
+template<std::size_t IN_DIM, std::size_t OUT_DIM, std::size_t NCOEFFS> void runMonomialTest() {
+    using Input = std::array<double, IN_DIM>;
+    using Output = std::array<double, OUT_DIM>;
+    const double tol = std::pow(10.0, -static_cast<double>(NCOEFFS - 3));
     Input a{};
     a.fill(-1.0);
     Input b{};
     b.fill(1.0);
 
-    auto approx = poly_eval::make_func_eval<nCoeffsCt>(sumCos<Input, Output>, a, b);
+    auto approx = poly_eval::fit<NCOEFFS>(sumCos<Input, Output>, a, b);
 
     for (int i = 0; i < kNumPoints; ++i) {
         Input x;
         for (auto &xi : x) xi = dist(gen);
         auto expected = sumCos<Input, Output>(x);
         auto actual = approx(x);
-        for (std::size_t j = 0; j < outDim; ++j) {
+        for (std::size_t j = 0; j < OUT_DIM; ++j) {
             ASSERT_NEAR(actual[j], expected[j], tol);
         }
     }
 }
-
-// -----------------------------------------------------------------------------
-// Individual TEST cases – no custom preprocessor tricks, just standard GTest.
-// -----------------------------------------------------------------------------
 
 TEST(Eval, In2Out2Deg16) { runMonomialTest<2, 2, 16>(); }
 TEST(Eval, In2Out3Deg16) { runMonomialTest<2, 3, 16>(); }
@@ -71,8 +62,8 @@ TEST(Eval, RuntimeNCoeffsRejectsNonPositive) {
     using Out = std::array<double, 2>;
     In a{-1.0, -1.0};
     In b{1.0, 1.0};
-    EXPECT_THROW((void)poly_eval::make_func_eval(sumCos<In, Out>, 0, a, b), std::invalid_argument);
-    EXPECT_THROW((void)poly_eval::make_func_eval(sumCos<In, Out>, -2, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(sumCos<In, Out>, 0, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(sumCos<In, Out>, -2, a, b), std::invalid_argument);
 }
 
 // -----------------------------------------------------------------------------

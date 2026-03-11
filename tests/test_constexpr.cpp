@@ -49,11 +49,11 @@ static_assert(m::sqrt(2.0) > 1.41 && m::sqrt(2.0) < 1.42, "sqrt(2) ~= 1.414"); /
 // FuncEval CT construction (C++20+)
 // ---------------------------------------------------------------------------
 #if __cplusplus >= 202002L
-static constexpr auto ct_poly = poly_eval::make_func_eval<4>(
+static constexpr auto ct_poly = poly_eval::fit<4>(
     [](double x) { return x * x + 1.0; }, -1.0, 1.0);
 
-static_assert(decltype(ct_poly)::kNCoeffsCompileTime == 4, "FuncEval CT: kNCoeffsCompileTime");
-static_assert(poly_eval::detail::relative_l2_norm(ct_poly(0.0), 1.0) < 1e-12,
+static_assert(decltype(ct_poly)::NCOEFFS == 4, "FuncEval CT: NCOEFFS");
+static_assert(poly_eval::detail::relativeL2Norm(ct_poly(0.0), 1.0) < 1e-12,
               "FuncEval CT: eval at x=0 should approximate x^2+1=1");
 #endif
 

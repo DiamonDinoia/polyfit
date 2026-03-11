@@ -3,8 +3,6 @@
 #include "polyfit/polyfit.hpp"
 
 int main() {
-    constexpr auto f = [](double x) { return x * x + 2.0; };
-    constexpr auto poly = poly_eval::make_func_eval<3>(f, -1.0, 1.0);
-
-    std::cout << poly(0.5) << '\n';
+    constexpr auto approx = poly_eval::fit<3>([](double x) { return x * x + 2.0; }, -1.0, 1.0);
+    std::cout << approx(0.5) << '\n';
 }

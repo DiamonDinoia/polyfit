@@ -11,10 +11,10 @@ TEST(FuncEvalMany, PackedMatchesIndividual) {
     };
     double a = -1.0, b = 1.0;
 
-    auto fe1 = make_func_eval<8>(f1, a, b);
-    auto fe2 = make_func_eval<8>(f2, a, b);
+    auto fe1 = fit<8>(f1, a, b);
+    auto fe2 = fit<8>(f2, a, b);
 
-    auto packed = make_func_eval_many(fe1, fe2);
+    auto packed = pack(fe1, fe2);
 
     double x = 0.3;
     auto p = packed(x);

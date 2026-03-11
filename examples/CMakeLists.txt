@@ -5,14 +5,10 @@ include(PolyfitWarnings)
 include(PolyfitSanitizers)
 include(PolyfitStaticAnalysis)
 
-# Runtime examples need C++17. Compile-time examples need C++20.
-# Default to C++17; compiletime targets get CXX_STANDARD 20 set individually below.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Canonical C++20 detection: CMake populates CMAKE_CXX_COMPILE_FEATURES per
-# compiler without requiring compiler-specific flags like -std=c++20 or /std:c++20.
 if("cxx_std_20" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
     set(COMPILER_SUPPORTS_CXX20 TRUE)
 else()
@@ -20,25 +16,18 @@ else()
     message(STATUS "Compiler does not support C++20; compile-time examples will be skipped")
 endif()
 
-# 1. List source files
 set(SOURCES
         runtime_1D_fixed.cpp
         runtime_1D_eps.cpp
         runtime_ND_fixed.cpp
-        runtime_ND_eps.cpp
-        many_polys_example.cpp
+        pack.cpp
+        tags.cpp
 )
 set(SOURCES_CXX20)
 if(COMPILER_SUPPORTS_CXX20)
     list(APPEND SOURCES_CXX20 compiletime_1D_fixed.cpp)
-    # The constexpr eps overload uses a GCC extension (function parameter in
-    # if-constexpr condition) that Clang and MSVC reject.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        list(APPEND SOURCES_CXX20 compiletime_1D_eps.cpp)
-    endif()
 endif()
 
-# 2. Generate one executable target per source, collect their names:
 set(EXAMPLE_TARGETS "")
 foreach(src IN LISTS SOURCES SOURCES_CXX20)
     get_filename_component(name ${src} NAME_WE)
@@ -61,9 +50,7 @@ foreach(src IN LISTS SOURCES SOURCES_CXX20)
     list(APPEND EXAMPLE_TARGETS ${name})
 endforeach()
 
-# 3. Build up all of the “run” commands in a list:
 set(RUN_COMMANDS
-        # This first COMMAND makes USES_TERMINAL happy:
         COMMAND ${CMAKE_COMMAND} -E echo "=== Building and running all examples ==="
 )
 foreach(exe IN LISTS EXAMPLE_TARGETS)
@@ -73,7 +60,6 @@ foreach(exe IN LISTS EXAMPLE_TARGETS)
     )
 endforeach()
 
-# 4. Single custom target that (a) depends on all the examples, then (b) runs them
 add_custom_target(run_examples
         DEPENDS ${EXAMPLE_TARGETS}
         USES_TERMINAL

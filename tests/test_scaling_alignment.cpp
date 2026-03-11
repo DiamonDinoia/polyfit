@@ -57,7 +57,7 @@ TEST(FuncEval, AlignmentVarianceBulkEval) {
         return std::sin(x) + 0.25 * x;
     };
     T a = -1.0, b = 1.0;
-    auto fe = poly_eval::make_func_eval(f, 8, a, b);
+    auto fe = poly_eval::fit(f, 8, a, b);
 
     const size_t P = 65; // use odd + offsets to vary alignment
     std::vector<T> pts(P + 2), out1(P + 2), out2(P + 2);

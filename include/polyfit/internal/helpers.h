@@ -1,4 +1,4 @@
-// Helper utilities for internal use (domain mapping, scaling)
+// Internal domain mapping and coefficient transformation helpers.
 #pragma once
 
 #include <algorithm>
@@ -9,74 +9,67 @@
 #include <vector>
 #include <xsimd/xsimd.hpp>
 
+#include "api_types.hpp"
 #include "simd_utils.h"
 
 namespace polyfit::internal::helpers {
 
 // Scalar mapping to canonical domain [-1,1]
 template<class ArgT, class ScalarT>
-constexpr ArgT map_to_domain_scalar(const ArgT arg, const ScalarT inv_span, const ScalarT sum_endpoints) noexcept {
+constexpr ArgT mapToDomainScalar(const ArgT arg, const ScalarT invSpan, const ScalarT sumEndpoints) noexcept {
     if constexpr (std::is_arithmetic_v<ArgT>) {
-        return static_cast<ArgT>(ArgT(0.5) *
-                                 ((arg / static_cast<ArgT>(inv_span)) + static_cast<ArgT>(sum_endpoints)));
+        return static_cast<ArgT>(ArgT(0.5) * ((arg / static_cast<ArgT>(invSpan)) + static_cast<ArgT>(sumEndpoints)));
     } else {
-        return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(inv_span)) + ArgT(sum_endpoints)));
+        return static_cast<ArgT>(ArgT(0.5) * ((arg / ArgT(invSpan)) + ArgT(sumEndpoints)));
     }
 }
 
 // Scalar/batch mapping from canonical domain back to original
 template<class ArgT, class ScalarT>
-PF_ALWAYS_INLINE constexpr ArgT map_from_domain_scalar(const ArgT arg, const ScalarT inv_span,
-                                                       const ScalarT sum_endpoints) noexcept {
-    return poly_eval::detail::fma(ArgT(2), arg, -ArgT(sum_endpoints)) * ArgT(inv_span);
+PF_ALWAYS_INLINE constexpr ArgT mapFromDomainScalar(const ArgT arg, const ScalarT invSpan,
+                                                    const ScalarT sumEndpoints) noexcept {
+    return poly_eval::detail::fma(ArgT(2), arg, -ArgT(sumEndpoints)) * ArgT(invSpan);
 }
 
 // Array (std::array) mapping overloads
 template<class T, std::size_t N>
-constexpr std::array<T, N> map_to_domain_array(const std::array<T, N> &t, const std::array<T, N> &inv_span,
-                                               const std::array<T, N> &sum_endpoints) noexcept {
+constexpr std::array<T, N> mapToDomainArray(const std::array<T, N> &t, const std::array<T, N> &invSpan,
+                                            const std::array<T, N> &sumEndpoints) noexcept {
     std::array<T, N> out{};
     for (std::size_t d = 0; d < N; ++d) {
-        out[d] = map_to_domain_scalar<T, T>(t[d], inv_span[d], sum_endpoints[d]);
+        out[d] = mapToDomainScalar<T, T>(t[d], invSpan[d], sumEndpoints[d]);
     }
     return out;
 }
 
 template<class T, std::size_t N>
 PF_ALWAYS_INLINE constexpr std::array<T, N>
-map_from_domain_array(const std::array<T, N> &x, const std::array<T, N> &inv_span,
-                      const std::array<T, N> &sum_endpoints) noexcept {
+mapFromDomainArray(const std::array<T, N> &x, const std::array<T, N> &invSpan,
+                   const std::array<T, N> &sumEndpoints) noexcept {
     std::array<T, N> out{};
     for (std::size_t d = 0; d < N; ++d) {
-        out[d] = map_from_domain_scalar<T, T>(x[d], inv_span[d], sum_endpoints[d]);
+        out[d] = mapFromDomainScalar<T, T>(x[d], invSpan[d], sumEndpoints[d]);
     }
     return out;
 }
 
 template<class T, std::size_t N>
-constexpr void compute_scaling_array(const std::array<T, N> &from, const std::array<T, N> &to,
-                                     std::array<T, N> &inv_span, std::array<T, N> &sum_endpoints) noexcept {
+constexpr void computeScalingArray(const std::array<T, N> &from, const std::array<T, N> &to,
+                                   std::array<T, N> &invSpan, std::array<T, N> &sumEndpoints) noexcept {
     for (std::size_t dim = 0; dim < N; ++dim) {
-        inv_span[dim] = T(1) / (to[dim] - from[dim]);
-        sum_endpoints[dim] = (to[dim] + from[dim]);
+        invSpan[dim] = T(1) / (to[dim] - from[dim]);
+        sumEndpoints[dim] = (to[dim] + from[dim]);
     }
 }
 
-//------------------------------------------------------------------------------
-// Error-free transformations for compensated arithmetic
-//------------------------------------------------------------------------------
 namespace eft {
 
-// twoSum: s + e = a + b exactly (Knuth/Moller)
 template<class T> constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
     T s = a + b;
     T v = s - a;
     return {s, (a - (s - v)) + (b - v)};
 }
 
-// twoProd via FMA: p + e = a * b exactly
-// In constant-evaluated contexts std::fma is not constexpr on Clang (until C++26),
-// so drop the error term and return {a*b, 0} for compile-time polynomial fitting.
 template<class T> constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
     T p = a * b;
     PF_IF_CONSTEVAL { return {p, T(0)}; }
@@ -85,102 +78,102 @@ template<class T> constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
 
 } // namespace eft
 
-//------------------------------------------------------------------------------
-// Fuse linear domain mapping into polynomial coefficients (in-place).
-// Given polynomial p(t) in Horner order (highest-order term first), computes
-// q(x) = p(alpha*x + beta) so that evaluation no longer needs per-point mapping.
-//
-// Uses compensated (error-free) arithmetic in the Taylor shift and alpha scaling
-// to recover machine precision: O(n^2 * eps^2) error instead of O(n^2 * eps).
-//------------------------------------------------------------------------------
+namespace detail {
 
-// Real arithmetic types: full twoProd + twoSum compensation
-template<class T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
-constexpr void fuse_linear_map(T *coeffs, std::size_t n, T alpha, T beta) noexcept {
-    if (n <= 1) return;
-
-    std::reverse(coeffs, coeffs + n);
-
-    // --- Compensated Taylor shift: p(x) -> p(x + beta) ---
-    // Each step: coeffs[j] += beta * coeffs[j+1]
-    // We track per-coefficient compensation using error-free transformations.
-    std::vector<T> comp(n, T(0));
-
+template<class T> constexpr void applyTaylorShift(T *coeffs, std::vector<T> &comp, std::size_t n, T beta) noexcept {
     for (std::size_t i = 0; i + 1 < n; ++i) {
         for (std::size_t j = n - 2; j >= i; --j) {
-            // twoProd: p + ep = beta * coeffs[j+1] exactly
             auto [p, ep] = eft::two_prod(beta, coeffs[j + 1]);
-            // First-order correction from compensation of coeffs[j+1]
-            T p_comp = beta * comp[j + 1];
-            // twoSum: s + es = coeffs[j] + p exactly
             auto [s, es] = eft::two_sum(coeffs[j], p);
-            comp[j] += ep + es + p_comp;
+            comp[j] += ep + es + beta * comp[j + 1];
             coeffs[j] = s;
             if (j == i) break;
         }
     }
-
-    // Apply accumulated compensation
-    for (std::size_t k = 0; k < n; ++k) coeffs[k] += comp[k];
-
-    // --- Compensated alpha scaling: coeff[k] *= alpha^k ---
-    T alpha_pow = alpha;
-    T alpha_err = T(0);
-    for (std::size_t k = 1; k < n; ++k) {
-        auto [p, ep] = eft::two_prod(coeffs[k], alpha_pow);
-        coeffs[k] = p + (ep + coeffs[k] * alpha_err);
-        // Accumulate alpha power with error tracking
-        auto [ap, ae] = eft::two_prod(alpha_pow, alpha);
-        alpha_err = alpha_err * alpha + ae;
-        alpha_pow = ap;
-    }
-
-    std::reverse(coeffs, coeffs + n);
 }
 
-// Complex coefficients with real mapping parameters: component-wise compensation
-template<class T> constexpr void fuse_linear_map(std::complex<T> *coeffs, std::size_t n, T alpha, T beta) noexcept {
+template<class T> constexpr void addCompensation(T *coeffs, const std::vector<T> &comp, std::size_t n) noexcept {
+    for (std::size_t k = 0; k < n; ++k) coeffs[k] += comp[k];
+}
+
+template<class T> constexpr void advancePower(T &alphaPow, T &alphaErr, T alpha) noexcept {
+    auto [nextPow, nextErr] = eft::two_prod(alphaPow, alpha);
+    alphaErr = alphaErr * alpha + nextErr;
+    alphaPow = nextPow;
+}
+
+template<class T> constexpr void scaleByPower(T *coeffs, std::size_t n, T alpha) noexcept {
+    T alphaPow = alpha;
+    T alphaErr = T(0);
+    for (std::size_t k = 1; k < n; ++k) {
+        auto [p, ep] = eft::two_prod(coeffs[k], alphaPow);
+        coeffs[k] = p + (ep + coeffs[k] * alphaErr);
+        advancePower(alphaPow, alphaErr, alpha);
+    }
+}
+
+template<class T>
+constexpr T shiftPart(T current, T next, T nextComp, T beta, T &comp) noexcept {
+    auto [prod, prodErr] = eft::two_prod(beta, next);
+    auto [sum, sumErr] = eft::two_sum(current, prod);
+    comp += prodErr + sumErr + beta * nextComp;
+    return sum;
+}
+
+template<class T>
+constexpr T scalePart(T value, T alphaPow, T alphaErr) noexcept {
+    auto [prod, prodErr] = eft::two_prod(value, alphaPow);
+    return prod + (prodErr + value * alphaErr);
+}
+
+template<class T>
+constexpr void addCompensation(std::complex<T> *coeffs, const std::vector<T> &compRe, const std::vector<T> &compIm,
+                               std::size_t n) noexcept {
+    for (std::size_t k = 0; k < n; ++k) coeffs[k] += std::complex<T>(compRe[k], compIm[k]);
+}
+
+} // namespace detail
+
+// Fold q(x) = p(alpha * x + beta) into the coefficient array in place.
+template<class T, poly_eval::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
+constexpr void fuseLinearMap(T *coeffs, std::size_t n, T alpha, T beta) noexcept {
     if (n <= 1) return;
 
     std::reverse(coeffs, coeffs + n);
 
-    // --- Compensated Taylor shift (component-wise) ---
-    std::vector<T> comp_re(n, T(0));
-    std::vector<T> comp_im(n, T(0));
+    std::vector<T> comp(n, T(0));
+    detail::applyTaylorShift(coeffs, comp, n, beta);
+    detail::addCompensation(coeffs, comp, n);
+    detail::scaleByPower(coeffs, n, alpha);
+
+    std::reverse(coeffs, coeffs + n);
+}
+
+template<class T> constexpr void fuseLinearMap(std::complex<T> *coeffs, std::size_t n, T alpha, T beta) noexcept {
+    if (n <= 1) return;
+
+    std::reverse(coeffs, coeffs + n);
+
+    std::vector<T> compRe(n, T(0));
+    std::vector<T> compIm(n, T(0));
 
     for (std::size_t i = 0; i + 1 < n; ++i) {
         for (std::size_t j = n - 2; j >= i; --j) {
-            // Real part: coeffs[j].real() += beta * coeffs[j+1].real()
-            auto [pr, epr] = eft::two_prod(beta, coeffs[j + 1].real());
-            T pr_comp = beta * comp_re[j + 1];
-            auto [sr, esr] = eft::two_sum(coeffs[j].real(), pr);
-            comp_re[j] += epr + esr + pr_comp;
-
-            // Imaginary part: coeffs[j].imag() += beta * coeffs[j+1].imag()
-            auto [pi, epi] = eft::two_prod(beta, coeffs[j + 1].imag());
-            T pi_comp = beta * comp_im[j + 1];
-            auto [si, esi] = eft::two_sum(coeffs[j].imag(), pi);
-            comp_im[j] += epi + esi + pi_comp;
-
-            coeffs[j] = std::complex<T>(sr, si);
+            const auto real = detail::shiftPart(coeffs[j].real(), coeffs[j + 1].real(), compRe[j + 1], beta, compRe[j]);
+            const auto imag = detail::shiftPart(coeffs[j].imag(), coeffs[j + 1].imag(), compIm[j + 1], beta, compIm[j]);
+            coeffs[j] = std::complex<T>(real, imag);
             if (j == i) break;
         }
     }
 
-    // Apply compensation
-    for (std::size_t k = 0; k < n; ++k) coeffs[k] += std::complex<T>(comp_re[k], comp_im[k]);
+    detail::addCompensation(coeffs, compRe, compIm, n);
 
-    // --- Compensated alpha scaling (component-wise) ---
-    T alpha_pow = alpha;
-    T alpha_err = T(0);
+    T alphaPow = alpha;
+    T alphaErr = T(0);
     for (std::size_t k = 1; k < n; ++k) {
-        auto [pr, epr] = eft::two_prod(coeffs[k].real(), alpha_pow);
-        auto [pi, epi] = eft::two_prod(coeffs[k].imag(), alpha_pow);
-        coeffs[k] =
-            std::complex<T>(pr + (epr + coeffs[k].real() * alpha_err), pi + (epi + coeffs[k].imag() * alpha_err));
-        auto [ap, ae] = eft::two_prod(alpha_pow, alpha);
-        alpha_err = alpha_err * alpha + ae;
-        alpha_pow = ap;
+        coeffs[k] = std::complex<T>(detail::scalePart(coeffs[k].real(), alphaPow, alphaErr),
+                                    detail::scalePart(coeffs[k].imag(), alphaPow, alphaErr));
+        detail::advancePower(alphaPow, alphaErr, alpha);
     }
 
     std::reverse(coeffs, coeffs + n);

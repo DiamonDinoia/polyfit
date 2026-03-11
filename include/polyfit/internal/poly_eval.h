@@ -9,135 +9,62 @@
 #include <cassert>
 #include <cstddef>
 
-//------------------------------------------------------------------------------
-// Forward Declarations (Public API)
-//------------------------------------------------------------------------------
-
 namespace poly_eval {
 
-// Scalar Horner (one-point)
-/**
- * @brief Evaluate a polynomial at a single point using Horner's method (scalar version).
- *
- * @tparam N_total Compile-time number of coefficients (0 for runtime).
- * @tparam OutputType Output value type.
- * @tparam InputType Input value type.
- * @param x The input value at which to evaluate the polynomial.
- * @param c_ptr Pointer to the coefficients array (highest-order term first).
- * @param c_size Number of coefficients (used if N_total == 0).
- * @return The evaluated polynomial value at x.
- */
-template<std::size_t N_total = 0, typename OutputType, typename InputType>
+// Evaluate one polynomial at one point. Coefficients are in Horner order.
+template<std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr OutputType horner(InputType xin, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
 
-/**
- * @brief Evaluate a polynomial at multiple points using SIMD-accelerated Horner's method.
- *
- * Coefficients are in Horner order (highest-order term first).
- *
- * @tparam N_monomials Compile-time number of monomials (0 for runtime).
- * @tparam pts_aligned Whether input points are SIMD-aligned.
- * @tparam out_aligned Whether output is SIMD-aligned.
- * @tparam UNROLL Unroll factor for SIMD loop (0 for default).
- * @tparam InputType Input value type.
- * @tparam OutputType Output value type.
- * @tparam MapFunc Mapping function applied to each input point used to center the coefficients.
- * @param pts Pointer to input points array.
- * @param out Pointer to output array.
- * @param num_points Number of points to evaluate.
- * @param monomials Pointer to coefficients array (highest-order term first).
- * @param monomials_size Number of coefficients.
- * @param map_func Function to map/transform each input point (default: identity).
- */
-template<std::size_t N_monomials = 0, bool pts_aligned = false, bool out_aligned = false, int UNROLL = 0,
+// Evaluate one polynomial across many points, optionally with SIMD and a point mapping step.
+template<std::size_t NMONOMIALS = 0, bool PTS_ALIGNED = false, bool OUT_ALIGNED = false, int UNROLL = 0,
          typename InputType, typename OutputType, typename MapFunc>
 PF_ALWAYS_INLINE constexpr void horner(
     const InputType *pts, OutputType *out, std::size_t num_points, const OutputType *monomials,
     std::size_t monomials_size, MapFunc map_func = [](auto v) { return v; }) noexcept;
 
-/**
- * @brief Evaluate multiple polynomials at a single point using Horner's method.
- *
- * Optionally supports scaling of the input.
- *
- * @tparam M_total Compile-time number of polynomials (0 for runtime).
- * @tparam N_total Compile-time number of coefficients per polynomial (0 for runtime).
- * @tparam OutputType Output value type.
- * @tparam InputType Input value type.
- * @param x The input value at which to evaluate.
- * @param coeffs Pointer to the coefficients array (row-major: M polynomials × N coefficients).
- * @param out Pointer to output array (size M).
- * @param M Number of polynomials (used if M_total == 0).
- * @param N Number of coefficients per polynomial (used if N_total == 0).
- */
-template<std::size_t M_total = 0, std::size_t N_total = 0, typename OutputType, typename InputType>
+// Evaluate several 1D polynomials at one point.
+template<std::size_t MCOUNT = 0, std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(InputType xin, const OutputType *coeffs, OutputType *out, std::size_t M = 0,
                                             std::size_t N = 0) noexcept;
 
-/**
- * @brief Evaluate multiple polynomials at multiple points (transposed layout).
- *
- * Supports both scalar and SIMD paths.
- *
- * @tparam M_total Compile-time number of points (0 for runtime).
- * @tparam N_total Compile-time number of coefficients (0 for runtime).
- * @tparam simd_width SIMD width (0 for scalar).
- * @tparam Out Output value type.
- * @tparam In Input value type.
- * @param x Pointer to input points array (size M).
- * @param c Pointer to coefficients array (row-major: N rows × M columns).
- * @param out Pointer to output array (size M).
- * @param M Number of points (used if M_total == 0).
- * @param N Number of coefficients (used if N_total == 0).
- */
-template<std::size_t M_total = 0, std::size_t N_total = 0, std::size_t simd_width = 0, bool aligned = false,
+// Evaluate many polynomials across many points in transposed coefficient layout.
+template<std::size_t MCOUNT = 0, std::size_t NCOEFFS = 0, std::size_t SIMD_WIDTH = 0, bool ALIGNED = false,
          typename Out, typename In>
 PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, std::size_t M = 0,
                                                   std::size_t N = 0) noexcept;
 
-/**
- * @brief Evaluate a multivariate polynomial using N-dimensional Horner's method.
- *
- * @tparam NCoeffsCt Compile-time coefficient count (0 for runtime).
- * @tparam OutT Output type (e.g., scalar or std::array).
- * @tparam InVec Input vector type (e.g., std::array).
- * @tparam Mdspan Coefficient tensor type (e.g., mdspan).
- * @param x Input vector of variables.
- * @param coeffs Coefficient tensor (last dimension is output dimension).
- * @param nCoeffsRt Runtime coefficient count (used if NCoeffsCt == 0).
- * @return Evaluated polynomial value(s).
- */
-template<std::size_t NCoeffsCt = 0, bool SIMD = true, typename OutT, typename InVec, typename Mdspan>
+// Evaluate an ND polynomial stored in an mdspan-backed coefficient tensor.
+template<std::size_t NCOEFFS = 0, bool SIMD = true, typename OutT, typename InVec, typename Mdspan>
 PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int nCoeffsRt);
 
-//------------------------------------------------------------------------------
-// detail namespace
-//------------------------------------------------------------------------------
 namespace detail {
 
-// helper to invoke coeffs(idx[0],…,idx[D‑1], d) in C++17
 template<std::size_t D, typename MdspanType, std::size_t... Is>
-PF_ALWAYS_INLINE constexpr auto call_coeffs_impl(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
-                                                 std::index_sequence<Is...>, std::size_t d) noexcept {
-    return coeffs(idx[Is]..., d);
+PF_ALWAYS_INLINE constexpr auto coeffAtImpl(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
+                                            std::index_sequence<Is...>, std::size_t outputIndex) noexcept {
+    return coeffs(idx[Is]..., outputIndex);
 }
 
 template<std::size_t D, typename MdspanType>
-PF_ALWAYS_INLINE constexpr auto call_coeffs(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
-                                            std::size_t d) noexcept {
-    return call_coeffs_impl<D, MdspanType>(coeffs, idx, std::make_index_sequence<D>{}, d);
+PF_ALWAYS_INLINE constexpr auto coeffAt(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
+                                        std::size_t outputIndex) noexcept {
+    return coeffAtImpl<D, MdspanType>(coeffs, idx, std::make_index_sequence<D>{}, outputIndex);
 }
 
-//------------------------------------------------------------------------------
-// detail::horner_nd_impl — tag-dispatched scalar / SIMD overloads
-//------------------------------------------------------------------------------
+template<std::size_t NCOEFFS, class Step>
+PF_ALWAYS_INLINE constexpr void forEachCoeff(int nCoeffsRt, Step &&step) {
+    if constexpr (NCOEFFS != 0) {
+        poet::static_for<NCOEFFS>([&](auto k) { step(std::size_t(k)); });
+    } else {
+        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
+    }
+}
 
-struct scalar_t {};
-struct simd_t {};
+struct ScalarEvalTag {};
+struct SimdEvalTag {};
 
-// Scalar overload — fully constexpr (no xsimd types)
-template<std::size_t Level, std::size_t Dim, std::size_t NCoeffsCt, typename OutT, typename InVec, typename Mdspan>
-PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(scalar_t, const InVec &x, const Mdspan &coeffs,
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(ScalarEvalTag, const InVec &x, const Mdspan &coeffs,
                                                std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT = std::tuple_size_v<OutT>;
@@ -149,31 +76,26 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(scalar_t, const InVec &x, const M
 
         OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, NCoeffsCt, OutT>(scalar_t{}, x, coeffs, idx, nCoeffsRt);
+            inner = horner_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
         } else {
-            poet::static_for<OUT>([&](auto i) { inner[i] = detail::call_coeffs<Dim>(coeffs, idx, i); });
+            poet::static_for<OUT>([&](auto i) { inner[i] = detail::coeffAt<Dim>(coeffs, idx, i); });
         }
 
         poet::static_for<OUT>([&](auto i) { res[i] = std::fma(res[i], x[axis], inner[i]); });
     };
 
-    if constexpr (NCoeffsCt != 0) {
-        poet::static_for<NCoeffsCt>([&](auto k) { step(k); });
-    } else {
-        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
-    }
+    forEachCoeff<NCOEFFS>(nCoeffsRt, step);
     return res;
 }
 
-// SIMD overload — uses xsimd batch operations
-template<std::size_t Level, std::size_t Dim, std::size_t NCoeffsCt, typename OutT, typename InVec, typename Mdspan>
-PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeffs, std::array<std::size_t, Dim> &idx,
-                                     int nCoeffsRt) {
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &coeffs,
+                                     std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT = std::tuple_size_v<OutT>;
 
     using Scalar = typename OutT::value_type;
-    using batch = xsimd::make_sized_batch_t<Scalar, optimal_simd_width<Scalar, OUT>()>;
+    using batch = xsimd::make_sized_batch_t<Scalar, optimalSimdWidth<Scalar, OUT>()>;
     alignas(batch::arch_type::alignment()) OutT res{0};
     const batch x_vec(x[axis]);
 
@@ -181,9 +103,9 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeff
         idx[axis] = k;
         alignas(batch::arch_type::alignment()) OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, NCoeffsCt, OutT>(simd_t{}, x, coeffs, idx, nCoeffsRt);
+            inner = horner_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(SimdEvalTag{}, x, coeffs, idx, nCoeffsRt);
         } else {
-            poet::static_for<OUT>([&](auto i) { inner[i] = call_coeffs<Dim>(coeffs, idx, i); });
+            poet::static_for<OUT>([&](auto i) { inner[i] = coeffAt<Dim>(coeffs, idx, i); });
         }
 
         poet::static_for<0, OUT, batch::size>([&](auto i) {
@@ -196,44 +118,26 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(simd_t, const InVec &x, const Mdspan &coeff
         });
     };
 
-    if constexpr (NCoeffsCt != 0) {
-        poet::static_for<NCoeffsCt>([&](auto k) { step(k); });
-    } else {
-        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
-    }
+    forEachCoeff<NCOEFFS>(nCoeffsRt, step);
     return res;
 }
 
 } // namespace detail
-// Compensated Horner (scalar only, for fitting accuracy)
-// Tracks rounding errors at each FMA step using two_prod and two_sum,
-// effectively doubling working precision: relative error O(u + n*u^2*cond)
-// instead of O(n*u*cond). Only used during fitting (refinement residuals).
 
-// Real overload (general OutputType)
-template<std::size_t N_total = 0, typename OutputType, typename InputType>
+template<std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
 constexpr OutputType compensated_horner(InputType x, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
 
-// Complex overload (more specialized, preferred by partial ordering)
-template<std::size_t N_total = 0, typename T, typename InputType>
+template<std::size_t NCOEFFS = 0, typename T, typename InputType>
 constexpr std::complex<T> compensated_horner(InputType x, const std::complex<T> *c_ptr, std::size_t c_size = 0) noexcept;
 
 } // namespace poly_eval
 
-//------------------------------------------------------------------------------
-// Implementation of Public API
-//------------------------------------------------------------------------------
-
 namespace poly_eval {
 
-//------------------------------------------------------------------------------
-// Horner (scalar, one-point)
-//------------------------------------------------------------------------------
-
-template<std::size_t N_total, typename OutputType, typename InputType>
+template<std::size_t NCOEFFS, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c_ptr,
                                              const std::size_t c_size) noexcept {
-    if constexpr (N_total != 0) {
+    if constexpr (NCOEFFS != 0) {
         // CT path: full unroll (N is known, serial chain)
         // GCC false positive: deep static_for inlining confuses -Wmaybe-uninitialized
 #if defined(__GNUC__) && !defined(__clang__)
@@ -241,7 +145,7 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
         OutputType acc = c_ptr[0];
-        poet::static_for<1, N_total>([&](auto i) { acc = detail::fma(acc, x, c_ptr[i]); });
+        poet::static_for<1, NCOEFFS>([&](auto i) { acc = detail::fma(acc, x, c_ptr[i]); });
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -255,15 +159,10 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
     }
 }
 
-//------------------------------------------------------------------------------
-// Compensated Horner (scalar, one-point)
-//------------------------------------------------------------------------------
-
-// Real overload
-template<std::size_t N_total, typename OutputType, typename InputType>
+template<std::size_t NCOEFFS, typename OutputType, typename InputType>
 constexpr OutputType compensated_horner(const InputType x, const OutputType *c_ptr, const std::size_t c_size) noexcept {
     namespace eft = polyfit::internal::helpers::eft;
-    const std::size_t n = N_total != 0 ? N_total : c_size;
+    const std::size_t n = NCOEFFS != 0 ? NCOEFFS : c_size;
     OutputType acc = c_ptr[0];
     OutputType comp = OutputType(0);
     for (std::size_t k = 1; k < n; ++k) {
@@ -276,10 +175,10 @@ constexpr OutputType compensated_horner(const InputType x, const OutputType *c_p
 }
 
 // Complex overload: component-wise compensation
-template<std::size_t N_total, typename T, typename InputType>
+template<std::size_t NCOEFFS, typename T, typename InputType>
 constexpr std::complex<T> compensated_horner(const InputType x, const std::complex<T> *c_ptr, const std::size_t c_size) noexcept {
     namespace eft = polyfit::internal::helpers::eft;
-    const std::size_t n = N_total != 0 ? N_total : c_size;
+    const std::size_t n = NCOEFFS != 0 ? NCOEFFS : c_size;
     T acc_re = c_ptr[0].real(), acc_im = c_ptr[0].imag();
     T comp_re = T(0), comp_im = T(0);
     const T xv = T(x);
@@ -301,30 +200,28 @@ constexpr std::complex<T> compensated_horner(const InputType x, const std::compl
 // SIMD Horner
 //------------------------------------------------------------------------------
 
-template<std::size_t N_monomials, bool pts_aligned, bool out_aligned, int UNROLL, typename InputType,
+template<std::size_t NMONOMIALS, bool PTS_ALIGNED, bool OUT_ALIGNED, int UNROLL, typename InputType,
          typename OutputType, typename MapFunc>
 PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::size_t num_points,
                                        const OutputType *monomials, std::size_t monomials_size,
                                        const MapFunc map_func) noexcept {
     PF_C23STATIC constexpr auto simd_size = xsimd::batch<InputType>::size;
-    PF_C23STATIC constexpr auto UF = UNROLL > 0 ? UNROLL : detail::optimal_horner_uf<OutputType>();
+    PF_C23STATIC constexpr auto UF = UNROLL > 0 ? UNROLL : detail::optimalHornerUf<OutputType>();
     PF_C23STATIC constexpr auto block = simd_size * UF;
 
-    using pts_mode = std::conditional_t<pts_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
-    using out_mode = std::conditional_t<out_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
+    using pts_mode = std::conditional_t<PTS_ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;
+    using out_mode = std::conditional_t<OUT_ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;
 
-    const auto tile_end = detail::round_down<block>(num_points);
-    const auto simd_end = detail::round_down<simd_size>(num_points);
+    const auto tile_end = detail::roundDown<block>(num_points);
+    const auto simd_end = detail::roundDown<simd_size>(num_points);
 
-    // Horner coefficient loop: CT → static_for (full unrolling), RT → plain for.
     auto for_k = [&](auto step) {
-        if constexpr (N_monomials != 0)
-            poet::static_for<1, N_monomials>(step);
+        if constexpr (NMONOMIALS != 0)
+            poet::static_for<1, NMONOMIALS>(step);
         else
             for (std::size_t k = 1; k < monomials_size; ++k) step(k);
     };
 
-    // Main unrolled SIMD loop: UF batches with shared coeff broadcast
     for (std::size_t i = 0; i < tile_end; i += block) {
         xsimd::batch<InputType> pt_batches[UF];
         xsimd::batch<OutputType> acc_batches[UF];
@@ -343,7 +240,6 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         poet::static_for<UF>([&](auto j) { acc_batches[j].store(out + i + j * simd_size, out_mode{}); });
     }
 
-    // Single-batch SIMD remainder
     for (std::size_t i = tile_end; i < simd_end; i += simd_size) {
         auto pt = map_func(xsimd::load(pts + i, pts_mode{}));
         auto acc = xsimd::batch<OutputType>(monomials[0]);
@@ -351,29 +247,28 @@ PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, st
         acc.store(out + i, out_mode{});
     }
 
-    // Scalar remainder
     for (std::size_t i = simd_end; i < num_points; ++i)
-        out[i] = horner<N_monomials>(map_func(pts[i]), monomials, monomials_size);
+        out[i] = horner<NMONOMIALS>(map_func(pts[i]), monomials, monomials_size);
 }
 
 //------------------------------------------------------------------------------
 // horner_many
 //------------------------------------------------------------------------------
 
-template<std::size_t M_total, std::size_t N_total, typename OutputType, typename InputType>
+template<std::size_t MCOUNT, std::size_t NCOEFFS, typename OutputType, typename InputType>
 PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputType *coeffs, OutputType *out,
                                             const std::size_t M, const std::size_t N) noexcept {
-    const std::size_t n_lim = N_total ? N_total : N;
+    const std::size_t n_lim = NCOEFFS ? NCOEFFS : N;
 
-    if constexpr (M_total != 0) {
-        poet::static_for<M_total>([&](auto m) {
-            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
+    if constexpr (MCOUNT != 0) {
+        poet::static_for<MCOUNT>([&](auto m) {
+            out[m] = horner<NCOEFFS>(xin, coeffs + (m * n_lim), n_lim);
         });
     } else {
         const std::size_t m_lim = M;
-        constexpr auto UF = detail::optimal_horner_many_uf();
+        constexpr auto UF = detail::optimalHornerManyUf();
         poet::dynamic_for<UF>(m_lim, [&](auto /*lane*/, std::size_t m) {
-            out[m] = horner<N_total>(xin, coeffs + (m * n_lim), n_lim);
+            out[m] = horner<NCOEFFS>(xin, coeffs + (m * n_lim), n_lim);
         });
     }
 }
@@ -384,75 +279,71 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputTyp
 
 namespace detail {
 
-template<std::size_t N_total, std::size_t simd_width, bool is_aligned, typename Out, typename AccArr, typename XvecArr,
+template<std::size_t NCOEFFS, std::size_t SIMD_WIDTH, bool IS_ALIGNED, typename Out, typename AccArr, typename XvecArr,
          typename ForChunks>
 PF_ALWAYS_INLINE void horner_transposed_simd_core(const Out *coeffs, Out *out, std::size_t stride, std::size_t n_lim,
                                                   AccArr &acc, XvecArr &xvec, ForChunks for_chunks) noexcept {
-    using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
-    using mode = std::conditional_t<is_aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
+    using batch_out = xsimd::make_sized_batch_t<Out, SIMD_WIDTH>;
+    using mode = std::conditional_t<IS_ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;
 
-    // Init accumulators from row 0
-    for_chunks([&](auto ci) { acc[ci] = batch_out::load(coeffs + std::size_t(ci) * simd_width, mode{}); });
+    for_chunks([&](auto ci) { acc[ci] = batch_out::load(coeffs + std::size_t(ci) * SIMD_WIDTH, mode{}); });
 
-    // Horner steps
     auto step = [&](std::size_t k) {
         const auto *col = coeffs + k * stride;
         for_chunks([&](auto ci) {
-            acc[ci] = detail::fma(acc[ci], xvec[ci], batch_out::load(col + std::size_t(ci) * simd_width, mode{}));
+            acc[ci] = detail::fma(acc[ci], xvec[ci], batch_out::load(col + std::size_t(ci) * SIMD_WIDTH, mode{}));
         });
     };
 
-    if constexpr (N_total != 0)
-        poet::static_for<1, N_total>([&](auto k) { step(k); });
+    if constexpr (NCOEFFS != 0)
+        poet::static_for<1, NCOEFFS>([&](auto k) { step(k); });
     else
         for (std::size_t k = 1; k < n_lim; ++k) step(k);
 
-    // Store results
-    for_chunks([&](auto ci) { acc[ci].store(out + std::size_t(ci) * simd_width, mode{}); });
+    for_chunks([&](auto ci) { acc[ci].store(out + std::size_t(ci) * SIMD_WIDTH, mode{}); });
 }
 
 } // namespace detail
 
-template<std::size_t M_total, std::size_t N_total, std::size_t simd_width, bool aligned, typename Out, typename In>
+template<std::size_t MCOUNT, std::size_t NCOEFFS, std::size_t SIMD_WIDTH, bool ALIGNED, typename Out, typename In>
 PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coeffs, Out *out, const std::size_t M,
                                                   const std::size_t N) noexcept {
-    constexpr bool has_Mt = (M_total != 0);
-    constexpr bool has_Nt = (N_total != 0);
-    const std::size_t m_lim = has_Mt ? M_total : M;
-    const std::size_t n_lim = has_Nt ? N_total : N;
+    constexpr bool has_Mt = (MCOUNT != 0);
+    constexpr bool has_Nt = (NCOEFFS != 0);
+    const std::size_t m_lim = has_Mt ? MCOUNT : M;
+    const std::size_t n_lim = has_Nt ? NCOEFFS : N;
     const std::size_t stride = m_lim;
 
-    if constexpr (simd_width > 0) {
-        using batch_in = xsimd::make_sized_batch_t<In, simd_width>;
-        using mode = std::conditional_t<aligned, xsimd::aligned_mode, xsimd::unaligned_mode>;
+    if constexpr (SIMD_WIDTH > 0) {
+        using batch_in = xsimd::make_sized_batch_t<In, SIMD_WIDTH>;
+        using mode = std::conditional_t<ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;
 
         if constexpr (has_Mt) {
-            constexpr std::size_t C = M_total / simd_width;
-            std::array<xsimd::make_sized_batch_t<Out, simd_width>, C> acc;
+            constexpr std::size_t C = MCOUNT / SIMD_WIDTH;
+            std::array<xsimd::make_sized_batch_t<Out, SIMD_WIDTH>, C> acc;
             std::array<batch_in, C> xvec;
             poet::static_for<C>(
-                [&](auto ci) { xvec[ci] = batch_in::load(xin + std::size_t(ci) * simd_width, mode{}); });
-            detail::horner_transposed_simd_core<N_total, simd_width, aligned>(
+                [&](auto ci) { xvec[ci] = batch_in::load(xin + std::size_t(ci) * SIMD_WIDTH, mode{}); });
+            detail::horner_transposed_simd_core<NCOEFFS, SIMD_WIDTH, ALIGNED>(
                 coeffs, out, stride, n_lim, acc, xvec,
                 [](auto body) { poet::static_for<C>([&](auto ci) { body(ci); }); });
         } else {
-            using batch_out = xsimd::make_sized_batch_t<Out, simd_width>;
-            constexpr std::size_t max_chunks = 8; // supports up to 8*simd_width points
-            const std::size_t C = m_lim / simd_width;
+            using batch_out = xsimd::make_sized_batch_t<Out, SIMD_WIDTH>;
+            constexpr std::size_t max_chunks = 8;
+            const std::size_t C = m_lim / SIMD_WIDTH;
             assert(C <= max_chunks && "horner_transposed: C exceeds stack buffer capacity");
             batch_out acc[max_chunks];
             batch_in xvec[max_chunks];
-            for (std::size_t ci = 0; ci < C; ++ci) xvec[ci] = batch_in::load(xin + ci * simd_width, mode{});
-            detail::horner_transposed_simd_core<N_total, simd_width, aligned>(coeffs, out, stride, n_lim, acc, xvec,
+            for (std::size_t ci = 0; ci < C; ++ci) xvec[ci] = batch_in::load(xin + ci * SIMD_WIDTH, mode{});
+            detail::horner_transposed_simd_core<NCOEFFS, SIMD_WIDTH, ALIGNED>(coeffs, out, stride, n_lim, acc, xvec,
                                                                               [C](auto body) {
                                                                                   for (std::size_t ci = 0; ci < C; ++ci)
                                                                                       body(ci);
                                                                               });
         }
     } else {
-        // Scalar path
         if constexpr (has_Mt) {
-            poet::static_for<M_total>([&](auto i) { out[i] = coeffs[i]; });
+            poet::static_for<MCOUNT>([&](auto i) { out[i] = coeffs[i]; });
         } else {
             for (std::size_t i = 0; i < m_lim; ++i) out[i] = coeffs[i];
         }
@@ -460,7 +351,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         const auto step = [&](const std::size_t k) noexcept {
             const auto col = coeffs + (k * stride);
             if constexpr (has_Mt) {
-                poet::static_for<M_total>([&](auto i) { out[i] = detail::fma(out[i], xin[i], col[i]); });
+                poet::static_for<MCOUNT>([&](auto i) { out[i] = detail::fma(out[i], xin[i], col[i]); });
             } else {
                 for (std::size_t i = 0; i < m_lim; ++i) {
                     out[i] = detail::fma(out[i], xin[i], col[i]);
@@ -469,7 +360,7 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
         };
 
         if constexpr (has_Nt) {
-            poet::static_for<1, N_total>([&](auto k) { step(k); });
+            poet::static_for<1, NCOEFFS>([&](auto k) { step(k); });
         } else {
             for (std::size_t k = 1; k < n_lim; ++k) step(k);
         }
@@ -480,12 +371,12 @@ PF_ALWAYS_INLINE constexpr void horner_transposed(const In *xin, const Out *coef
 // ND Horner front-end
 //------------------------------------------------------------------------------
 
-template<std::size_t NCoeffsCt, bool SIMD, typename OutT, typename InVec, typename Mdspan>
+template<std::size_t NCOEFFS, bool SIMD, typename OutT, typename InVec, typename Mdspan>
 PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int nCoeffsRt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
-    return detail::horner_nd_impl<Dim, Dim, NCoeffsCt, OutT>(
-        std::conditional_t<SIMD, detail::simd_t, detail::scalar_t>{}, x, coeffs, idx, nCoeffsRt);
+    return detail::horner_nd_impl<Dim, Dim, NCOEFFS, OutT>(
+        std::conditional_t<SIMD, detail::SimdEvalTag, detail::ScalarEvalTag>{}, x, coeffs, idx, nCoeffsRt);
 }
 
 } // namespace poly_eval

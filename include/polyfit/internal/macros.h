@@ -92,7 +92,7 @@
 #define PF_NO_UNIQUE_ADDRESS
 #endif
 
-// The eps-based constexpr make_func_eval uses a function parameter in an
+// The eps-based constexpr fit uses a function parameter in an
 // if-constexpr condition — a GCC extension that Clang strictly rejects.
 #if __cplusplus >= 202002L && defined(__GNUC__) && !defined(__clang__)
 #define PF_HAS_CONSTEXPR_EPS_OVERLOAD 1

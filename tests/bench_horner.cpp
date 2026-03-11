@@ -131,7 +131,7 @@ int main() {
         }
     }
 
-    // horner_transposed scalar (simd_width=0)
+    // horner_transposed scalar (SIMD_WIDTH=0)
     for (auto nCoeffs : nCoeffs1D) {
         for (auto M : Ms) {
             std::vector<double> coeffs(nCoeffs * M), out(M), x(M);

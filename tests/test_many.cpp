@@ -26,9 +26,9 @@ static double func(double x) { return std::cos(x); }
 // Helper to build a FuncEvalMany<N>
 template<std::size_t N, std::size_t... Is> auto makeGroupImpl(std::index_sequence<Is...>) {
     const auto make_one = [] {
-        return poly_eval::make_func_eval(func, 16, -1.0, 1.0);
+        return poly_eval::fit(func, 16, -1.0, 1.0);
     };
-    return poly_eval::make_func_eval_many((static_cast<void>(Is), make_one())...);
+    return poly_eval::pack((static_cast<void>(Is), make_one())...);
 }
 template<std::size_t N> auto makeGroup() { return makeGroupImpl<N>(std::make_index_sequence<N>{}); }
 
@@ -123,17 +123,16 @@ TEST(FuncEvalManySIMD, CorrectConstants) {
 
     constexpr auto simd_w = xsimd::batch<double>::size;
 
-    // kSimd should be the native SIMD width
-    EXPECT_EQ(Group2::kSimd, simd_w);
-    EXPECT_EQ(Group3::kSimd, simd_w);
+    // SIMD width should match the native batch width.
+    EXPECT_EQ(Group2::SIMD_WIDTH, simd_w);
+    EXPECT_EQ(Group3::SIMD_WIDTH, simd_w);
 
-    // kFPad should be kF rounded up to kSimd
-    EXPECT_EQ(Group2::kFPad, ((2 + simd_w - 1) / simd_w) * simd_w);
-    EXPECT_EQ(Group3::kFPad, ((3 + simd_w - 1) / simd_w) * simd_w);
-    EXPECT_EQ(Group5::kFPad, ((5 + simd_w - 1) / simd_w) * simd_w);
+    // Padded count should round the group size up to the SIMD width.
+    EXPECT_EQ(Group2::PADDED_COUNT, ((2 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group3::PADDED_COUNT, ((3 + simd_w - 1) / simd_w) * simd_w);
+    EXPECT_EQ(Group5::PADDED_COUNT, ((5 + simd_w - 1) / simd_w) * simd_w);
 
-    // vectorWidth should equal kSimd
-    EXPECT_EQ(Group2::vectorWidth, simd_w);
+    EXPECT_EQ(Group2::VECTOR_WIDTH, simd_w);
 }
 
 // ----- FuncEvalMany truncation tests -----

@@ -12,81 +12,80 @@
 
 namespace poly_eval {
 
-template<class Func, std::size_t, std::size_t, FusionMode = FusionMode::auto_> class FuncEval;
+template<class Func, std::size_t, std::size_t, FusionMode = FusionMode::Auto> class FuncEval;
+template<class Func, std::size_t> class FuncEvalND;
 template<typename T> using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+template<bool Condition, class T = int> using enable_if_t = std::enable_if_t<Condition, T>;
+template<class...> inline constexpr bool alwaysFalse_v = false;
+template<class T> inline constexpr bool isIntegralLike_v = std::is_integral_v<remove_cvref_t<T>>;
+template<class T> inline constexpr bool isFloatingPointLike_v = std::is_floating_point_v<remove_cvref_t<T>>;
 
-template<typename T, std::size_t N_compile_time>
-using Buffer = std::conditional_t<N_compile_time == 0, std::vector<T>, std::array<T, N_compile_time>>;
+template<typename T, std::size_t NCOMPILE>
+using Buffer = std::conditional_t<NCOMPILE == 0, std::vector<T>, std::array<T, NCOMPILE>>;
 
-template<typename T, std::size_t N>
-constexpr Buffer<T, N> make_buffer(std::size_t runtime_size) {
-    Buffer<T, N> buf{};
-    if constexpr (N == 0) {
-        buf.resize(runtime_size);
+template<typename T, std::size_t NCOMPILE>
+constexpr Buffer<T, NCOMPILE> makeBuffer(std::size_t runtimeSize) {
+    Buffer<T, NCOMPILE> buf{};
+    if constexpr (NCOMPILE == 0) {
+        buf.resize(runtimeSize);
     }
     return buf;
 }
 
-template<typename T> struct function_traits : function_traits<decltype(&remove_cvref_t<T>::operator())> {};
+template<typename T> struct FunctionTraits : FunctionTraits<decltype(&remove_cvref_t<T>::operator())> {};
 
-template<typename R, typename Arg> struct function_traits<R (*)(Arg)> {
+template<typename R, typename Arg> struct FunctionTraits<R (*)(Arg)> {
     using result_type = R;
     using arg0_type = Arg;
 };
 
-template<typename R, typename Arg> struct function_traits<std::function<R(Arg)>> {
+template<typename R, typename Arg> struct FunctionTraits<std::function<R(Arg)>> {
     using result_type = R;
     using arg0_type = Arg;
 };
 
-template<typename F, typename R, typename Arg> struct function_traits<R (F::*)(Arg) const> {
+template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg) const> {
     using result_type = R;
     using arg0_type = Arg;
 };
 
-template<typename F, typename R, typename Arg> struct function_traits<R (F::*)(Arg)> {
+template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg)> {
     using result_type = R;
     using arg0_type = Arg;
 };
 
-template<typename R, typename T> struct function_traits<R (*)(const T &)> {
+template<typename R, typename T> struct FunctionTraits<R (*)(const T &)> {
     using result_type = R;
     using arg0_type = T;
 };
 
-template<typename T, typename = void> struct is_tuple_like : std::false_type {};
+template<class Func> using fitInput_t = typename FunctionTraits<Func>::arg0_type;
+template<class Func> using fitOutput_t = typename FunctionTraits<Func>::result_type;
 
-template<typename T>
-struct is_tuple_like<T, std::void_t<decltype(std::tuple_size_v<remove_cvref_t<T>>)>> : std::true_type {};
+namespace detail {
 
-#if __cpp_concepts >= 201907L
-template<typename T>
-concept tuple_like = is_tuple_like<T>::value;
-#endif
+template<typename T> struct IsComplex : std::false_type {};
+template<typename T> struct IsComplex<std::complex<T>> : std::true_type {};
+template<typename T> inline constexpr bool isComplex_v = IsComplex<remove_cvref_t<T>>::value;
 
-template<typename T, typename = void> struct tuple_size_or_zero : std::integral_constant<std::size_t, 0> {};
+template<typename, typename = void> struct HasTupleSize : std::false_type {};
+template<typename T> struct HasTupleSize<T, std::void_t<decltype(std::tuple_size<T>::value)>> : std::true_type {};
+template<typename T> inline constexpr bool hasTupleSize_v = HasTupleSize<remove_cvref_t<T>>::value;
 
-template<typename T>
-struct tuple_size_or_zero<T, std::void_t<decltype(std::tuple_size_v<remove_cvref_t<T>>)>>
-    : std::integral_constant<std::size_t, std::tuple_size_v<remove_cvref_t<T>>> {};
-
-template<typename T> struct is_func_eval : std::false_type {};
-template<typename... Args> struct is_func_eval<FuncEval<Args...>> : std::true_type {};
-
-} // namespace poly_eval
-
-template<typename T> struct is_complex : std::false_type {};
-template<typename T> struct is_complex<std::complex<T>> : std::true_type {};
-template<typename T> inline constexpr bool is_complex_v = is_complex<poly_eval::remove_cvref_t<T>>::value;
-
-template<typename, typename = void> struct has_tuple_size : std::false_type {};
-template<typename T> struct has_tuple_size<T, std::void_t<decltype(std::tuple_size<T>::value)>> : std::true_type {};
-template<typename T> inline constexpr bool has_tuple_size_v = has_tuple_size<poly_eval::remove_cvref_t<T>>::value;
-
-template<typename T, typename = void> struct value_type_or_identity {
+template<typename T, typename = void> struct valueTypeOrIdentity {
     using type = T;
 };
 
-template<typename T> struct value_type_or_identity<T, std::void_t<typename T::value_type>> {
+template<typename T> struct valueTypeOrIdentity<T, std::void_t<typename T::value_type>> {
     using type = typename T::value_type;
 };
+
+} // namespace detail
+
+template<class Func> inline constexpr bool takesTupleInput_v = detail::hasTupleSize_v<fitInput_t<Func>>;
+
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS = 1, FusionMode FUSION = FusionMode::Auto>
+using FitEvaluator =
+    std::conditional_t<takesTupleInput_v<Func>, FuncEvalND<Func, NCOEFFS>, FuncEval<Func, NCOEFFS, ITERS, FUSION>>;
+
+} // namespace poly_eval

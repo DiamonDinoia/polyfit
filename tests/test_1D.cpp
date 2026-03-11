@@ -1,5 +1,5 @@
 // fast_eval_test.cpp
-// Google Test suite for poly_eval::make_func_eval APIs with randomized verification
+// Google Test suite for poly_eval::fit APIs with randomized verification
 
 #include <cmath>
 #include <complex>
@@ -28,7 +28,7 @@ static constexpr std::size_t kNumRandomTests = 100;
 template<typename T, typename X = double, typename F>
 void batch_verify(const F &f, const std::vector<X> &xs, const std::vector<T> &ys, const double tol) {
     for (size_t i = 0; i < xs.size(); ++i) {
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(ys[i], f(xs[i])), tol)
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(ys[i], f(xs[i])), tol)
             << "Failed at x=" << xs[i] << ": expected " << f(xs[i]) << ", got " << ys[i];
     }
 }
@@ -38,13 +38,13 @@ TEST(PolyEval, RuntimeDegreeDoubleRandom) {
     double a = -0.5, b = 0.5;
     int nCoeffs = 16;
     constexpr auto eps = 1e-15;
-    auto poly = poly_eval::make_func_eval(double_func, nCoeffs, a, b);
+    auto poly = poly_eval::fit(double_func, nCoeffs, a, b);
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(xs[i]), double_func(xs[i])), eps);
     }
 
     // Batch test
@@ -60,14 +60,14 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
     constexpr auto nCoeffs = 12;
     constexpr size_t iters = 1;
     constexpr auto eps = 2.5e-4;
-    const auto poly = poly_eval::make_func_eval(float_func, nCoeffs, a, b, poly_eval::iters<iters>{});
+    const auto poly = poly_eval::fit(float_func, nCoeffs, a, b, poly_eval::Iters<iters>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<float> dist(a, b);
     std::vector<float> xs(kNumRandomTests);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), float_func(xs[i])), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(xs[i]), float_func(xs[i])), eps);
     }
 
     // Batch test (float)
@@ -80,22 +80,22 @@ TEST(PolyEval, RuntimeDegreeFloatCustomItersRandom) {
 TEST(PolyEval, RuntimeDegreeRejectsNonPositive) {
     constexpr double a = -1.0;
     constexpr double b = 1.0;
-    EXPECT_THROW((void)poly_eval::make_func_eval(double_func, 0, a, b), std::invalid_argument);
-    EXPECT_THROW((void)poly_eval::make_func_eval(double_func, -3, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(double_func, 0, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(double_func, -3, a, b), std::invalid_argument);
 }
 // 3. Compile-Time Coefficient Count (double, default iters)
 TEST(PolyEval, CompileTimeDegreeDoubleRandom) {
     double a = -.5, b = .5;
     constexpr size_t N = 6;
     constexpr auto eps = 1e-4;
-    auto poly = poly_eval::make_func_eval<N>(double_func, a, b);
+    auto poly = poly_eval::fit<N>(double_func, a, b);
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(xs[i]), double_func(xs[i])), eps);
     }
     // Batch test
     std::vector<double> ys(kNumRandomTests);
@@ -110,15 +110,15 @@ TEST(PolyEval, ErrorDrivenRuntimeEpsRandom) {
     constexpr size_t maxNCoeffs = 16;
     constexpr size_t evalPoints = 100;
     constexpr size_t Iters = 1;
-    auto poly = poly_eval::make_func_eval(double_func, eps, a, b, poly_eval::maxNCoeffs<maxNCoeffs>{},
-                                          poly_eval::evalPts<evalPoints>{}, poly_eval::iters<Iters>{});
+    auto poly = poly_eval::fit(double_func, eps, a, b, poly_eval::MaxCoeffs<maxNCoeffs>{},
+                                          poly_eval::EvalPts<evalPoints>{}, poly_eval::Iters<Iters>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         xs[i] = dist(gen);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(xs[i]), double_func(xs[i])), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(xs[i]), double_func(xs[i])), eps);
     }
 
     // Batch test
@@ -131,7 +131,7 @@ TEST(PolyEval, ErrorDrivenRuntimeEpsRandom) {
 TEST(PolyEval, RuntimeDegreeComplexRandom) {
     double a = -1.0, b = 1.0;
     int nCoeffs = 13;
-    auto poly = poly_eval::make_func_eval(complex_func, nCoeffs, a, b);
+    auto poly = poly_eval::fit(complex_func, nCoeffs, a, b);
     const auto eps = 1e-6;
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -140,7 +140,7 @@ TEST(PolyEval, RuntimeDegreeComplexRandom) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(want, got), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(want, got), eps);
     }
 
     // Batch test
@@ -152,7 +152,7 @@ TEST(PolyEval, RuntimeDegreeComplexRandom) {
 TEST(PolyEval, CompileDegreeComplexRandom) {
     constexpr double a = -1.0, b = 1.0;
     constexpr auto N = 13;
-    const auto poly = poly_eval::make_func_eval<N>(complex_func, a, b);
+    const auto poly = poly_eval::fit<N>(complex_func, a, b);
     const auto eps = 1e-12;
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -161,7 +161,7 @@ TEST(PolyEval, CompileDegreeComplexRandom) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(want, got), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(want, got), eps);
     }
 
     // Batch test
@@ -173,7 +173,7 @@ TEST(PolyEval, CompileDegreeComplexRandom) {
 TEST(PolyEval, RuntimeEpsComplexRandom) {
     double a = -1.0, b = 1.0;
     double eps = 1e-13;
-    auto poly = poly_eval::make_func_eval(complex_func, eps, a, b);
+    auto poly = poly_eval::fit(complex_func, eps, a, b);
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
@@ -181,7 +181,7 @@ TEST(PolyEval, RuntimeEpsComplexRandom) {
         xs[i] = dist(gen);
         auto want = complex_func(xs[i]);
         auto got = poly(xs[i]);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(want, got), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(want, got), eps);
     }
 
     // Batch test
@@ -200,7 +200,7 @@ TEST(PolyEval, FullCompileTimeRandom) {
     constexpr double a = -1.0, b = 1.0;
     constexpr size_t nCoeffs = 5;
     constexpr size_t ItersCT = 2;
-    constexpr auto poly = poly_eval::make_func_eval<nCoeffs>(double_constexpr_func, a, b, poly_eval::iters<ItersCT>{});
+    constexpr auto poly = poly_eval::fit<nCoeffs>(double_constexpr_func, a, b, poly_eval::Iters<ItersCT>{});
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -224,7 +224,7 @@ constexpr auto complex_constexpr_func = [](const double x) constexpr {
 TEST(PolyEval, FullCompileTimeEps) {
     constexpr double a = -1.0, b = 1.0;
     constexpr auto eps = 1e-13;
-    constexpr auto poly = poly_eval::make_func_eval<eps, a, b>(double_constexpr_func);
+    constexpr auto poly = poly_eval::fit<eps, a, b>(double_constexpr_func);
 
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
@@ -248,7 +248,7 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
     constexpr size_t evalPoints = 100;
     constexpr size_t Iters = 0;
     constexpr auto poly =
-        poly_eval::make_func_eval<eps, a, b, maxNCoeffs, evalPoints, Iters>(complex_constexpr_func);
+        poly_eval::fit<eps, a, b, maxNCoeffs, evalPoints, Iters>(complex_constexpr_func);
     // Randomized tests (single-point)
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests);
@@ -256,7 +256,7 @@ TEST(PolyEval, ErrorDrivenCompileTimeEpsComplexRandom) {
         xs[i] = dist(gen);
         auto want = complex_constexpr_func(xs[i]);
         auto got = poly(xs[i]);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(want, got), eps);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(want, got), eps);
     }
 
     // Batch test
@@ -274,7 +274,7 @@ TEST(PolyEval, TruncateLowDegreeFunc) {
     auto cubic = [](double x) {
         return x * x * x - 2.0 * x + 1.0;
     };
-    auto poly = poly_eval::make_func_eval(cubic, 16, -1.0, 1.0);
+    auto poly = poly_eval::fit(cubic, 16, -1.0, 1.0);
     const auto original_size = poly.coeffs().size();
     EXPECT_EQ(original_size, 16u);
 
@@ -297,7 +297,7 @@ TEST(PolyEval, TruncatePreservesConstant) {
         (void)x;
         return 42.0;
     };
-    auto poly = poly_eval::make_func_eval(constantFunc, 16, -1.0, 1.0);
+    auto poly = poly_eval::fit(constantFunc, 16, -1.0, 1.0);
     poly.truncate(1e-10);
     EXPECT_EQ(poly.coeffs().size(), 1u); // only constant term remains
     EXPECT_NEAR(poly(0.5), 42.0, 1e-10);
@@ -307,7 +307,7 @@ TEST(PolyEval, CoeffsAreHighDegreeFirst) {
     auto quadratic = [](double x) {
         return x * x + 2.0;
     };
-    auto poly = poly_eval::make_func_eval(quadratic, 3, -1.0, 1.0);
+    auto poly = poly_eval::fit(quadratic, 3, -1.0, 1.0);
     const auto &coeffs = poly.coeffs();
     ASSERT_EQ(coeffs.size(), 3u);
     EXPECT_NEAR(coeffs[0], 1.0, 1e-12);
@@ -316,14 +316,14 @@ TEST(PolyEval, CoeffsAreHighDegreeFirst) {
 }
 
 TEST(PolyEval, AdaptiveFitFindsWorkingDegree) {
-    auto poly = poly_eval::make_func_eval(double_func, 1e-12, -0.5, 0.5);
+    auto poly = poly_eval::fit(double_func, 1e-12, -0.5, 0.5);
     EXPECT_LE(poly.coeffs().size(), 32u);
     EXPECT_GT(poly.coeffs().size(), 1u);
 
     std::uniform_real_distribution<double> dist(-0.5, 0.5);
     for (std::size_t i = 0; i < 100; ++i) {
         double x = dist(gen);
-        EXPECT_LE(poly_eval::detail::relative_l2_norm(poly(x), double_func(x)), 1e-12);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(x), double_func(x)), 1e-12);
     }
 }
 
@@ -335,7 +335,7 @@ TEST(PolyEval, HighDegree48MachineEps) {
         return std::sin(x);
     };
     const double a = -1.0, b = 1.0;
-    auto poly = poly_eval::make_func_eval(sinFunc, 48, a, b);
+    auto poly = poly_eval::fit(sinFunc, 48, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double maxErr = 0.0;
@@ -354,7 +354,7 @@ TEST(PolyEval, HighDegree48Exp) {
         return std::exp(x);
     };
     const double a = -1.0, b = 1.0;
-    auto poly = poly_eval::make_func_eval(expFunc, 48, a, b);
+    auto poly = poly_eval::fit(expFunc, 48, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double maxErr = 0.0;
@@ -371,7 +371,7 @@ TEST(PolyEval, HighDegree48Complex) {
         return std::complex<double>(std::sin(x), std::cos(x));
     };
     const double a = -1.0, b = 1.0;
-    auto poly = poly_eval::make_func_eval(func, 48, a, b);
+    auto poly = poly_eval::fit(func, 48, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double maxErr = 0.0;
@@ -388,7 +388,7 @@ TEST(PolyEval, HighDegree48Batch) {
         return std::sin(x);
     };
     const double a = -1.0, b = 1.0;
-    auto poly = poly_eval::make_func_eval(sinFunc, 48, a, b);
+    auto poly = poly_eval::fit(sinFunc, 48, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests), ys(kNumRandomTests);
@@ -408,13 +408,13 @@ TEST(PolyEval, HighDegree48Batch) {
 TEST(PolyEval, WideDomainRuntimeDegree) {
     auto func = [](double x) { return std::exp(-x / 1000.0); };
     const double a = 1000.0, b = 2000.0;
-    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+    auto poly = poly_eval::fit(func, 32, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double max_rel = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+        max_rel = std::max(max_rel, poly_eval::detail::relativeL2Norm(poly(x), func(x)));
     }
     EXPECT_LT(max_rel, 1e-13) << "Wide domain [1000,2000] exp(-x/1000) max relative error: " << max_rel;
 }
@@ -423,13 +423,13 @@ TEST(PolyEval, WideDomainCompileTimeDegree) {
     auto func = [](double x) { return std::log(x); };
     constexpr double a = 1000.0, b = 2000.0;
     constexpr std::size_t N = 24;
-    auto poly = poly_eval::make_func_eval<N>(func, a, b);
+    auto poly = poly_eval::fit<N>(func, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double max_rel = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+        max_rel = std::max(max_rel, poly_eval::detail::relativeL2Norm(poly(x), func(x)));
     }
     EXPECT_LT(max_rel, 1e-13) << "Wide domain CT log(x) max relative error: " << max_rel;
 }
@@ -437,7 +437,7 @@ TEST(PolyEval, WideDomainCompileTimeDegree) {
 TEST(PolyEval, WideDomainBatch) {
     auto func = [](double x) { return 1.0 / x; };
     const double a = 1000.0, b = 2000.0;
-    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+    auto poly = poly_eval::fit(func, 32, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     std::vector<double> xs(kNumRandomTests), ys(kNumRandomTests);
@@ -451,13 +451,13 @@ TEST(PolyEval, WideDomainEpsDriven) {
     auto func = [](double x) { return std::sqrt(x); };
     const double a = 1000.0, b = 2000.0;
     constexpr double eps = 1e-12;
-    auto poly = poly_eval::make_func_eval(func, eps, a, b);
+    auto poly = poly_eval::fit(func, eps, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double max_rel = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+        max_rel = std::max(max_rel, poly_eval::detail::relativeL2Norm(poly(x), func(x)));
     }
     EXPECT_LT(max_rel, eps) << "Wide domain eps-driven sqrt max relative error: " << max_rel;
 }
@@ -467,13 +467,13 @@ TEST(PolyEval, WideDomainComplex) {
         return std::complex<double>(std::log(x), 1.0 / x);
     };
     const double a = 1000.0, b = 2000.0;
-    auto poly = poly_eval::make_func_eval(func, 32, a, b);
+    auto poly = poly_eval::fit(func, 32, a, b);
 
     std::uniform_real_distribution<double> dist(a, b);
     double max_rel = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        max_rel = std::max(max_rel, poly_eval::detail::relative_l2_norm(poly(x), func(x)));
+        max_rel = std::max(max_rel, poly_eval::detail::relativeL2Norm(poly(x), func(x)));
     }
     EXPECT_LT(max_rel, 1e-13) << "Wide domain complex log+i/x max relative error: " << max_rel;
 }
@@ -490,7 +490,7 @@ TEST(PolyEval, DirectDomainVsMappedAccuracy) {
     constexpr std::size_t N = 16;
 
     // --- Approach 1: with domain mapping (the normal API) ---
-    auto poly_mapped = poly_eval::make_func_eval(func, static_cast<int>(N), a, b);
+    auto poly_mapped = poly_eval::fit(func, static_cast<int>(N), a, b);
 
     // --- Approach 2: direct interpolation on [a, b] without mapping ---
     // Place Chebyshev nodes directly in [a, b]
@@ -500,8 +500,8 @@ TEST(PolyEval, DirectDomainVsMappedAccuracy) {
         nodes[k] = 0.5 * ((b - a) * t + (b + a)); // Chebyshev node in [a, b]
         samples[k] = func(nodes[k]);
     }
-    auto newton = poly_eval::detail::bjorck_pereyra(nodes, samples);
-    auto mono = poly_eval::detail::newton_to_monomial(newton, nodes);
+    auto newton = poly_eval::detail::bjorckPereyra(nodes, samples);
+    auto mono = poly_eval::detail::newtonToMonomial(newton, nodes);
 
     // Evaluate both at random points
     std::uniform_real_distribution<double> dist(a, b);
@@ -540,25 +540,25 @@ TEST(PolyEval, FusionNeverSkipsFusion) {
     // Use [0, pi] where the domain map is non-trivial (not identity like [-1,1])
     auto func = [](double x) { return std::sin(x); };
     const double a = 0.0, b = poly_eval::detail::constants::pi;
-    auto poly_never = poly_eval::make_func_eval<16>(func, a, b, poly_eval::fuse_never{});
-    auto poly_auto = poly_eval::make_func_eval<16>(func, a, b);
+    auto poly_never = poly_eval::fit<16>(func, a, b, poly_eval::FuseNever{});
+    auto poly_auto = poly_eval::fit<16>(func, a, b);
     std::uniform_real_distribution<double> dist(a, b);
     double maxErr_never = 0.0, maxErr_auto = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        maxErr_never = std::max(maxErr_never, poly_eval::detail::relative_l2_norm(poly_never(x), func(x)));
-        maxErr_auto = std::max(maxErr_auto, poly_eval::detail::relative_l2_norm(poly_auto(x), func(x)));
+        maxErr_never = std::max(maxErr_never, poly_eval::detail::relativeL2Norm(poly_never(x), func(x)));
+        maxErr_auto = std::max(maxErr_auto, poly_eval::detail::relativeL2Norm(poly_auto(x), func(x)));
     }
     EXPECT_LT(maxErr_never, 1e-10);
     EXPECT_LT(maxErr_auto, 1e-10);
     EXPECT_NE(maxErr_never, maxErr_auto)
-        << "fuse_never and auto should take different code paths on non-trivial domains";
+        << "FuseNever and auto should take different code paths on non-trivial domains";
 }
 
 TEST(PolyEval, FusionAlwaysForcesOnNarrowDomain) {
     auto func = [](double x) { return std::cos(x); };
-    auto poly_always = poly_eval::make_func_eval<8>(func, 0.0, 2.0, poly_eval::fuse_always{});
-    auto poly_auto = poly_eval::make_func_eval<8>(func, 0.0, 2.0);
+    auto poly_always = poly_eval::fit<8>(func, 0.0, 2.0, poly_eval::FuseAlways{});
+    auto poly_auto = poly_eval::fit<8>(func, 0.0, 2.0);
     std::uniform_real_distribution<double> dist(0.0, 2.0);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
@@ -569,15 +569,15 @@ TEST(PolyEval, FusionAlwaysForcesOnNarrowDomain) {
 TEST(PolyEval, FusionAlwaysOnWideDomainLosesAccuracy) {
     auto func = [](double x) { return std::exp(-x / 1000.0); };
     const double a = 1000.0, b = 2000.0;
-    auto poly_auto = poly_eval::make_func_eval(func, 32, a, b);
-    auto poly_force = poly_eval::make_func_eval(func, 32, a, b, poly_eval::fuse_always{});
+    auto poly_auto = poly_eval::fit(func, 32, a, b);
+    auto poly_force = poly_eval::fit(func, 32, a, b, poly_eval::FuseAlways{});
 
     std::uniform_real_distribution<double> dist(a, b);
     double maxErr_auto = 0.0, maxErr_force = 0.0;
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
-        maxErr_auto = std::max(maxErr_auto, poly_eval::detail::relative_l2_norm(poly_auto(x), func(x)));
-        maxErr_force = std::max(maxErr_force, poly_eval::detail::relative_l2_norm(poly_force(x), func(x)));
+        maxErr_auto = std::max(maxErr_auto, poly_eval::detail::relativeL2Norm(poly_auto(x), func(x)));
+        maxErr_force = std::max(maxErr_force, poly_eval::detail::relativeL2Norm(poly_force(x), func(x)));
     }
     EXPECT_LT(maxErr_auto, 1e-13);
     EXPECT_GT(maxErr_force, maxErr_auto)
@@ -586,8 +586,8 @@ TEST(PolyEval, FusionAlwaysOnWideDomainLosesAccuracy) {
 
 TEST(PolyEval, TagOrderIndependence) {
     auto func = [](double x) { return std::sin(x); };
-    auto p1 = poly_eval::make_func_eval<16>(func, -1.0, 1.0, poly_eval::iters<2>{}, poly_eval::fuse_never{});
-    auto p2 = poly_eval::make_func_eval<16>(func, -1.0, 1.0, poly_eval::fuse_never{}, poly_eval::iters<2>{});
+    auto p1 = poly_eval::fit<16>(func, -1.0, 1.0, poly_eval::Iters<2>{}, poly_eval::FuseNever{});
+    auto p2 = poly_eval::fit<16>(func, -1.0, 1.0, poly_eval::FuseNever{}, poly_eval::Iters<2>{});
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
     for (std::size_t i = 0; i < kNumRandomTests; ++i) {
         double x = dist(gen);
