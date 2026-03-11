@@ -66,6 +66,30 @@ TEST(Eval, RuntimeNCoeffsRejectsNonPositive) {
     EXPECT_THROW((void)poly_eval::fit(sumCos<In, Out>, -2, a, b), std::invalid_argument);
 }
 
+TEST(Eval, NdBraceInitArgumentsAreInferredFromFunction) {
+    auto approx = poly_eval::fit([](const std::array<double, 2> &p) {
+        return std::array<double, 2>{std::cos(p[0]) + std::sin(p[1]), p[0] * p[1]};
+    }, 10, {-1.0, -1.0}, {1.0, 1.0});
+
+    const auto y = approx({0.25, -0.5});
+    EXPECT_NEAR(y[0], std::cos(0.25) + std::sin(-0.5), 1e-8);
+    EXPECT_NEAR(y[1], 0.25 * -0.5, 1e-8);
+}
+
+#if __cplusplus >= 202002L
+TEST(Eval, TemplateParameterNdFit) {
+    constexpr std::array<double, 2> a{-1.0, -1.0};
+    constexpr std::array<double, 2> b{1.0, 1.0};
+    const auto approx = poly_eval::fit<8, a, b>([](const std::array<double, 2> &p) {
+        return std::array<double, 2>{p[0] + p[1], p[0] * p[1]};
+    });
+
+    const auto y = approx({0.25, -0.5});
+    EXPECT_NEAR(y[0], -0.25, 1e-8);
+    EXPECT_NEAR(y[1], -0.125, 1e-8);
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // Main entry point for Google Test
 // -----------------------------------------------------------------------------

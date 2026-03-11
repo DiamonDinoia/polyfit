@@ -47,6 +47,24 @@ constexpr auto approx = poly_eval::fit<8>([](double x) { return x * x + 1.0; }, 
 static_assert(approx(0.5) > 1.0);
 ```
 
+Compile-time fit with a compile-time error target:
+
+```cpp
+constexpr auto approx = poly_eval::fit<1e-12, -1.0, 1.0>([](double x) constexpr {
+    return std::sin(x) + x * x;
+});
+static_assert(approx(0.25) > 0.0);
+```
+
+This overload is available only when `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is enabled.
+Today that means the supported C++20 GCC path. It is 1D-only and uses template
+parameters instead of runtime tags:
+
+- `EPS`
+- `a`
+- `b`
+- optional `MAX_NCOEFFS`, `EVAL_POINTS`, `ITERS`
+
 Adaptive fit with options:
 
 ```cpp
@@ -66,14 +84,11 @@ The tags can appear in any order. You can pass only the ones you need.
 ND fit:
 
 ```cpp
-using In = std::array<double, 2>;
-using Out = std::array<double, 2>;
+auto approx = poly_eval::fit([](const std::array<double, 2> &p) {
+    return std::array<double, 2>{std::cos(p[0]) + std::sin(p[1]), p[0] * p[1]};
+}, 10, {-1.0, -1.0}, {1.0, 1.0});
 
-auto approx = poly_eval::fit([](const In &p) {
-    return Out{std::cos(p[0]) + std::sin(p[1]), p[0] * p[1]};
-}, 10, In{-1.0, -1.0}, In{1.0, 1.0});
-
-auto y = approx(In{0.25, -0.5});
+auto y = approx({0.25, -0.5});
 ```
 
 Pack several 1D evaluators:
@@ -102,6 +117,8 @@ auto y = packed(0.5);
 - `Iters<N>{}` controls refinement iterations for 1D fitting.
 - `FuseAuto{}`, `FuseAlways{}`, and `FuseNever{}` control domain fusion in 1D fits.
 - `MaxCoeffs` and `EvalPts` do not affect fixed-count or ND runtime fits.
+- The compile-time epsilon overload does not use tags; it takes `MAX_NCOEFFS`,
+  `EVAL_POINTS`, and `ITERS` as template parameters.
 
 Example with the same tags in a different order:
 

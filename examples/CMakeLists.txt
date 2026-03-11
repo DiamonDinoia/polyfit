@@ -25,7 +25,10 @@ set(SOURCES
 )
 set(SOURCES_CXX20)
 if(COMPILER_SUPPORTS_CXX20)
-    list(APPEND SOURCES_CXX20 compiletime_1D_fixed.cpp)
+    list(APPEND SOURCES_CXX20
+            compiletime_1D_fixed.cpp
+            compiletime_1D_eps.cpp
+    )
 endif()
 
 set(EXAMPLE_TARGETS "")
