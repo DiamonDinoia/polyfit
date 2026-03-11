@@ -249,16 +249,33 @@ PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = COUN
     }
 }
 
-template<typename T> PF_C20CONSTEXPR double relativeError(const T &approx, const T &actual) {
+template<typename T, class Step> PF_ALWAYS_INLINE constexpr void forEachComponent(const T &value, Step &&step) {
     if constexpr (detail::hasTupleSize_v<T>) {
-        double err = 0.0;
         for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
-            err = std::max(math::abs(1.0 - approx[i] / actual[i]), err);
+            step(value[i]);
         }
-        return err;
     } else {
-        return math::abs(1.0 - approx / actual);
+        step(value);
     }
+}
+
+template<typename T, class Step>
+PF_ALWAYS_INLINE constexpr void forEachComponentPair(const T &lhs, const T &rhs, Step &&step) {
+    if constexpr (detail::hasTupleSize_v<T>) {
+        for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
+            step(lhs[i], rhs[i]);
+        }
+    } else {
+        step(lhs, rhs);
+    }
+}
+
+template<typename T> PF_C20CONSTEXPR double relativeError(const T &approx, const T &actual) {
+    double err = 0.0;
+    forEachComponentPair(approx, actual, [&](const auto &approxValue, const auto &actualValue) {
+        err = std::max(err, math::abs(1.0 - approxValue / actualValue));
+    });
+    return err;
 }
 
 template<typename T> PF_C20CONSTEXPR double relativeL2Norm(const T &approx, const T &actual) {
@@ -272,15 +289,10 @@ template<typename T> PF_C20CONSTEXPR double relativeL2Norm(const T &approx, cons
 
     double numerator = 0.0;
     double denominator = 0.0;
-    if constexpr (detail::hasTupleSize_v<T>) {
-        for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
-            numerator += squaredNorm(approx[i] - actual[i]);
-            denominator += squaredNorm(actual[i]);
-        }
-    } else {
-        numerator += squaredNorm(approx - actual);
-        denominator += squaredNorm(actual);
-    }
+    forEachComponentPair(approx, actual, [&](const auto &approxValue, const auto &actualValue) {
+        numerator += squaredNorm(approxValue - actualValue);
+        denominator += squaredNorm(actualValue);
+    });
 
     const double ratio = denominator == 0.0 ? numerator : numerator / denominator;
     PF_IF_CONSTEVAL { return math::sqrt(ratio); }
