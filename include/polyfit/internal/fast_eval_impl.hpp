@@ -408,16 +408,17 @@ FuncEvalMany<EvalTypes...>::mapInput(std::size_t polyIndex, InputType x) const n
 }
 
 template<typename... EvalTypes>
-constexpr std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT>
-FuncEvalMany<EvalTypes...>::mapInputs(InputType x) const noexcept {
+constexpr auto FuncEvalMany<EvalTypes...>::mapInputs(typename FuncEvalMany<EvalTypes...>::InputType x) const noexcept
+    -> std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT> {
     std::array<InputType, PADDED_COUNT> mapped{};
     poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), x); });
     return mapped;
 }
 
 template<typename... EvalTypes>
-constexpr std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT>
-FuncEvalMany<EvalTypes...>::mapInputs(const std::array<InputType, COUNT> &xs) const noexcept {
+constexpr auto FuncEvalMany<EvalTypes...>::mapInputs(
+    const std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::COUNT> &xs) const noexcept
+    -> std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT> {
     std::array<InputType, PADDED_COUNT> mapped{};
     poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), xs[i]); });
     return mapped;
@@ -426,9 +427,10 @@ FuncEvalMany<EvalTypes...>::mapInputs(const std::array<InputType, COUNT> &xs) co
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::evalMapped(const std::array<InputType, PADDED_COUNT> &xu) const noexcept
     -> std::array<OutputType, COUNT> {
+    alignas(ALIGNMENT) std::array<InputType, PADDED_COUNT> alignedXu = xu;
     alignas(ALIGNMENT) std::array<OutputType, PADDED_COUNT> full{};
     horner_transposed<PADDED_COUNT, MAX_NCOEFFS, VECTOR_WIDTH, true>(
-        xu.data(), coeffs.data_handle(), full.data(), PADDED_COUNT, static_cast<std::size_t>(coeffs.extent(0)));
+        alignedXu.data(), coeffs.data_handle(), full.data(), PADDED_COUNT, static_cast<std::size_t>(coeffs.extent(0)));
     return extractReal(full);
 }
 
