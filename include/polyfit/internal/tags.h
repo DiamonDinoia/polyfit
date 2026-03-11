@@ -42,19 +42,16 @@ template<template<std::size_t> class Tag, std::size_t V> struct TagValue<Tag, Ta
     static constexpr std::size_t val = V;
 };
 
-template<template<std::size_t> class Tag, std::size_t Default, class... Tags> struct TagPicker {
-    static constexpr std::size_t value = Default;
-};
-
-template<template<std::size_t> class Tag, std::size_t Default, class First, class... Rest>
-struct TagPicker<Tag, Default, First, Rest...> {
-    static constexpr std::size_t value = TagValue<Tag, tag_type_t<First>>::matched
-                                             ? TagValue<Tag, tag_type_t<First>>::val
-                                             : TagPicker<Tag, Default, Rest...>::value;
-};
-
 template<template<std::size_t> class Tag, std::size_t Default, class... Tags>
-inline constexpr std::size_t tagValue = TagPicker<Tag, Default, Tags...>::value;
+inline constexpr std::size_t tagValue = [] {
+    std::size_t value = Default;
+    [[maybe_unused]] bool matched = false;
+    ((matched = matched || (TagValue<Tag, tag_type_t<Tags>>::matched
+                                ? (value = TagValue<Tag, tag_type_t<Tags>>::val, true)
+                                : false)),
+     ...);
+    return value;
+}();
 
 template<class T>
 inline constexpr FusionMode fusionModeFor =
@@ -62,16 +59,13 @@ inline constexpr FusionMode fusionModeFor =
     : std::is_same_v<tag_type_t<T>, FuseNever> ? FusionMode::Never
                                                : FusionMode::Auto;
 
-template<class... Tags> struct FusionPicker {
-    static constexpr FusionMode value = FusionMode::Auto;
-};
-
-template<class First, class... Rest> struct FusionPicker<First, Rest...> {
-    static constexpr FusionMode value =
-        fusionModeFor<First> != FusionMode::Auto ? fusionModeFor<First> : FusionPicker<Rest...>::value;
-};
-
-template<class... Tags> inline constexpr FusionMode fusionModeValue = FusionPicker<Tags...>::value;
+template<class... Tags>
+inline constexpr FusionMode fusionModeValue = [] {
+    FusionMode mode = FusionMode::Auto;
+    [[maybe_unused]] bool matched = false;
+    ((matched = matched || (fusionModeFor<Tags> != FusionMode::Auto ? (mode = fusionModeFor<Tags>, true) : false)), ...);
+    return mode;
+}();
 
 template<class... Tags> struct FitOptions {
     static constexpr bool VALID = allTags<Tags...>;
