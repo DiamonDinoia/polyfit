@@ -402,29 +402,6 @@ template<typename... EvalTypes> PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>:
 }
 
 template<typename... EvalTypes>
-constexpr typename FuncEvalMany<EvalTypes...>::InputType
-FuncEvalMany<EvalTypes...>::mapInput(std::size_t polyIndex, InputType x) const noexcept {
-    return xsimd::fms(InputType(2.0), x, sumEndpoints[polyIndex]) * invSpan[polyIndex];
-}
-
-template<typename... EvalTypes>
-constexpr auto FuncEvalMany<EvalTypes...>::mapInputs(typename FuncEvalMany<EvalTypes...>::InputType x) const noexcept
-    -> std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT> {
-    std::array<InputType, PADDED_COUNT> mapped{};
-    poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), x); });
-    return mapped;
-}
-
-template<typename... EvalTypes>
-constexpr auto FuncEvalMany<EvalTypes...>::mapInputs(
-    const std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::COUNT> &xs) const noexcept
-    -> std::array<typename FuncEvalMany<EvalTypes...>::InputType, FuncEvalMany<EvalTypes...>::PADDED_COUNT> {
-    std::array<InputType, PADDED_COUNT> mapped{};
-    poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), xs[i]); });
-    return mapped;
-}
-
-template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::evalMapped(const std::array<InputType, PADDED_COUNT> &xu) const noexcept
     -> std::array<OutputType, COUNT> {
     alignas(ALIGNMENT) std::array<InputType, PADDED_COUNT> alignedXu = xu;

@@ -87,3 +87,26 @@ ctest --test-dir build --output-on-failure
 ```
 
 More detail: [`docs/API.md`](docs/API.md)
+
+## Performance
+
+Benchmarks run automatically on pushes to `main` across `gcc-14`, `gcc-15`, `llvm-20`, and `llvm-21` on Ubuntu 24.04 with `-mavx2 -mfma`.
+Published charts and raw summaries live on the [`benchmark-results`](https://github.com/DiamonDinoia/polyfit/tree/benchmark-results) branch.
+
+### Horner evaluation
+
+![Horner evaluation performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/horner_performance.svg)
+
+### 1D fitting
+
+![1D fitting performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/fitting_performance.svg)
+
+### Cross-compiler overview
+
+![Cross-compiler relative performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/cross_compiler_overview.svg)
+
+### Average speedup vs gcc-14
+
+![Average speedup](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/average_improvement.svg)
+
+Raw numbers: [`summary.md`](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/summary.md)

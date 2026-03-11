@@ -138,9 +138,19 @@ template<typename... EvalTypes> class FuncEvalMany {
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
     template<class Step> constexpr void forEachCoeff(Step &&step) const noexcept;
     PF_C20CONSTEXPR void bindCoeffView(std::size_t coeffCount);
-    [[nodiscard]] constexpr InputType mapInput(std::size_t polyIndex, InputType x) const noexcept;
-    [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(InputType x) const noexcept;
-    [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(const std::array<InputType, COUNT> &xs) const noexcept;
+    [[nodiscard]] constexpr InputType mapInput(std::size_t polyIndex, InputType x) const noexcept {
+        return xsimd::fms(InputType(2.0), x, sumEndpoints[polyIndex]) * invSpan[polyIndex];
+    }
+    [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(InputType x) const noexcept {
+        std::array<InputType, PADDED_COUNT> mapped{};
+        poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), x); });
+        return mapped;
+    }
+    [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(const std::array<InputType, COUNT> &xs) const noexcept {
+        std::array<InputType, PADDED_COUNT> mapped{};
+        poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), xs[i]); });
+        return mapped;
+    }
     [[nodiscard]] std::array<OutputType, COUNT> evalMapped(const std::array<InputType, PADDED_COUNT> &xu) const noexcept;
     void scatterColumnBatch(xsimd::batch<OutputType> acc, OutputType *out, std::size_t base, std::size_t column) const noexcept;
     void evalColumn(std::size_t column, const InputType *x, OutputType *out, std::size_t numPoints) const noexcept;
