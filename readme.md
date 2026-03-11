@@ -61,6 +61,21 @@ auto approx = poly_eval::fit(
     poly_eval::FuseNever{});
 ```
 
+The tags can appear in any order. You can pass only the ones you need.
+
+ND fit:
+
+```cpp
+using In = std::array<double, 2>;
+using Out = std::array<double, 2>;
+
+auto approx = poly_eval::fit([](const In &p) {
+    return Out{std::cos(p[0]) + std::sin(p[1]), p[0] * p[1]};
+}, 10, In{-1.0, -1.0}, In{1.0, 1.0});
+
+auto y = approx(In{0.25, -0.5});
+```
+
 Pack several 1D evaluators:
 
 ```cpp
@@ -76,6 +91,31 @@ auto y = packed(0.5);
 - 1D coefficients are stored in Horner order: highest degree first.
 - Degenerate domains throw `std::invalid_argument`.
 - `pack(...)` is for 1D `FuncEval` objects, not `FuncEvalND`.
+
+## Tags
+
+- Tags are optional.
+- Tags can appear in any order.
+- Repeating the same tag kind is a compile-time error.
+- `MaxCoeffs<N>{}` sets the search cap for adaptive `fit(f, eps, a, b, ...)`.
+- `EvalPts<N>{}` sets how many points are checked when validating an adaptive fit.
+- `Iters<N>{}` controls refinement iterations for 1D fitting.
+- `FuseAuto{}`, `FuseAlways{}`, and `FuseNever{}` control domain fusion in 1D fits.
+- `MaxCoeffs` and `EvalPts` do not affect fixed-count or ND runtime fits.
+
+Example with the same tags in a different order:
+
+```cpp
+auto approx = poly_eval::fit(
+    [](double x) { return std::sin(x); },
+    1e-12,
+    -1.0,
+    1.0,
+    poly_eval::FuseNever{},
+    poly_eval::Iters<2>{},
+    poly_eval::EvalPts<200>{},
+    poly_eval::MaxCoeffs<48>{});
+```
 
 ## Build Examples and Tests
 
@@ -100,13 +140,5 @@ Published charts and raw summaries live on the [`benchmark-results`](https://git
 ### 1D fitting
 
 ![1D fitting performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/fitting_performance.svg)
-
-### Cross-compiler overview
-
-![Cross-compiler relative performance](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/cross_compiler_overview.svg)
-
-### Average speedup vs gcc-14
-
-![Average speedup](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/average_improvement.svg)
 
 Raw numbers: [`summary.md`](https://raw.githubusercontent.com/DiamonDinoia/polyfit/benchmark-results/summary.md)

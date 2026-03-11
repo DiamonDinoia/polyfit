@@ -733,7 +733,7 @@ constexpr void FuncEvalND<Func, NCOEFFS>::forEachIndex(const std::array<int, Ran
 template<std::size_t NCOEFFS, class Func, class... Tags>
 [[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
     using Options = detail::FitOptions<Tags...>;
-    static_assert(Options::VALID, "Unsupported fit tag");
+    static_assert(Options::VALID, "Unsupported or duplicate fit tag");
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
     using Evaluator = FitEvaluator<Func, NCOEFFS, Options::ITERS, Options::FUSION_MODE>;
     return Evaluator(F, a, b);
@@ -742,7 +742,7 @@ template<std::size_t NCOEFFS, class Func, class... Tags>
 template<class Func, class Spec, class... Tags>
 [[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, Spec spec, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
     using Options = detail::FitOptions<Tags...>;
-    static_assert(Options::VALID, "Unsupported fit tag");
+    static_assert(Options::VALID, "Unsupported or duplicate fit tag");
 
     if constexpr (isIntegralLike_v<Spec>) {
         const auto nCoeffs = detail::validatePositiveCoeffCount(static_cast<int>(spec));

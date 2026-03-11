@@ -8,6 +8,12 @@
 
 std::mt19937 rng(42);
 
+static_assert(poly_eval::detail::FitOptions<>::VALID);
+static_assert(poly_eval::detail::FitOptions<poly_eval::EvalPts<64>, poly_eval::MaxCoeffs<12>, poly_eval::Iters<2>,
+                                            poly_eval::FuseNever>::VALID);
+static_assert(poly_eval::detail::FitOptions<poly_eval::MaxCoeffs<8>, poly_eval::MaxCoeffs<16>>::VALID == false);
+static_assert(poly_eval::detail::FitOptions<poly_eval::FuseAuto, poly_eval::FuseNever>::VALID == false);
+
 // Helper to compute maximum relative error over random samples
 template<typename TrueF, typename ApproxF, typename Domain>
 double computeMaxRelativeError(TrueF f_true, ApproxF f_approx, Domain low, Domain high, int num_samples) {

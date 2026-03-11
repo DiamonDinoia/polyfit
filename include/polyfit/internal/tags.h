@@ -33,6 +33,11 @@ template<> struct IsTag<FuseNever> : std::true_type {};
 template<class... Tags>
 inline constexpr bool allTags = (true && ... && IsTag<tag_type_t<Tags>>::value);
 
+template<class T> struct IsFusionTag : std::false_type {};
+template<> struct IsFusionTag<FuseAuto> : std::true_type {};
+template<> struct IsFusionTag<FuseAlways> : std::true_type {};
+template<> struct IsFusionTag<FuseNever> : std::true_type {};
+
 template<template<std::size_t> class Tag, class T> struct TagValue {
     static constexpr bool matched = false;
     static constexpr std::size_t val = 0;
@@ -53,6 +58,10 @@ inline constexpr std::size_t tagValue = [] {
     return value;
 }();
 
+template<template<std::size_t> class Tag, class... Tags>
+inline constexpr std::size_t tagCount =
+    (std::size_t{0} + ... + std::size_t(TagValue<Tag, tag_type_t<Tags>>::matched));
+
 template<class T>
 inline constexpr FusionMode fusionModeFor =
     std::is_same_v<tag_type_t<T>, FuseAlways> ? FusionMode::Always
@@ -67,8 +76,14 @@ inline constexpr FusionMode fusionModeValue = [] {
     return mode;
 }();
 
+template<class... Tags>
+inline constexpr std::size_t fusionTagCount =
+    (std::size_t{0} + ... + std::size_t(IsFusionTag<tag_type_t<Tags>>::value));
+
 template<class... Tags> struct FitOptions {
-    static constexpr bool VALID = allTags<Tags...>;
+    static constexpr bool UNIQUE = tagCount<Iters, Tags...> <= 1 && tagCount<MaxCoeffs, Tags...> <= 1
+        && tagCount<EvalPts, Tags...> <= 1 && fusionTagCount<Tags...> <= 1;
+    static constexpr bool VALID = allTags<Tags...> && UNIQUE;
     static constexpr std::size_t ITERS = tagValue<Iters, 1, Tags...>;
     static constexpr std::size_t MAX_NCOEFFS = tagValue<MaxCoeffs, 32, Tags...>;
     static constexpr std::size_t EVAL_POINTS = tagValue<EvalPts, 100, Tags...>;
