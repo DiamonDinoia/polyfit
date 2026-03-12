@@ -57,6 +57,7 @@ function(polyfit_enable_warnings target)
     /Zc:__cplusplus  # report correct __cplusplus value instead of always 199711L
     /external:anglebrackets  # treat angle-bracket includes as external
     /external:W0             # suppress all warnings in external headers
+    /wd4324  # structure padded due to alignment specifier — intentional for SIMD-aligned storage
     /wd4702  # unreachable code — false positive with if constexpr branches
     /wd4723  # potential divide by 0 — false positive in interval scaling
     /w14242
