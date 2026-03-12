@@ -100,8 +100,12 @@
 
 #if PF_HAS_CXX20
 #define PF_IS_CONSTANT_EVALUATED() std::is_constant_evaluated()
-#elif defined(_MSC_VER) && _MSC_VER >= 1925
-#define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
+#elif defined(_MSC_VER)
+// Pre-C++20 MSVC accepts __builtin_is_constant_evaluated(), but the fallback
+// path is only used to emulate constexpr-aware branching. Returning false keeps
+// runtime code on the stable branch and avoids optimizer-sensitive behavior in
+// Release builds.
+#define PF_IS_CONSTANT_EVALUATED() false
 #elif PF_HAS_BUILTIN(__builtin_is_constant_evaluated)
 #define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
 #else
