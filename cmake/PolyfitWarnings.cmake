@@ -43,9 +43,12 @@ function(polyfit_enable_warnings target)
   #   standard library vector operations through template chains.
   # - Wno-gnu-zero-variadic-macro-arguments: GTest TYPED_TEST_SUITE uses GNU
   #   extension zero-arg variadic macros; suppress the pedantic warning.
+  # - Wno-c++20-attribute-extensions: allow using standard attributes such as
+  #   [[likely]] and [[no_unique_address]] as extensions in C++17 mode.
   set(_warnings_clang_only
     -Wnull-dereference
     -Wno-gnu-zero-variadic-macro-arguments
+    -Wno-c++20-attribute-extensions
   )
 
   set(_warnings_msvc
