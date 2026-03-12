@@ -11,6 +11,7 @@
 
 #include "api_types.hpp"
 #include "macros.h"
+#include "numeric_utils.h"
 
 namespace poly_eval {
 namespace detail {
@@ -25,16 +26,16 @@ PF_ALWAYS_INLINE constexpr std::size_t roundDown(std::size_t x) noexcept {
     }
 }
 
-template<typename T, std::size_t RESERVED> PF_C23CONSTEVAL std::size_t registerLimitedUnroll() noexcept {
+template<typename T, std::size_t RESERVED> PF_CXX20_CONSTEVAL std::size_t registerLimitedUnroll() noexcept {
     constexpr std::size_t nregs = poet::vector_register_count();
     constexpr std::size_t vreg_bytes = sizeof(T) * xsimd::batch<T>::size;
     constexpr std::size_t actualReserved = vreg_bytes <= 16 ? RESERVED - (RESERVED > 0 ? 1 : 0) : RESERVED;
     return (nregs - actualReserved) / 2;
 }
 
-template<typename T> PF_C23CONSTEVAL std::size_t optimalHornerUf() noexcept { return registerLimitedUnroll<T, 1>(); }
+template<typename T> PF_CXX20_CONSTEVAL std::size_t optimalHornerUf() noexcept { return registerLimitedUnroll<T, 1>(); }
 
-template<typename T> PF_C23CONSTEVAL std::size_t optimalManyEvalUf() noexcept { return registerLimitedUnroll<T, 3>(); }
+template<typename T> PF_CXX20_CONSTEVAL std::size_t optimalManyEvalUf() noexcept { return registerLimitedUnroll<T, 3>(); }
 
 template<class T, std::size_t WIDTH = 1> constexpr std::uint8_t minSimdWidth() {
     if constexpr (std::is_void_v<xsimd::make_sized_batch_t<T, WIDTH>>) {
@@ -99,8 +100,7 @@ constexpr PF_ALWAYS_INLINE xsimd::batch<std::complex<T>, A> fma(const xsimd::bat
 template<typename T, typename = enable_if_t<!isXsimdBatch_v<T> && std::is_arithmetic_v<T>>>
 constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
     if constexpr (std::is_floating_point_v<T>) {
-        PF_IF_CONSTEVAL { return a * b + c; }
-        return std::fma(a, b, c);
+        return math::fma(a, b, c);
     } else {
         return (a * b) + c;
     }
@@ -109,8 +109,9 @@ constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
 template<typename T>
 constexpr PF_ALWAYS_INLINE std::complex<T> fma(const std::complex<T> &a, const T &b,
                                                const std::complex<T> &c) noexcept {
-    PF_IF_CONSTEVAL { return std::complex<T>(a.real() * b + c.real(), a.imag() * b + c.imag()); }
-    return std::complex<T>(std::fma(a.real(), b, c.real()), std::fma(a.imag(), b, c.imag()));
+    return constEval(
+        [=] { return std::complex<T>(a.real() * b + c.real(), a.imag() * b + c.imag()); },
+        [=] { return std::complex<T>(std::fma(a.real(), b, c.real()), std::fma(a.imag(), b, c.imag())); });
 }
 
 template<typename T, typename B, typename = enable_if_t<std::is_arithmetic_v<B>>>

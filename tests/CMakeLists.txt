@@ -47,22 +47,42 @@ function(polyfit_apply_dev_profile target)
     endif ()
 endfunction()
 
+function(polyfit_apply_bench_profile target)
+    if (POLYFIT_STRICT_WARNINGS)
+        polyfit_enable_warnings(${target})
+    endif ()
+endfunction()
+
+function(polyfit_configure_benchmark_target target std)
+    target_link_libraries(${target}
+            PRIVATE
+            polyfit::polyfit
+            nanobench::nanobench
+    )
+    set_property(TARGET ${target} PROPERTY CXX_STANDARD ${std})
+    set_property(TARGET ${target} PROPERTY CXX_STANDARD_REQUIRED ON)
+    set_property(TARGET ${target} PROPERTY CXX_EXTENSIONS OFF)
+    target_compile_options(${target} PRIVATE
+            $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
+            $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
+            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
+            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
+            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:MSVC>>:/fp:fast>
+    )
+    polyfit_apply_bench_profile(${target})
+endfunction()
+
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
 # -----------------------------------------------------------------------------
 # Standards to test/build: start at C++17 and add every later standard the compiler supports.
-# C++23 and beyond additionally require native std::mdspan (checked in root CMakeLists.txt).
-# Compiler-specific features (e.g. constexpr eps overload) are guarded by PF_HAS_* macros
-# in the headers, so all supported standards can be tested on every compiler.
+# Compiler- and library-specific features are guarded by PF_HAS_* macros in the
+# headers, so later standards can use the same mdspan fallback as earlier ones.
 set(POLYFIT_TEST_STANDARDS 17)
 include(CheckCXXCompilerFlag)
 foreach(_std IN ITEMS 20 23 26)
     check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
     if (_POLYFIT_CXX${_std})
-        # C++23+ requires native std::mdspan
-        if (_std GREATER_EQUAL 23 AND NOT POLYFIT_HAS_NATIVE_MDSPAN)
-            continue()
-        endif ()
         list(APPEND POLYFIT_TEST_STANDARDS ${_std})
     endif ()
 endforeach()
@@ -90,52 +110,12 @@ function(add_polyfit_test_matrix NAME SRC)
     endforeach()
 endfunction()
 
-# -----------------------------------------------------------------------------
-# Helper to add a benchmark target
-# -----------------------------------------------------------------------------
-function(add_polyfit_benchmark NAME SRC)
-    add_executable(${NAME} ${SRC})
-    target_link_libraries(${NAME}
-            PRIVATE
-            polyfit::polyfit
-            nanobench::nanobench
-    )
-    # Default to C++20 for the base target
-    set_property(TARGET ${NAME} PROPERTY CXX_STANDARD 20)
-    set_property(TARGET ${NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
-    set_property(TARGET ${NAME} PROPERTY CXX_EXTENSIONS OFF)
-
-    target_compile_options(${NAME} PRIVATE
-            $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
-            $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:MSVC>>:/fp:fast>
-    )
-    polyfit_apply_dev_profile(${NAME})
-    # not a CTest test by default
-endfunction()
-
 # Benchmarks matrix across standards (where supported)
 function(add_polyfit_benchmark_for_std BASENAME SRC STD)
     set(TGT "${BASENAME}_cxx${STD}")
     add_executable(${TGT} ${SRC})
-    target_link_libraries(${TGT}
-            PRIVATE
-            polyfit::polyfit
-            nanobench::nanobench
-    )
-    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD ${STD})
-    set_property(TARGET ${TGT} PROPERTY CXX_STANDARD_REQUIRED ON)
-    set_property(TARGET ${TGT} PROPERTY CXX_EXTENSIONS OFF)
-    target_compile_options(${TGT} PRIVATE
-            $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
-            $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
-            $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:MSVC>>:/fp:fast>
-    )
-    polyfit_apply_dev_profile(${TGT})
+    polyfit_configure_benchmark_target(${TGT} ${STD})
+    set_property(GLOBAL APPEND PROPERTY POLYFIT_BENCHMARK_TARGETS_${STD} ${TGT})
 endfunction()
 
 function(add_polyfit_benchmark_matrix NAME SRC)
@@ -166,6 +146,31 @@ add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)
 add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.cpp)
 add_polyfit_test_matrix(test_edge_cases test_edge_cases.cpp)
 add_polyfit_test_matrix(test_constexpr test_constexpr.cpp)
+add_polyfit_test_matrix(test_feature_macros test_feature_macros.cpp)
+
+foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
+    get_property(_polyfit_bench_targets GLOBAL PROPERTY POLYFIT_BENCHMARK_TARGETS_${STD})
+    if (_polyfit_bench_targets)
+        set(_runner "run_benchmarks_cxx${STD}")
+        set(_runner_commands
+                COMMAND ${CMAKE_COMMAND} -E echo "Benchmark note: use a tuned system for stable numbers."
+                COMMAND ${CMAKE_COMMAND} -E echo "Recommended: pyperf system tune, performance governor, and native tuning if desired."
+        )
+        foreach(_bench_target IN LISTS _polyfit_bench_targets)
+            list(APPEND _runner_commands COMMAND $<TARGET_FILE:${_bench_target}>)
+        endforeach ()
+        add_custom_target(${_runner}
+                ${_runner_commands}
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMENT "Running polyfit benchmarks for C++${STD}"
+                VERBATIM
+        )
+        add_dependencies(${_runner} ${_polyfit_bench_targets})
+        if (STD EQUAL 20)
+            add_custom_target(run_benchmarks DEPENDS ${_runner})
+        endif ()
+    endif ()
+endforeach ()
 
 if (POLYFIT_ENABLE_COVERAGE)
     find_program(LCOV_EXECUTABLE lcov)

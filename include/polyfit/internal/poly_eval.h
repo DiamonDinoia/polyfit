@@ -42,7 +42,7 @@ namespace detail {
 template<std::size_t D, typename MdspanType, std::size_t... Is>
 PF_ALWAYS_INLINE constexpr auto coeffAtImpl(const MdspanType &coeffs, const std::array<std::size_t, D> &idx,
                                             std::index_sequence<Is...>, std::size_t outputIndex) noexcept {
-    return coeffs(idx[Is]..., outputIndex);
+    return coeffs[std::array<std::size_t, D + 1>{idx[Is]..., outputIndex}];
 }
 
 template<std::size_t D, typename MdspanType>
@@ -205,9 +205,9 @@ template<std::size_t NMONOMIALS, bool PTS_ALIGNED, bool OUT_ALIGNED, int UNROLL,
 PF_ALWAYS_INLINE constexpr void horner(const InputType *pts, OutputType *out, std::size_t num_points,
                                        const OutputType *monomials, std::size_t monomials_size,
                                        const MapFunc map_func) noexcept {
-    PF_C23STATIC constexpr auto simd_size = xsimd::batch<InputType>::size;
-    PF_C23STATIC constexpr auto UF = UNROLL > 0 ? UNROLL : detail::optimalHornerUf<OutputType>();
-    PF_C23STATIC constexpr auto block = simd_size * UF;
+    PF_STATIC_CONSTEXPR_LOCAL auto simd_size = xsimd::batch<InputType>::size;
+    PF_STATIC_CONSTEXPR_LOCAL auto UF = UNROLL > 0 ? UNROLL : detail::optimalHornerUf<OutputType>();
+    PF_STATIC_CONSTEXPR_LOCAL auto block = simd_size * UF;
 
     using pts_mode = std::conditional_t<PTS_ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;
     using out_mode = std::conditional_t<OUT_ALIGNED, xsimd::aligned_mode, xsimd::unaligned_mode>;

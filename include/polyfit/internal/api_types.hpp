@@ -32,53 +32,45 @@ constexpr Buffer<T, NCOMPILE> makeBuffer(std::size_t runtimeSize) {
     return buf;
 }
 
+template<typename R, typename Arg> struct FunctionSig {
+    using result_type = R;
+    using arg0_type = remove_cvref_t<Arg>;
+};
+
 template<typename T> struct FunctionTraits : FunctionTraits<decltype(&remove_cvref_t<T>::operator())> {};
 
-template<typename R, typename Arg> struct FunctionTraits<R (*)(Arg)> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
+template<typename R, typename Arg> struct FunctionTraits<R(Arg)> : FunctionSig<R, Arg> {};
 
-template<typename R, typename Arg> struct FunctionTraits<std::function<R(Arg)>> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
+template<typename R, typename Arg> struct FunctionTraits<R (*)(Arg)> : FunctionTraits<R(Arg)> {};
 
-template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg) const> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
+template<typename R, typename Arg> struct FunctionTraits<std::function<R(Arg)>> : FunctionTraits<R(Arg)> {};
 
-template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg)> {
-    using result_type = R;
-    using arg0_type = Arg;
-};
+template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg)> : FunctionTraits<R(Arg)> {};
 
-template<typename R, typename T> struct FunctionTraits<R (*)(const T &)> {
-    using result_type = R;
-    using arg0_type = T;
-};
+template<typename F, typename R, typename Arg> struct FunctionTraits<R (F::*)(Arg) const> : FunctionTraits<R(Arg)> {};
 
 template<class Func> using fitInput_t = typename FunctionTraits<Func>::arg0_type;
 template<class Func> using fitOutput_t = typename FunctionTraits<Func>::result_type;
 
 namespace detail {
 
-template<typename T> struct IsComplex : std::false_type {};
-template<typename T> struct IsComplex<std::complex<T>> : std::true_type {};
-template<typename T> inline constexpr bool isComplex_v = IsComplex<remove_cvref_t<T>>::value;
+template<typename T> inline constexpr bool isComplexBase_v = false;
+template<typename T> inline constexpr bool isComplexBase_v<std::complex<T>> = true;
+template<typename T> inline constexpr bool isComplex_v = isComplexBase_v<remove_cvref_t<T>>;
 
-template<typename, typename = void> struct HasTupleSize : std::false_type {};
-template<typename T> struct HasTupleSize<T, std::void_t<decltype(std::tuple_size<T>::value)>> : std::true_type {};
-template<typename T> inline constexpr bool hasTupleSize_v = HasTupleSize<remove_cvref_t<T>>::value;
+template<typename T, typename = void> inline constexpr bool hasTupleSizeBase_v = false;
+template<typename T> inline constexpr bool hasTupleSizeBase_v<T, std::void_t<decltype(std::tuple_size<T>::value)>> = true;
+template<typename T> inline constexpr bool hasTupleSize_v = hasTupleSizeBase_v<remove_cvref_t<T>>;
 
-template<typename T, typename = void> struct valueTypeOrIdentity {
-    using type = T;
+template<typename T, typename = void> struct ValueType {
+    using type = remove_cvref_t<T>;
 };
 
-template<typename T> struct valueTypeOrIdentity<T, std::void_t<typename T::value_type>> {
-    using type = typename T::value_type;
+template<typename T> struct ValueType<T, std::void_t<typename remove_cvref_t<T>::value_type>> {
+    using type = typename remove_cvref_t<T>::value_type;
 };
+
+template<typename T> using value_type_or_t = typename ValueType<T>::type;
 
 } // namespace detail
 

@@ -33,7 +33,7 @@ namespace eft = polyfit::internal::helpers::eft;
 #endif
 
 template<std::size_t N, class X, class Y>
-PF_C20CONSTEXPR Buffer<Y, N> bjorckPereyra(const Buffer<X, N> &x, const Buffer<Y, N> &y) {
+PF_CXX20_CONSTEXPR Buffer<Y, N> bjorckPereyra(const Buffer<X, N> &x, const Buffer<Y, N> &y) {
     const std::size_t n = (N == 0 ? x.size() : N);
     Buffer<Y, N> a = y;
 
@@ -98,7 +98,7 @@ PF_C20CONSTEXPR Buffer<Y, N> bjorckPereyra(const Buffer<X, N> &x, const Buffer<Y
 }
 
 template<std::size_t N, class X, class Y>
-PF_C20CONSTEXPR Buffer<Y, N> newtonToMonomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
+PF_CXX20_CONSTEXPR Buffer<Y, N> newtonToMonomial(const Buffer<Y, N> &alpha, const Buffer<X, N> &nodes) {
     const std::size_t n = alpha.size();
     constexpr std::size_t WORK_SIZE = (N == 0) ? 0 : N + 1;
     auto c = makeBuffer<Y, WORK_SIZE>(n + 1);
@@ -178,12 +178,12 @@ PF_C20CONSTEXPR Buffer<Y, N> newtonToMonomial(const Buffer<Y, N> &alpha, const B
 }
 
 template<class X, class Y>
-PF_C20CONSTEXPR std::vector<Y> bjorckPereyra(const std::vector<X> &x, const std::vector<Y> &y) {
+PF_CXX20_CONSTEXPR std::vector<Y> bjorckPereyra(const std::vector<X> &x, const std::vector<Y> &y) {
     return bjorckPereyra<0, X, Y>(x, y);
 }
 
 template<class X, class Y>
-PF_C20CONSTEXPR std::vector<Y> newtonToMonomial(const std::vector<Y> &alpha, const std::vector<X> &nodes) {
+PF_CXX20_CONSTEXPR std::vector<Y> newtonToMonomial(const std::vector<Y> &alpha, const std::vector<X> &nodes) {
     return newtonToMonomial<0, X, Y>(alpha, nodes);
 }
 
@@ -192,7 +192,7 @@ PF_C20CONSTEXPR std::vector<Y> newtonToMonomial(const std::vector<Y> &alpha, con
 #endif
 
 template<std::size_t NCOEFFS, std::size_t DIM, std::size_t OUT_DIM, std::size_t... Is>
-PF_C23CONSTEVAL auto makeStaticExtentsImpl(std::index_sequence<Is...>) {
+PF_CXX20_CONSTEVAL auto makeStaticExtentsImpl(std::index_sequence<Is...>) {
     return stdex::extents<std::size_t, ((void)Is, NCOEFFS)..., OUT_DIM>{};
 }
 
@@ -200,19 +200,19 @@ template<std::size_t NCOEFFS, std::size_t DIM, std::size_t OUT_DIM>
 using StaticExtents_t = decltype(makeStaticExtentsImpl<NCOEFFS, DIM, OUT_DIM>(std::make_index_sequence<DIM>{}));
 
 template<class Scalar, std::size_t NCOEFFS, std::size_t DIM, std::size_t OUT_DIM>
-PF_C23CONSTEVAL std::size_t storageRequired() {
+PF_CXX20_CONSTEVAL std::size_t storageRequired() {
     using extents_t = StaticExtents_t<NCOEFFS, DIM, OUT_DIM>;
     using mdspan_t = stdex::mdspan<Scalar, extents_t, stdex::layout_right>;
     return typename mdspan_t::mapping_type{extents_t{}}.required_span_size();
 }
 
 template<std::size_t NCOEFFS, std::size_t DIM_IN, std::size_t DIM_OUT, std::size_t... Is>
-PF_C23CONSTEVAL auto makeStaticExtents(std::index_sequence<Is...>) {
+PF_CXX20_CONSTEVAL auto makeStaticExtents(std::index_sequence<Is...>) {
     return stdex::extents<std::size_t, ((void)Is, NCOEFFS)..., DIM_OUT>{};
 }
 
 template<std::size_t COUNT = 0, typename T>
-PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = COUNT) {
+PF_CXX20_CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = COUNT) {
     Buffer<T, COUNT> points{};
     if (numPoints <= 0) {
         return points;
@@ -250,7 +250,8 @@ PF_C20CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = COUN
 }
 
 template<typename T, class Step> PF_ALWAYS_INLINE constexpr void forEachComponent(const T &value, Step &&step) {
-    if constexpr (detail::hasTupleSize_v<T>) {
+    using V = poly_eval::remove_cvref_t<T>;
+    if constexpr (detail::hasTupleSize_v<V> && !detail::isComplex_v<V>) {
         for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
             step(value[i]);
         }
@@ -261,7 +262,8 @@ template<typename T, class Step> PF_ALWAYS_INLINE constexpr void forEachComponen
 
 template<typename T, class Step>
 PF_ALWAYS_INLINE constexpr void forEachComponentPair(const T &lhs, const T &rhs, Step &&step) {
-    if constexpr (detail::hasTupleSize_v<T>) {
+    using V = poly_eval::remove_cvref_t<T>;
+    if constexpr (detail::hasTupleSize_v<V> && !detail::isComplex_v<V>) {
         for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
             step(lhs[i], rhs[i]);
         }
@@ -270,7 +272,7 @@ PF_ALWAYS_INLINE constexpr void forEachComponentPair(const T &lhs, const T &rhs,
     }
 }
 
-template<typename T> PF_C20CONSTEXPR double relativeError(const T &approx, const T &actual) {
+template<typename T> PF_CXX20_CONSTEXPR double relativeError(const T &approx, const T &actual) {
     double err = 0.0;
     forEachComponentPair(approx, actual, [&](const auto &approxValue, const auto &actualValue) {
         err = std::max(err, math::abs(1.0 - approxValue / actualValue));
@@ -278,7 +280,7 @@ template<typename T> PF_C20CONSTEXPR double relativeError(const T &approx, const
     return err;
 }
 
-template<typename T> PF_C20CONSTEXPR double relativeL2Norm(const T &approx, const T &actual) {
+template<typename T> PF_CXX20_CONSTEXPR double relativeL2Norm(const T &approx, const T &actual) {
     const auto squaredNorm = [](const auto &v) constexpr noexcept -> double {
         if constexpr (detail::isComplex_v<poly_eval::remove_cvref_t<decltype(v)>>) {
             return double(v.real()) * double(v.real()) + double(v.imag()) * double(v.imag());
@@ -295,8 +297,7 @@ template<typename T> PF_C20CONSTEXPR double relativeL2Norm(const T &approx, cons
     });
 
     const double ratio = denominator == 0.0 ? numerator : numerator / denominator;
-    PF_IF_CONSTEVAL { return math::sqrt(ratio); }
-    return std::sqrt(ratio);
+    return constEval([=] { return math::sqrt(ratio); }, [=] { return std::sqrt(ratio); });
 }
 
 } // namespace poly_eval::detail

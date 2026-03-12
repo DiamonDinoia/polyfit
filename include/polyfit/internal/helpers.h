@@ -14,6 +14,18 @@
 
 namespace polyfit::internal::helpers {
 
+template<class T> constexpr bool isIdMap(T invSpan, T sumEndpoints) noexcept {
+    return invSpan == T(0.5) && sumEndpoints == T(0);
+}
+
+template<class T, std::size_t N>
+constexpr bool isIdMap(const std::array<T, N> &invSpan, const std::array<T, N> &sumEndpoints) noexcept {
+    for (std::size_t i = 0; i < N; ++i) {
+        if (!isIdMap(invSpan[i], sumEndpoints[i])) return false;
+    }
+    return true;
+}
+
 // Scalar mapping to canonical domain [-1,1]
 template<class ArgT, class ScalarT>
 constexpr ArgT mapToDomainScalar(const ArgT arg, const ScalarT invSpan, const ScalarT sumEndpoints) noexcept {
@@ -72,8 +84,9 @@ template<class T> constexpr std::pair<T, T> two_sum(T a, T b) noexcept {
 
 template<class T> constexpr std::pair<T, T> two_prod(T a, T b) noexcept {
     T p = a * b;
-    PF_IF_CONSTEVAL { return {p, T(0)}; }
-    return {p, std::fma(a, b, -p)};
+    return poly_eval::detail::constEval(
+        [=] { return std::pair<T, T>{p, T(0)}; },
+        [=] { return std::pair<T, T>{p, std::fma(a, b, -p)}; });
 }
 
 } // namespace eft

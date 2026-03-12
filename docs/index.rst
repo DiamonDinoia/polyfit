@@ -25,6 +25,25 @@ Core API
 - ``poly_eval::pack(...)`` combines several 1D evaluators into ``FuncEvalMany``.
 - 1D fitting options use tags such as ``Iters<N>``, ``MaxCoeffs<N>``, ``EvalPts<N>``, and ``FuseAuto``.
 
+Quick support guide
+-------------------
+
+===============================  ==========  =======  ==========================
+Form                             Dimensions  Runtime  Constant evaluation
+===============================  ==========  =======  ==========================
+``fit(f, nCoeffs, a, b, ...)``   1D          Yes      No
+``fit(f, eps, a, b, ...)``       1D          Yes      No
+``fit<NCOEFFS>(f, a, b, ...)``   1D          Yes      Yes, in C++20
+``fit(f, nCoeffs, a, b)``        ND          Yes      No
+``fit<NCOEFFS, a, b>(f)``        ND          Yes      Yes, in C++20
+``fit<EPS, a, b, ...>(f)``       1D          No       Yes, when enabled
+``pack(e1, e2, ...)``            1D bundle   Yes      See ``guides/pack``
+===============================  ==========  =======  ==========================
+
+If you are choosing between overloads, start with :doc:`guides/fit`. If you
+already have several 1D evaluators and want to evaluate them together, go to
+:doc:`guides/pack`.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents

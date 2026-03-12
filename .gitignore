@@ -1,7 +1,11 @@
 cmake-*/
 build-*/
 .idea/
+.vscode/
 build/
+.cache/
+docs/_build/
+core.*
 
 # Generated files — produced at build time, not stored in the repo
 docs/api/

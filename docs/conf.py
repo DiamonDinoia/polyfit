@@ -52,7 +52,6 @@ exclude_patterns = [
     "api/function_polyeval_8hpp_1aeabd8326d5cc248fbd6a8ae8d1098f40.rst",
     "api/function_polyeval_8hpp_1afa1c2905c64c53c7d718c72a49eec305.rst",
     "api/namespace_std.rst",
-    "api/dir_include.rst",
 ]
 
 html_static_path = []

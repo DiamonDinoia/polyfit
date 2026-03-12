@@ -28,6 +28,12 @@ template<typename... EvalTypes> class FuncEvalMany;
  */
 template<class Func, std::size_t NCOEFFS_CT, std::size_t ITERS_CT, FusionMode FUSION_MODE>
 class FuncEval {
+    using InputScalar = detail::value_type_or_t<fitInput_t<Func>>;
+    using OutputScalar = detail::value_type_or_t<fitOutput_t<Func>>;
+    static_assert(std::is_same_v<InputScalar, OutputScalar>,
+                  "FuncEval requires matching input and output scalar types; for example double -> complex<double> is "
+                  "supported, but float -> double is not");
+
   public:
     using InputType = fitInput_t<Func>;
     using OutputType = fitOutput_t<Func>;
@@ -37,9 +43,9 @@ class FuncEval {
     static constexpr std::size_t NCOEFFS = NCOEFFS_CT;
     static constexpr std::size_t ITERS = ITERS_CT;
 
-    PF_C20CONSTEXPR FuncEval(Func F, InputType a, InputType b, const InputType *pts = nullptr);
+    PF_CXX20_CONSTEXPR FuncEval(Func F, InputType a, InputType b, const InputType *pts = nullptr);
 
-    PF_C20CONSTEXPR FuncEval(Func F, int nCoeffs, InputType a, InputType b, const InputType *pts = nullptr);
+    PF_CXX20_CONSTEXPR FuncEval(Func F, int nCoeffs, InputType a, InputType b, const InputType *pts = nullptr);
 
     FuncEval(const FuncEval &) = default;
     FuncEval &operator=(const FuncEval &) = default;
@@ -51,7 +57,7 @@ class FuncEval {
     template<bool ptsAligned = false, bool outAligned = false>
     constexpr void operator()(const InputType *pts, OutputType *out, std::size_t numPoints) const noexcept;
 
-    PF_C20CONSTEXPR void truncate(typename detail::valueTypeOrIdentity<OutputType>::type eps) noexcept;
+    PF_CXX20_CONSTEXPR void truncate(detail::value_type_or_t<OutputType> eps) noexcept;
 
     /**
      * @brief Access coefficients in Horner order.
@@ -59,27 +65,27 @@ class FuncEval {
      * The returned buffer stores coefficients from highest-order term to constant
      * term so it can be passed directly to Horner-based evaluation helpers.
      */
-    [[nodiscard]] PF_C20CONSTEXPR const OutputBuffer &coeffs() const noexcept;
+    [[nodiscard]] PF_CXX20_CONSTEXPR const OutputBuffer &coeffs() const noexcept;
     [[nodiscard]] constexpr std::size_t nCoeffs() const noexcept;
 
   private:
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
     InputType invSpan, sumEndpoints;
-    PF_NO_UNIQUE_ADDRESS std::conditional_t<FUSION_MODE == FusionMode::Auto, bool, std::true_type> domainFused{};
+    bool identityMap = false;
     OutputBuffer coeffsBuf;
 
-    PF_C20CONSTEXPR void initialize(detail::CompileTimeCountTag, Func F, InputType a, InputType b,
+    PF_CXX20_CONSTEXPR void initialize(detail::CompileTimeCountTag, Func F, InputType a, InputType b,
                                     const InputType *pts);
-    PF_C20CONSTEXPR void initialize(detail::RuntimeCountTag, Func F, int nCoeffs, InputType a, InputType b,
+    PF_CXX20_CONSTEXPR void initialize(detail::RuntimeCountTag, Func F, int nCoeffs, InputType a, InputType b,
                                     const InputType *pts);
 
-    PF_C20CONSTEXPR void buildNodeGrid(InputBuffer &grid, const InputType *pts) const;
-    PF_C20CONSTEXPR void sampleOnGrid(OutputBuffer &samples, const InputBuffer &grid, Func F) const;
-    PF_C20CONSTEXPR void computeMonomialCoeffs(const InputBuffer &grid, const OutputBuffer &samples);
-    [[nodiscard]] PF_C20CONSTEXPR bool shouldFuseDomain() const noexcept;
-    PF_C20CONSTEXPR void fuseDomain();
+    PF_CXX20_CONSTEXPR void buildNodeGrid(InputBuffer &grid, const InputType *pts) const;
+    PF_CXX20_CONSTEXPR void sampleOnGrid(OutputBuffer &samples, const InputBuffer &grid, Func F) const;
+    PF_CXX20_CONSTEXPR void computeMonomialCoeffs(const InputBuffer &grid, const OutputBuffer &samples);
+    [[nodiscard]] PF_CXX20_CONSTEXPR bool shouldFuseDomain() const noexcept;
+    PF_CXX20_CONSTEXPR void fuseDomain();
 
-    PF_C20CONSTEXPR void initializeCoeffs(Func F, const InputType *pts);
+    PF_CXX20_CONSTEXPR void initializeCoeffs(Func F, const InputType *pts);
 
     template<class T> PF_ALWAYS_INLINE constexpr T mapToDomain(T value) const noexcept;
     template<class T> PF_ALWAYS_INLINE constexpr T mapFromDomain(T value) const noexcept;
@@ -87,7 +93,7 @@ class FuncEval {
     template<int OuterUnrollFactor, bool ptsAligned, bool outAligned>
     constexpr void evalBatch(const InputType *pts, OutputType *out, std::size_t numPoints) const noexcept;
 
-    PF_C20CONSTEXPR void refine(const InputBuffer &chebNodes, const OutputBuffer &samples);
+    PF_CXX20_CONSTEXPR void refine(const InputBuffer &chebNodes, const OutputBuffer &samples);
 
     template<typename... EvalTypes> friend class FuncEvalMany;
 #endif
@@ -104,8 +110,14 @@ template<typename... EvalTypes> class FuncEvalMany {
     using FirstEval = std::tuple_element_t<0, std::tuple<EvalTypes...>>;
     using InputType = typename FirstEval::InputType;
     using OutputType = typename FirstEval::OutputType;
+    static_assert((std::is_same_v<InputType, typename EvalTypes::InputType> && ...),
+                  "All evaluators packed into FuncEvalMany must have the same input type");
+    static_assert((std::is_same_v<OutputType, typename EvalTypes::OutputType> && ...),
+                  "All evaluators packed into FuncEvalMany must have the same output type");
 
     static constexpr std::size_t COUNT = sizeof...(EvalTypes);
+
+  private:
     static constexpr std::size_t SIMD_WIDTH = xsimd::batch<InputType>::size;
     static constexpr std::size_t PADDED_COUNT = ((COUNT + SIMD_WIDTH - 1) / SIMD_WIDTH) * SIMD_WIDTH;
     static constexpr std::size_t VECTOR_WIDTH = SIMD_WIDTH;
@@ -116,11 +128,13 @@ template<typename... EvalTypes> class FuncEvalMany {
 
     static constexpr std::size_t MAX_NCOEFFS = std::max({EvalTypes::NCOEFFS...});
 
-    explicit PF_C20CONSTEXPR FuncEvalMany(const EvalTypes &...evals);
-    PF_C20CONSTEXPR FuncEvalMany(const FuncEvalMany &other);
-    PF_C20CONSTEXPR FuncEvalMany &operator=(const FuncEvalMany &other);
-    PF_C20CONSTEXPR FuncEvalMany(FuncEvalMany &&other) noexcept;
-    PF_C20CONSTEXPR FuncEvalMany &operator=(FuncEvalMany &&other) noexcept;
+  public:
+
+    explicit PF_CXX20_CONSTEXPR FuncEvalMany(const EvalTypes &...evals);
+    PF_CXX20_CONSTEXPR FuncEvalMany(const FuncEvalMany &other);
+    PF_CXX20_CONSTEXPR FuncEvalMany &operator=(const FuncEvalMany &other);
+    PF_CXX20_CONSTEXPR FuncEvalMany(FuncEvalMany &&other) noexcept;
+    PF_CXX20_CONSTEXPR FuncEvalMany &operator=(FuncEvalMany &&other) noexcept;
 
     [[nodiscard]] constexpr std::size_t size() const noexcept;
     [[nodiscard]] constexpr std::size_t nCoeffs() const noexcept;
@@ -132,33 +146,43 @@ template<typename... EvalTypes> class FuncEvalMany {
     template<typename... Ts> std::array<OutputType, COUNT> operator()(InputType first, Ts... rest) const noexcept;
     template<typename... Ts> std::array<OutputType, COUNT> operator()(const std::tuple<Ts...> &tup) const noexcept;
 
-    PF_C20CONSTEXPR void truncate(typename detail::valueTypeOrIdentity<OutputType>::type eps);
+    PF_CXX20_CONSTEXPR void truncate(detail::value_type_or_t<OutputType> eps);
 
   private:
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
     template<class Step> constexpr void forEachCoeff(Step &&step) const noexcept;
-    PF_C20CONSTEXPR void bindCoeffView(std::size_t coeffCount);
+    PF_CXX20_CONSTEXPR void rebindCoeffs(std::size_t coeffCount) noexcept;
+    PF_CXX20_CONSTEXPR void bindCoeffView(std::size_t coeffCount);
+    [[nodiscard]] constexpr OutputType &coeffRef(std::size_t coeffIndex, std::size_t polyIndex) noexcept;
+    [[nodiscard]] constexpr const OutputType &coeffRef(std::size_t coeffIndex, std::size_t polyIndex) const noexcept;
+    template<class Get> [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> gatherInputs(Get &&get) const noexcept {
+        std::array<InputType, PADDED_COUNT> inputs{};
+        poet::static_for<COUNT>([&](auto i) { inputs[i] = get(std::size_t(i)); });
+        return inputs;
+    }
+    template<class Get> [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(Get &&get) const noexcept {
+        auto inputs = gatherInputs(std::forward<Get>(get));
+        poet::static_for<COUNT>([&](auto i) { inputs[i] = mapInput(std::size_t(i), inputs[i]); });
+        return inputs;
+    }
     [[nodiscard]] constexpr InputType mapInput(std::size_t polyIndex, InputType x) const noexcept {
+        if (identityMap[polyIndex]) return x;
         return xsimd::fms(InputType(2.0), x, sumEndpoints[polyIndex]) * invSpan[polyIndex];
     }
     [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(InputType x) const noexcept {
-        std::array<InputType, PADDED_COUNT> mapped{};
-        poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), x); });
-        return mapped;
+        return mapInputs([=](std::size_t) { return x; });
     }
     [[nodiscard]] constexpr std::array<InputType, PADDED_COUNT> mapInputs(const std::array<InputType, COUNT> &xs) const noexcept {
-        std::array<InputType, PADDED_COUNT> mapped{};
-        poet::static_for<COUNT>([&](auto i) { mapped[i] = mapInput(std::size_t(i), xs[i]); });
-        return mapped;
+        return mapInputs([&](std::size_t i) { return xs[i]; });
     }
-    [[nodiscard]] std::array<OutputType, COUNT> evalMapped(const std::array<InputType, PADDED_COUNT> &xu) const noexcept;
+    [[nodiscard]] std::array<OutputType, COUNT> evalInputs(const std::array<InputType, PADDED_COUNT> &xu) const noexcept;
     void scatterColumnBatch(xsimd::batch<OutputType> acc, OutputType *out, std::size_t base, std::size_t column) const noexcept;
     void evalColumn(std::size_t column, const InputType *x, OutputType *out, std::size_t numPoints) const noexcept;
 
     template<std::size_t I, typename FE, typename... Rest>
-    PF_C20CONSTEXPR void copyCoeffs(const FE &eval, const Rest &...rest);
+    PF_CXX20_CONSTEXPR void copyCoeffs(const FE &eval, const Rest &...rest);
 
-    PF_C20CONSTEXPR void zeroPadCoeffs();
+    PF_CXX20_CONSTEXPR void zeroPadCoeffs();
     [[nodiscard]] constexpr std::array<OutputType, COUNT> extractReal(const std::array<OutputType, PADDED_COUNT> &full) const noexcept;
 
     static constexpr std::size_t dyn = stdex::dynamic_extent;
@@ -168,6 +192,8 @@ template<typename... EvalTypes> class FuncEvalMany {
     stdex::mdspan<OutputType, Ext> coeffs{nullptr, 1, PADDED_COUNT};
     std::array<InputType, PADDED_COUNT> invSpan{};
     std::array<InputType, PADDED_COUNT> sumEndpoints{};
+    std::array<bool, PADDED_COUNT> identityMap{};
+    bool allIdentityMap = false;
 #endif
 };
 
@@ -207,6 +233,7 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
     static constexpr std::size_t COEFF_STORAGE = detail::storageRequired<Scalar, NCOEFFS, DIM, OUT_DIM>();
 
     InputType invSpan{}, sumEndpoints{};
+    bool identityDomain = false;
     alignas(xsimd::best_arch::alignment())
         AlignedBuffer<Scalar, COEFF_STORAGE, xsimd::best_arch::alignment()> coeffsFlat;
     Mdspan coeffsMd;
@@ -238,10 +265,10 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 template<std::size_t NCOEFFS, class Func, class... Tags>
-[[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, fitInput_t<Func> a, fitInput_t<Func> b, Tags...);
+[[nodiscard]] PF_CXX20_CONSTEXPR auto fit(Func F, fitInput_t<Func> a, fitInput_t<Func> b, Tags...);
 
 template<class Func, class Spec, class... Tags>
-[[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, Spec spec, fitInput_t<Func> a, fitInput_t<Func> b, Tags...);
+[[nodiscard]] PF_CXX20_CONSTEXPR auto fit(Func F, Spec spec, fitInput_t<Func> a, fitInput_t<Func> b, Tags...);
 #endif
 
 #if __cplusplus >= 202002L
@@ -259,7 +286,7 @@ template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS = 32, std::size_t E
 #endif
 
 template<typename... EvalTypes>
-[[nodiscard]] PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> pack(EvalTypes... evals) noexcept;
+[[nodiscard]] PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...> pack(EvalTypes... evals) noexcept;
 
 } // namespace poly_eval
 

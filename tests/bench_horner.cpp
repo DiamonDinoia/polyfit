@@ -16,6 +16,7 @@
 #include <nanobench.h>
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <experimental/mdspan>
@@ -23,6 +24,8 @@
 #include <string>
 #include <vector>
 #include <xsimd/xsimd.hpp>
+
+using namespace std::chrono_literals;
 
 int main() {
     std::random_device rd;
@@ -34,7 +37,7 @@ int main() {
     using AlignedVec = std::vector<double, xsimd::aligned_allocator<double, alignment>>;
 
     ankerl::nanobench::Bench bench;
-    bench.title("poly_eval Horner Suite").unit("eval").epochs(50).warmup(10).minEpochIterations(20);
+    bench.title("poly_eval Horner Suite").unit("eval").epochs(50).warmup(10).minEpochTime(20ms).minEpochIterations(100);
 
     constexpr size_t P = 4096;
     std::vector<size_t> nCoeffs1D = {8, 16, 24, 32};

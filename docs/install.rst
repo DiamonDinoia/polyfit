@@ -7,6 +7,45 @@ Requirements
 - C++17-conforming compiler (GCC ≥ 10, Clang ≥ 12, MSVC 2019+, AppleClang ≥ 13)
 - CMake ≥ 3.14
 - (Optional) C++20 for constexpr fitting paths
+- (Optional) C++23/C++26 for newer compile-time and constexpr-`<cmath>` paths
+
+Feature levels
+--------------
+
+Use this as the short compatibility guide:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Toolchain level
+     - What it enables
+   * - C++17
+     - Runtime 1D fitting, runtime ND fitting, packed 1D evaluation
+   * - C++20
+     - Constant-evaluated fixed-count 1D and fixed-count ND fits
+   * - ``PF_HAS_CONSTEXPR_EPS_OVERLOAD``
+     - Compile-time epsilon-driven 1D fitting
+   * - C++23 / newer stdlib support
+     - Native ``if consteval`` and cleaner compile-time dispatch
+   * - C++26-capable stdlib
+     - Native constexpr ``<cmath>`` paths
+
+Tested support
+--------------
+
+The current CI matrix exercises:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Area
+     - Current CI coverage
+   * - Runtime 1D, runtime ND, ``pack(...)``
+     - Linux ``gcc``, ``gcc-13``, ``gcc-14``, ``llvm``, ``llvm-18``, ``llvm-21``; macOS ``apple-clang``; Windows ``msvc``
+   * - Fixed-count ``constexpr`` 1D and ND
+     - Built and tested in the Linux C++20 and C++23 matrix
+   * - Compile-time epsilon 1D
+     - Exercised only when ``PF_HAS_CONSTEXPR_EPS_OVERLOAD`` is true; in current CI that means the Linux GCC jobs
 
 polyfit is header-only. The following methods all make ``polyfit::polyfit`` available as a CMake
 INTERFACE target.
@@ -114,3 +153,44 @@ MSVC correctly reports the language standard version:
 .. code-block:: cmake
 
    target_compile_options(my_target PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
+
+Optional modern paths
+---------------------
+
+polyfit keeps the documented C++17 baseline and C++20 constexpr-fit support.
+When newer toolchains are available, the headers enable additional paths
+automatically:
+
+* C++23: native ``if consteval`` and constexpr local statics where supported
+* C++26-capable standard libraries: native constexpr ``<cmath>`` functions
+
+These are compatibility improvements only. You do not need to opt in through a
+separate CMake option.
+
+Building the docs
+-----------------
+
+Build the docs through the CMake ``docs`` target:
+
+.. code-block:: bash
+
+   cmake -S . -B build-docs-check
+   python3 -m pip install -r docs/requirements.txt
+   cmake --build build-docs-check --target docs
+
+This target runs the configured Doxygen and Sphinx steps for the build tree.
+The generated HTML is written under ``build-docs-check/docs/html/``.
+
+Running benchmarks
+------------------
+
+Build and run the benchmark suite through the CMake benchmark target:
+
+.. code-block:: bash
+
+   cmake -S . -B build-bench -DPOLYFIT_BUILD_TESTS=ON -DPOLYFIT_BUILD_EXAMPLES=OFF -DPOLYFIT_ENABLE_BENCH_NATIVE_TUNING=ON
+   cmake --build build-bench --target run_benchmarks
+
+For stable measurements, use a tuned machine state: prefer a ``performance``
+CPU governor, run ``pyperf system tune`` when available, and avoid
+sanitizer-enabled builds.

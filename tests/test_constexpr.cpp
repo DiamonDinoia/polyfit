@@ -55,6 +55,14 @@ static constexpr auto ct_poly = poly_eval::fit<4>(
 static_assert(decltype(ct_poly)::NCOEFFS == 4, "FuncEval CT: NCOEFFS");
 static_assert(poly_eval::detail::relativeL2Norm(ct_poly(0.0), 1.0) < 1e-12,
               "FuncEval CT: eval at x=0 should approximate x^2+1=1");
+
+static constexpr std::array<double, 2> nd_a{-1.0, -1.0};
+static constexpr std::array<double, 2> nd_b{1.0, 1.0};
+static constexpr auto ct_nd = poly_eval::fit<4, nd_a, nd_b>([](const std::array<double, 2> &p) constexpr {
+    return std::array<double, 2>{p[0] + p[1], p[0] - p[1]};
+});
+
+static_assert(ct_nd.nCoeffsPerAxis() == 4, "FuncEvalND CT: nCoeffsPerAxis");
 #endif
 
 // ---------------------------------------------------------------------------

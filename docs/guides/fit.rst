@@ -3,11 +3,28 @@ fit
 
 ``poly_eval::fit(...)`` builds the library's evaluator types.
 
+This guide is for choosing the right overload quickly. For the complete overload
+and tag reference, see the API reference page.
+
 Returned type
 -------------
 
 - 1D scalar or complex callables return ``FuncEval``
 - ``std::array``-like inputs return ``FuncEvalND``
+
+Quick overload guide
+--------------------
+
+===============================  ==========  =======  ==========================
+Form                             Dimensions  Runtime  Constant evaluation
+===============================  ==========  =======  ==========================
+``fit(f, nCoeffs, a, b, ...)``   1D          Yes      No
+``fit(f, eps, a, b, ...)``       1D          Yes      No
+``fit<NCOEFFS>(f, a, b, ...)``   1D          Yes      Yes, in C++20
+``fit(f, nCoeffs, a, b)``        ND          Yes      No
+``fit<NCOEFFS, a, b>(f)``        ND          Yes      Yes, in C++20
+``fit<EPS, a, b, ...>(f)``       1D          No       Yes, when enabled
+===============================  ==========  =======  ==========================
 
 Runtime 1D fixed coefficient count
 ----------------------------------
@@ -38,6 +55,13 @@ Runtime 1D adaptive fit
 The adaptive overload searches upward from ``1`` coefficient and throws if the
 requested error is not met before ``MaxCoeffs``.
 
+Tag meanings for the adaptive overload:
+
+- ``MaxCoeffs<N>``: maximum coefficient count to try
+- ``EvalPts<N>``: validation point count for each candidate polynomial
+- ``Iters<N>``: refinement passes after the initial fit
+- ``FuseAuto``, ``FuseAlways``, ``FuseNever``: control whether the domain map is folded into the coefficients
+
 Compile-time 1D fixed coefficient count
 ---------------------------------------
 
@@ -48,6 +72,9 @@ Compile-time 1D fixed coefficient count
        -1.0,
        1.0,
        poly_eval::Iters<2>{});
+
+This overload is still a 1D fit. The coefficient count is fixed at compile
+time, but the evaluator can still be used at runtime.
 
 Runtime ND fixed coefficient count
 ----------------------------------
@@ -60,6 +87,9 @@ Runtime ND fixed coefficient count
 
    auto y = approx({0.25, -0.5});
 
+This is the ND runtime path. It uses a runtime coefficient count per axis and
+does not use the 1D tuning tags.
+
 ND fit with template-parameter bounds
 -------------------------------------
 
@@ -71,6 +101,9 @@ ND fit with template-parameter bounds
    auto approx = poly_eval::fit<8, a, b>([](const std::array<double, 2> &p) {
        return std::array<double, 2>{p[0] + p[1], p[0] * p[1]};
    });
+
+This overload is C++20-only. It can be constant-evaluated when the callable is
+``constexpr``. Runtime-sized ND fits remain runtime-only.
 
 Compile-time epsilon fit
 ------------------------
@@ -85,7 +118,7 @@ This overload:
 
 - is C++20 only
 - is enabled only when ``PF_HAS_CONSTEXPR_EPS_OVERLOAD`` is true
-- is currently intended for the supported GCC constexpr path
+- is currently CI-tested on the Linux GCC jobs where ``PF_HAS_CONSTEXPR_EPS_OVERLOAD`` is true
 - is 1D only
 - uses template parameters instead of runtime tags
 
@@ -97,31 +130,29 @@ Full form:
        return std::sin(x) + x * x;
    });
 
+Template parameters:
+
+- ``EPS``: target relative error
+- ``a``, ``b``: domain bounds
+- ``MAX_NCOEFFS`` (default ``32``): maximum coefficient count to try
+- ``EVAL_POINTS`` (default ``100``): number of validation points per candidate
+- ``ITERS`` (default ``1``): refinement passes after the initial fit
+
+Those last three template parameters serve the same role as ``MaxCoeffs``,
+``EvalPts``, and ``Iters`` in the runtime adaptive API.
+
 Tags
 ----
 
 The 1D runtime fixed-count, runtime adaptive, and compile-time fixed-count
-overloads accept these tags:
-
-- ``poly_eval::Iters<N>``
-- ``poly_eval::MaxCoeffs<N>``
-- ``poly_eval::EvalPts<N>``
-- ``poly_eval::FuseAuto``
-- ``poly_eval::FuseAlways``
-- ``poly_eval::FuseNever``
+overloads accept optional tuning tags. See the API reference for the full tag
+list and defaults.
 
 Rules:
 
 - tags are optional
 - tags can appear in any order
 - duplicate tag kinds are a compile-time error
-
-Defaults:
-
-- ``Iters<1>``
-- ``MaxCoeffs<32>``
-- ``EvalPts<100>``
-- ``FuseAuto{}``
 
 Applicability:
 

@@ -14,6 +14,17 @@
 
 namespace poly_eval::detail {
 
+template<class Fallback, class Runtime>
+PF_ALWAYS_INLINE constexpr auto constEval(Fallback fallback, Runtime runtime) noexcept(noexcept(runtime()))
+    -> decltype(runtime()) {
+#if PF_HAS_CONSTEXPR_CMATH
+    return runtime();
+#else
+    PF_IF_CONSTEVAL { return fallback(); }
+    return runtime();
+#endif
+}
+
 template<typename T> constexpr auto countr_zero(T x) noexcept {
     static_assert(std::is_unsigned_v<T>, "countr_zero requires an unsigned integral type");
 #if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
@@ -47,57 +58,58 @@ inline constexpr double pi = 3.14159265358979323846;
 namespace math {
 
 template<typename T> constexpr T fma(T a, T b, T c) noexcept {
-    PF_IF_CONSTEVAL { return a * b + c; }
-    return std::fma(a, b, c);
+    return constEval([=] { return a * b + c; }, [=] { return std::fma(a, b, c); });
 }
 
 template<typename T> constexpr T abs(T x) noexcept {
-    PF_IF_CONSTEVAL { return x < T(0) ? -x : x; }
-    return std::abs(x);
+    return constEval([=] { return x < T(0) ? -x : x; }, [=] { return std::abs(x); });
 }
 
 template<typename T> constexpr T log10(T x) noexcept {
-    PF_IF_CONSTEVAL {
-        if (x <= T(0)) return T(0);
-        T result = T(0);
-        while (x >= T(10)) {
-            x /= T(10);
-            result += T(1);
-        }
-        while (x < T(1)) {
-            x *= T(10);
-            result -= T(1);
-        }
-        const T y = (x - T(1)) / (x + T(1));
-        const T y2 = y * y;
-        const T lnX = T(2) * y *
-                      (T(1) + y2 * (T(1.0 / 3.0) +
-                                    y2 * (T(1.0 / 5.0) + y2 * (T(1.0 / 7.0) + y2 * (T(1.0 / 9.0) + y2 / T(11))))));
-        return result + lnX / T(2.302585092994046);
-    }
-    return std::log10(x);
+    return constEval(
+        [=] {
+            T y = x;
+            if (y <= T(0)) return T(0);
+            T result = T(0);
+            while (y >= T(10)) {
+                y /= T(10);
+                result += T(1);
+            }
+            while (y < T(1)) {
+                y *= T(10);
+                result -= T(1);
+            }
+            const T z = (y - T(1)) / (y + T(1));
+            const T z2 = z * z;
+            const T lnX = T(2) * z *
+                          (T(1) + z2 * (T(1.0 / 3.0) +
+                                        z2 * (T(1.0 / 5.0) + z2 * (T(1.0 / 7.0) + z2 * (T(1.0 / 9.0) + z2 / T(11))))));
+            return result + lnX / T(2.302585092994046);
+        },
+        [=] { return std::log10(x); });
 }
 
 constexpr double sqrt(double x) noexcept {
-    PF_IF_CONSTEVAL {
-        if (x <= 0.0) return 0.0;
-        double estimate = x;
-        for (int i = 0; i < 100; ++i) {
-            const double next = 0.5 * (estimate + x / estimate);
-            if (next == estimate) break;
-            estimate = next;
-        }
-        return estimate;
-    }
-    return std::sqrt(x);
+    return constEval(
+        [=] {
+            if (x <= 0.0) return 0.0;
+            double estimate = x;
+            for (int i = 0; i < 100; ++i) {
+                const double next = 0.5 * (estimate + x / estimate);
+                if (next == estimate) break;
+                estimate = next;
+            }
+            return estimate;
+        },
+        [=] { return std::sqrt(x); });
 }
 
 } // namespace math
 
 constexpr double cos(const double x) noexcept {
-    constexpr double PIO2_HI = 1.57079632679489655800e+00;
-    constexpr double PIO2_LO = 6.12323399573676603587e-17;
-    constexpr double INV_PIO2 = 6.36619772367581382433e-01;
+    PF_STATIC_CONSTEXPR_LOCAL double PIO2_HI = 1.57079632679489655800e+00;
+    PF_STATIC_CONSTEXPR_LOCAL double PIO2_LO = 6.12323399573676603587e-17;
+    PF_STATIC_CONSTEXPR_LOCAL double INV_PIO2 = 6.36619772367581382433e-01;
 
     const double fn = x * INV_PIO2;
     const int n = static_cast<int>(fn + (fn >= 0.0 ? 0.5 : -0.5));
@@ -144,8 +156,11 @@ constexpr double cos(const double x) noexcept {
         return -sinPoly(y);
     case 2:
         return -cosPoly(y);
-    default:
+    case 3:
         return sinPoly(y);
+    default:
+        PF_UNREACHABLE();
+        return 0.0;
     }
 }
 

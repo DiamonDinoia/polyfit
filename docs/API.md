@@ -7,6 +7,8 @@
 
 ## Main Entry Points
 
+For usage-first examples, see [`guides/fit.rst`](guides/fit.rst) and [`guides/pack.rst`](guides/pack.rst).
+
 ### `poly_eval::fit(...)`
 
 Supported overloads:
@@ -22,9 +24,39 @@ Returned type:
 - `FuncEval` for 1D scalar or complex callables
 - `FuncEvalND` for `std::array`-like inputs
 
+Support matrix:
+
+| Form | Dimensions | Runtime | `constexpr` | Notes |
+| --- | --- | --- | --- | --- |
+| `fit(f, nCoeffs, a, b, tags...)` | 1D | Yes | No | Fixed-count |
+| `fit(f, eps, a, b, tags...)` | 1D | Yes | No | Adaptive search |
+| `fit<NCOEFFS>(f, a, b, tags...)` | 1D | Yes | Yes, in C++20 | Fixed-count |
+| `fit(f, nCoeffs, a, b)` | ND | Yes | No | Runtime-sized ND |
+| `fit<NCOEFFS, a, b>(f)` | ND | Yes | Yes, in C++20 | Fixed-count ND with template bounds |
+| `fit<EPS, a, b, MAX_NCOEFFS, EVAL_POINTS, ITERS>(f)` | 1D | No | Yes, when `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is enabled | Compile-time epsilon search |
+
+Tested support:
+
+| Area | Current CI coverage |
+| --- | --- |
+| Runtime 1D, runtime ND, `pack(...)` | Linux `gcc`, `gcc-13`, `gcc-14`, `llvm`, `llvm-18`, `llvm-21`; macOS `apple-clang`; Windows `msvc` |
+| Fixed-count `constexpr` 1D and ND | Built and tested in the C++20/C++23 Linux matrix |
+| Compile-time epsilon 1D | Exercised when `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is true; in current CI that means the Linux GCC jobs |
+
 ### `poly_eval::pack(...)`
 
 Packs several 1D `FuncEval` objects into a `FuncEvalMany`.
+
+Best use case:
+
+- several independent 1D evaluators
+- same input/output scalar family
+- evaluated together often enough that a grouped path matters
+
+Not for:
+
+- `FuncEvalND`
+- a single evaluator by itself
 
 ## `fit(...)` Overloads
 
@@ -44,6 +76,7 @@ Notes:
 - `nCoeffs` must be positive
 - 1D overloads accept the `Iters` and fusion tags
 - ND runtime fixed-count fits ignore the 1D-only tuning tags
+- ND runtime fits are not intended to be constant-evaluated
 
 ### Runtime adaptive fit
 
@@ -64,6 +97,9 @@ Notes:
 - 1D only
 - searches upward from `1` coefficient
 - throws if the requested error is not met before `MaxCoeffs`
+- `MaxCoeffs<N>` sets the search cap
+- `EvalPts<N>` sets how many validation points are checked per candidate
+- `Iters<N>` sets refinement passes after the initial fit
 
 ### Compile-time fixed coefficient count
 
@@ -79,6 +115,7 @@ Notes:
 
 - 1D overloads accept `Iters` and fusion tags
 - `NCOEFFS` must be positive
+- can be used at runtime or in constant evaluation in C++20
 
 ### ND fit with template-parameter bounds
 
@@ -96,6 +133,8 @@ Notes:
 - C++20 only
 - for `std::array`-like inputs
 - uses template parameters for the domain bounds and coefficient count
+- can be constant-evaluated when the callable is `constexpr`
+- runtime-sized ND fits remain runtime-only
 
 ### Compile-time epsilon fit
 
@@ -113,19 +152,24 @@ constexpr auto approx = poly_eval::fit<1e-12, -1.0, 1.0, 48, 200, 2>([](double x
 });
 ```
 
-Defaults:
-
-- `MAX_NCOEFFS = 32`
-- `EVAL_POINTS = 100`
-- `ITERS = 1`
-
 Notes:
 
 - C++20 only
 - available only when `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is enabled
-- currently intended for the supported GCC constexpr path
+- currently CI-tested on the Linux GCC jobs where `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is true
 - 1D only
 - uses template parameters, not runtime tags
+
+Template parameters:
+
+- `EPS`: target relative error
+- `a`, `b`: domain bounds
+- `MAX_NCOEFFS` (default `32`): maximum coefficient count to try
+- `EVAL_POINTS` (default `100`): number of validation points per candidate
+- `ITERS` (default `1`): refinement passes after the initial fit
+
+This overload does not take runtime tags. The template parameters replace
+`MaxCoeffs`, `EvalPts`, and `Iters`.
 
 ## Tags
 
@@ -215,6 +259,11 @@ Useful members:
 
 Packed evaluator returned by `pack(...)`.
 
+When it helps:
+
+- repeated grouped evaluation of several 1D approximations
+- especially when the same bundle is evaluated on the same input or on batches of inputs
+
 Useful members:
 
 - `size()` returns the number of packed evaluators
@@ -226,19 +275,23 @@ Useful members:
 - `operator()(pts, out, count)` evaluates many points into a flat output buffer
 - `truncate(eps)` trims trailing coefficient rows
 
-Useful constants:
+Useful constant:
 
 - `FuncEvalMany::COUNT`
-- `FuncEvalMany::SIMD_WIDTH`
-- `FuncEvalMany::PADDED_COUNT`
-- `FuncEvalMany::MAX_NCOEFFS`
 
 ## `pack(...)` Constraints
 
 - `pack(...)` is for 1D `FuncEval` objects
+- all packed evaluators must use the same input and output types
 - all packed evaluators must use the same sizing mode
 - mixing runtime-sized and compile-time-sized evaluators is unsupported
 - runtime-sized evaluators can be packed together only if they use the same active coefficient count
+
+Common call forms:
+
+- `packed(x)`: same input for every polynomial
+- `packed(xs)`: one input per polynomial
+- `packed(pts, out, count)`: bulk evaluation into a flat output buffer
 
 Basic example:
 

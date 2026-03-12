@@ -22,7 +22,7 @@ EXCLUDE_SYMBOLS        = poly_eval::fit \
                          poly_eval::function_traits \
                          std
 
-PREDEFINED             = PF_C20CONSTEXPR= \
+PREDEFINED             = PF_CXX20_CONSTEXPR= \
                          PF_ALWAYS_INLINE= \
                          PF_NO_INLINE= \
                          PF_RESTRICT= \

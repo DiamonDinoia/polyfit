@@ -15,7 +15,7 @@ namespace poly_eval {
 namespace detail {
 
 constexpr int validatePositiveCoeffCount(const int n) {
-    if (n <= 0) {
+    if (n <= 0) PF_UNLIKELY {
         throw std::invalid_argument("nCoeffs must be positive");
     }
     return n;
@@ -24,12 +24,12 @@ constexpr int validatePositiveCoeffCount(const int n) {
 template<typename T> constexpr void validateDomain(const T &a, const T &b) {
     if constexpr (detail::hasTupleSize_v<T>) {
         for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
-            if (a[i] == b[i]) {
+            if (a[i] == b[i]) PF_UNLIKELY {
                 throw std::invalid_argument("Domain endpoints must differ in every dimension");
             }
         }
     } else {
-        if (a == b) {
+        if (a == b) PF_UNLIKELY {
             throw std::invalid_argument("Domain endpoints must differ");
         }
     }
@@ -47,7 +47,7 @@ template<class Evaluator, class Func, class Points>
 template<class Evaluator, class Func, class Spec, class InputType>
 [[nodiscard]] Evaluator fitToTolerance(Func F, Spec tolerance, InputType a, InputType b, std::size_t evalPointCount,
                                        std::size_t maxCoeffCount) {
-    if (tolerance <= Spec(0)) {
+    if (tolerance <= Spec(0)) PF_UNLIKELY {
         throw std::invalid_argument("Requested error tolerance must be positive");
     }
 
@@ -70,21 +70,23 @@ template<class Evaluator, class Func, class Spec, class InputType>
 } // namespace detail
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const int nCoeffs, const InputType a,
+PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const int nCoeffs, const InputType a,
                                                                  const InputType b, const InputType *pts)
     : invSpan(InputType(1) / (b - a)), sumEndpoints(b + a) {
+    identityMap = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
     initialize(detail::RuntimeCountTag{}, F, nCoeffs, a, b, pts);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const InputType a, const InputType b,
+PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const InputType a, const InputType b,
                                                                  const InputType *pts)
     : invSpan(InputType(1) / (b - a)), sumEndpoints(b + a) {
+    identityMap = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
     initialize(detail::CompileTimeCountTag{}, F, a, b, pts);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void
+PF_CXX20_CONSTEXPR void
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::CompileTimeCountTag, Func F, const InputType a,
                                                    const InputType b, const InputType *pts) {
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
@@ -93,7 +95,7 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::CompileTimeCountTag, 
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::RuntimeCountTag, Func F,
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::RuntimeCountTag, Func F,
                                                                          const int nCoeffs, const InputType a,
                                                                          const InputType b, const InputType *pts) {
     static_assert(NCOEFFS == 0, "Runtime coefficient count is only valid for runtime-sized evaluators");
@@ -127,9 +129,9 @@ template<bool ptsAligned, bool outAligned>
 PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept {
 #ifdef PF_OUTER_UNROLL
-    PF_C23STATIC constexpr auto unrollFactor = PF_OUTER_UNROLL;
+    PF_STATIC_CONSTEXPR_LOCAL auto unrollFactor = PF_OUTER_UNROLL;
 #else
-    PF_C23STATIC constexpr auto unrollFactor = 0;
+    PF_STATIC_CONSTEXPR_LOCAL auto unrollFactor = 0;
 #endif
 
     if constexpr (ptsAligned) {
@@ -145,7 +147,7 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator
 PF_FAST_EVAL_END
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR const typename FuncEval<Func, NCOEFFS, ITERS, FUSION>::OutputBuffer &
+PF_CXX20_CONSTEXPR const typename FuncEval<Func, NCOEFFS, ITERS, FUSION>::OutputBuffer &
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::coeffs() const noexcept {
     return coeffsBuf;
 }
@@ -159,6 +161,7 @@ template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 template<class T>
 [[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION>::mapToDomain(
     const T value) const noexcept {
+    if (identityMap) return value;
     return polyfit::internal::helpers::mapToDomainScalar(value, invSpan, sumEndpoints);
 }
 
@@ -168,16 +171,12 @@ template<class T>
     const T value) const noexcept {
     if constexpr (FUSION == FusionMode::Always)
         return value;
-    else if constexpr (FUSION == FusionMode::Never)
-        return polyfit::internal::helpers::mapFromDomainScalar(value, invSpan, sumEndpoints);
-    else {
-        if (domainFused) return value;
-        return polyfit::internal::helpers::mapFromDomainScalar(value, invSpan, sumEndpoints);
-    }
+    if (identityMap) return value;
+    return polyfit::internal::helpers::mapFromDomainScalar(value, invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs(Func F, const InputType *pts) {
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs(Func F, const InputType *pts) {
     auto grid = makeBuffer<InputType, NCOEFFS>(coeffsBuf.size());
     auto samples = makeBuffer<OutputType, NCOEFFS>(coeffsBuf.size());
 
@@ -198,7 +197,7 @@ PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs(Fu
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void
+PF_CXX20_CONSTEXPR void
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::buildNodeGrid(InputBuffer &grid, const InputType *pts) const {
     const auto coeffCount = coeffsBuf.size();
     for (std::size_t coeffIdx = 0; coeffIdx < coeffCount; ++coeffIdx) {
@@ -209,7 +208,7 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION>::buildNodeGrid(InputBuffer &grid, const I
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::sampleOnGrid(
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::sampleOnGrid(
     OutputBuffer &samples, const InputBuffer &grid, Func F) const {
     const auto coeffCount = coeffsBuf.size();
     for (std::size_t sampleIdx = 0; sampleIdx < coeffCount; ++sampleIdx) {
@@ -218,7 +217,7 @@ PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::sampleOnGrid(
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::computeMonomialCoeffs(
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::computeMonomialCoeffs(
     const InputBuffer &grid, const OutputBuffer &samples) {
     auto newtonCoeffs = detail::bjorckPereyra<NCOEFFS, InputType, OutputType>(grid, samples);
     auto monomialCoeffs = detail::newtonToMonomial<NCOEFFS, InputType, OutputType>(newtonCoeffs, grid);
@@ -227,11 +226,11 @@ PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::computeMonomialCoef
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain() const noexcept {
+PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain() const noexcept {
     if constexpr (FUSION == FusionMode::Always) {
         return true;
     } else {
-        using Scalar = typename detail::valueTypeOrIdentity<InputType>::type;
+        using Scalar = detail::value_type_or_t<InputType>;
         const auto alpha = Scalar(2) * static_cast<Scalar>(invSpan);
         const auto beta = -static_cast<Scalar>(sumEndpoints) * static_cast<Scalar>(invSpan);
         const auto coeffCount = static_cast<int>(coeffsBuf.size());
@@ -242,19 +241,19 @@ PF_C20CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain() 
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::fuseDomain() {
-    using Scalar = typename detail::valueTypeOrIdentity<InputType>::type;
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::fuseDomain() {
+    using Scalar = detail::value_type_or_t<InputType>;
     const auto alpha = Scalar(2) * static_cast<Scalar>(invSpan);
     const auto beta = -static_cast<Scalar>(sumEndpoints) * static_cast<Scalar>(invSpan);
 
     polyfit::internal::helpers::fuseLinearMap(coeffsBuf.data(), coeffsBuf.size(), alpha, beta);
     invSpan = InputType(0.5);
     sumEndpoints = InputType(0);
-    if constexpr (FUSION == FusionMode::Auto) domainFused = true;
+    identityMap = true;
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void
+PF_CXX20_CONSTEXPR void
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::refine(const InputBuffer &chebNodes, const OutputBuffer &samples) {
     const auto nCoeffs = coeffsBuf.size();
     std::reverse(coeffsBuf.begin(), coeffsBuf.end());
@@ -276,8 +275,8 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION>::refine(const InputBuffer &chebNodes, con
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::truncate(
-    typename detail::valueTypeOrIdentity<OutputType>::type eps) noexcept {
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::truncate(
+    detail::value_type_or_t<OutputType> eps) noexcept {
     if constexpr (NCOEFFS == 0) {
         std::size_t skip = 0;
         while (skip + 1 < coeffsBuf.size() && std::abs(coeffsBuf[skip]) < eps) ++skip;
@@ -285,9 +284,11 @@ PF_C20CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::truncate(
     }
 }
 
-template<typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const EvalTypes &...evals) {
+template<typename... EvalTypes> PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const EvalTypes &...evals) {
     invSpan = {evals.invSpan...};
     sumEndpoints = {evals.sumEndpoints...};
+    identityMap = {evals.identityMap...};
+    allIdentityMap = (... && evals.identityMap);
 
     if constexpr (MAX_NCOEFFS == 0) {
         bindCoeffView(std::max({std::size_t(evals.coeffsBuf.size())...}));
@@ -300,33 +301,38 @@ template<typename... EvalTypes> PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::Func
 }
 
 template<typename... EvalTypes>
-PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
+PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const FuncEvalMany &other)
     : coeffStore(other.coeffStore), coeffs{coeffStore.data(), other.coeffs.extents()}, invSpan(other.invSpan),
-      sumEndpoints(other.sumEndpoints) {}
+      sumEndpoints(other.sumEndpoints), identityMap(other.identityMap), allIdentityMap(other.allIdentityMap) {}
 
 template<typename... EvalTypes>
-PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
+PF_CXX20_CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(const FuncEvalMany &other) -> FuncEvalMany & {
     if (this != &other) {
         coeffStore = other.coeffStore;
         invSpan = other.invSpan;
         sumEndpoints = other.sumEndpoints;
-        coeffs = decltype(coeffs){coeffStore.data(), other.coeffs.extents()};
+        identityMap = other.identityMap;
+        allIdentityMap = other.allIdentityMap;
+        rebindCoeffs(other.coeffs.extent(0));
     }
     return *this;
 }
 
 template<typename... EvalTypes>
-PF_C20CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
+PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(FuncEvalMany &&other) noexcept
     : coeffStore(std::move(other.coeffStore)), coeffs{coeffStore.data(), other.coeffs.extents()},
-      invSpan(std::move(other.invSpan)), sumEndpoints(std::move(other.sumEndpoints)) {}
+      invSpan(std::move(other.invSpan)), sumEndpoints(std::move(other.sumEndpoints)), identityMap(other.identityMap),
+      allIdentityMap(other.allIdentityMap) {}
 
 template<typename... EvalTypes>
-PF_C20CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
+PF_CXX20_CONSTEXPR auto FuncEvalMany<EvalTypes...>::operator=(FuncEvalMany &&other) noexcept -> FuncEvalMany & {
     if (this != &other) {
         coeffStore = std::move(other.coeffStore);
         invSpan = std::move(other.invSpan);
         sumEndpoints = std::move(other.sumEndpoints);
-        coeffs = decltype(coeffs){coeffStore.data(), other.coeffs.extents()};
+        identityMap = other.identityMap;
+        allIdentityMap = other.allIdentityMap;
+        rebindCoeffs(other.coeffs.extent(0));
     }
     return *this;
 }
@@ -340,7 +346,12 @@ template<typename... EvalTypes> constexpr std::size_t FuncEvalMany<EvalTypes...>
 PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept -> std::array<OutputType, COUNT> {
-    return evalMapped(mapInputs(x));
+    if (allIdentityMap) {
+        std::array<InputType, PADDED_COUNT> inputs{};
+        inputs.fill(x);
+        return evalInputs(inputs);
+    }
+    return evalInputs(mapInputs(x));
 }
 PF_FAST_EVAL_END
 
@@ -348,7 +359,8 @@ PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(const std::array<InputType, COUNT> &xs) const noexcept
     -> std::array<OutputType, COUNT> {
-    return evalMapped(mapInputs(xs));
+    if (allIdentityMap) return evalInputs(gatherInputs([&](std::size_t i) { return xs[i]; }));
+    return evalInputs(mapInputs(xs));
 }
 PF_FAST_EVAL_END
 
@@ -378,9 +390,9 @@ auto FuncEvalMany<EvalTypes...>::operator()(const std::tuple<Ts...> &tup) const 
 
 template<typename... EvalTypes>
 template<std::size_t I, typename FE, typename... Rest>
-PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::copyCoeffs(const FE &eval, const Rest &...rest) {
-    for (std::size_t k = 0; k < eval.coeffsBuf.size(); ++k) coeffs(k, I) = eval.coeffsBuf[k];
-    for (std::size_t k = eval.coeffsBuf.size(); k < coeffs.extent(0); ++k) coeffs(k, I) = OutputType{};
+PF_CXX20_CONSTEXPR void FuncEvalMany<EvalTypes...>::copyCoeffs(const FE &eval, const Rest &...rest) {
+    for (std::size_t k = 0; k < eval.coeffsBuf.size(); ++k) coeffRef(k, I) = eval.coeffsBuf[k];
+    for (std::size_t k = eval.coeffsBuf.size(); k < coeffs.extent(0); ++k) coeffRef(k, I) = OutputType{};
     if constexpr (I + 1 < COUNT) copyCoeffs<I + 1>(rest...);
 }
 
@@ -394,15 +406,30 @@ constexpr void FuncEvalMany<EvalTypes...>::forEachCoeff(Step &&step) const noexc
     }
 }
 
-template<typename... EvalTypes> PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::bindCoeffView(std::size_t coeffCount) {
-    if constexpr (MAX_NCOEFFS == 0) {
-        coeffStore.assign(PADDED_COUNT * coeffCount, OutputType{});
-    }
+template<typename... EvalTypes> PF_CXX20_CONSTEXPR void FuncEvalMany<EvalTypes...>::rebindCoeffs(std::size_t coeffCount) noexcept {
     coeffs = decltype(coeffs){coeffStore.data(), coeffCount, PADDED_COUNT};
 }
 
+template<typename... EvalTypes> PF_CXX20_CONSTEXPR void FuncEvalMany<EvalTypes...>::bindCoeffView(std::size_t coeffCount) {
+    if constexpr (MAX_NCOEFFS == 0) {
+        coeffStore.assign(PADDED_COUNT * coeffCount, OutputType{});
+    }
+    rebindCoeffs(coeffCount);
+}
+
 template<typename... EvalTypes>
-auto FuncEvalMany<EvalTypes...>::evalMapped(const std::array<InputType, PADDED_COUNT> &xu) const noexcept
+constexpr auto FuncEvalMany<EvalTypes...>::coeffRef(std::size_t coeffIndex, std::size_t polyIndex) noexcept -> OutputType & {
+    return coeffs[std::array<std::size_t, 2>{coeffIndex, polyIndex}];
+}
+
+template<typename... EvalTypes>
+constexpr auto FuncEvalMany<EvalTypes...>::coeffRef(std::size_t coeffIndex, std::size_t polyIndex) const noexcept
+    -> const OutputType & {
+    return coeffs[std::array<std::size_t, 2>{coeffIndex, polyIndex}];
+}
+
+template<typename... EvalTypes>
+auto FuncEvalMany<EvalTypes...>::evalInputs(const std::array<InputType, PADDED_COUNT> &xu) const noexcept
     -> std::array<OutputType, COUNT> {
     alignas(ALIGNMENT) std::array<InputType, PADDED_COUNT> alignedXu = xu;
     alignas(ALIGNMENT) std::array<OutputType, PADDED_COUNT> full{};
@@ -414,8 +441,9 @@ auto FuncEvalMany<EvalTypes...>::evalMapped(const std::array<InputType, PADDED_C
 template<typename... EvalTypes>
 void FuncEvalMany<EvalTypes...>::scatterColumnBatch(xsimd::batch<OutputType> acc, OutputType *out, std::size_t base,
                                                     std::size_t column) const noexcept {
-    constexpr std::size_t simdSize = xsimd::batch<InputType>::size;
-    alignas(xsimd::batch<OutputType>::arch_type::alignment()) OutputType tmp[simdSize];
+    using Batch = xsimd::batch<OutputType>;
+    constexpr std::size_t simdSize = Batch::size;
+    alignas(Batch::arch_type::alignment()) OutputType tmp[simdSize];
     acc.store_aligned(tmp);
     poet::static_for<simdSize>([&](auto lane) { out[(base + std::size_t(lane)) * COUNT + column] = tmp[lane]; });
 }
@@ -423,67 +451,86 @@ void FuncEvalMany<EvalTypes...>::scatterColumnBatch(xsimd::batch<OutputType> acc
 template<typename... EvalTypes>
 void FuncEvalMany<EvalTypes...>::evalColumn(std::size_t column, const InputType *PF_RESTRICT x,
                                             OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept {
-    PF_C23STATIC constexpr std::size_t simdSize = xsimd::batch<InputType>::size;
-    PF_C23STATIC constexpr std::size_t unrollFactor = detail::optimalManyEvalUf<OutputType>();
-    PF_C23STATIC constexpr std::size_t blockSize = simdSize * unrollFactor;
-    PF_C23STATIC constexpr std::size_t stride = PADDED_COUNT;
+    PF_STATIC_CONSTEXPR_LOCAL std::size_t stride = PADDED_COUNT;
+    using InBatch = xsimd::batch<InputType>;
+    using OutBatch = xsimd::batch<OutputType>;
 
     const auto invSpanValue = invSpan[column];
     const auto sumEndpointsValue = sumEndpoints[column];
     const OutputType *columnCoeffs = coeffs.data_handle() + column;
-    const auto twoVec = xsimd::batch<InputType>(InputType(2.0));
-    const auto sumEndpointsVec = xsimd::batch<InputType>(sumEndpointsValue);
-    const auto invSpanVec = xsimd::batch<InputType>(invSpanValue);
-    auto mapSimd = [&](auto xv) { return xsimd::fms(twoVec, xv, sumEndpointsVec) * invSpanVec; };
+    const bool columnIdentity = identityMap[column];
+    if constexpr (InBatch::size != OutBatch::size) {
+        for (std::size_t i = 0; i < numPoints; ++i) {
+            auto mapped = mapInput(column, x[i]);
+            OutputType acc = columnCoeffs[0];
+            forEachCoeff([&](auto k) { acc = detail::fma(acc, mapped, columnCoeffs[std::size_t(k) * stride]); });
+            out[i * COUNT + column] = acc;
+        }
+        return;
+    } else {
+        PF_STATIC_CONSTEXPR_LOCAL std::size_t simdSize = OutBatch::size;
+        PF_STATIC_CONSTEXPR_LOCAL std::size_t unrollFactor = detail::optimalManyEvalUf<OutputType>();
+        PF_STATIC_CONSTEXPR_LOCAL std::size_t blockSize = simdSize * unrollFactor;
+        const auto twoVec = InBatch(InputType(2.0));
+        const auto sumEndpointsVec = InBatch(sumEndpointsValue);
+        const auto invSpanVec = InBatch(invSpanValue);
+        auto mapSimd = [&](InBatch xv) {
+            if (columnIdentity) return xv;
+            return xsimd::fms(twoVec, xv, sumEndpointsVec) * invSpanVec;
+        };
 
-    const auto tileEnd = detail::roundDown<blockSize>(numPoints);
-    const auto simdEnd = detail::roundDown<simdSize>(numPoints);
+        const auto tileEnd = detail::roundDown<blockSize>(numPoints);
+        const auto simdEnd = detail::roundDown<simdSize>(numPoints);
 
-    for (std::size_t i = 0; i < tileEnd; i += blockSize) {
-        xsimd::batch<InputType> pt[unrollFactor];
-        xsimd::batch<OutputType> acc[unrollFactor];
+        for (std::size_t i = 0; i < tileEnd; i += blockSize) {
+            InBatch pt[unrollFactor];
+            OutBatch acc[unrollFactor];
 
-        poet::static_for<unrollFactor>([&](auto j) {
-            pt[j] = mapSimd(xsimd::load_unaligned(x + i + j * simdSize));
-            acc[j] = xsimd::batch<OutputType>(columnCoeffs[0]);
-        });
+            poet::static_for<unrollFactor>([&](auto j) {
+                pt[j] = mapSimd(xsimd::load_unaligned(x + i + j * simdSize));
+                acc[j] = OutBatch(columnCoeffs[0]);
+            });
 
-        forEachCoeff([&](auto k) {
-            const auto coeff = xsimd::batch<OutputType>(columnCoeffs[std::size_t(k) * stride]);
-            poet::static_for<unrollFactor>([&](auto j) { acc[j] = detail::fma(acc[j], pt[j], coeff); });
-        });
+            forEachCoeff([&](auto k) {
+                const auto coeff = OutBatch(columnCoeffs[std::size_t(k) * stride]);
+                poet::static_for<unrollFactor>([&](auto j) { acc[j] = detail::fma(acc[j], pt[j], coeff); });
+            });
 
-        poet::static_for<unrollFactor>([&](auto j) { scatterColumnBatch(acc[j], out, i + j * simdSize, column); });
-    }
+            poet::static_for<unrollFactor>([&](auto j) { scatterColumnBatch(acc[j], out, i + j * simdSize, column); });
+        }
 
-    for (std::size_t i = tileEnd; i < simdEnd; i += simdSize) {
-        auto mapped = mapSimd(xsimd::load_unaligned(x + i));
-        auto acc = xsimd::batch<OutputType>(columnCoeffs[0]);
-        forEachCoeff([&](auto k) {
-            acc = detail::fma(acc, mapped, xsimd::batch<OutputType>(columnCoeffs[std::size_t(k) * stride]));
-        });
-        scatterColumnBatch(acc, out, i, column);
-    }
+        for (std::size_t i = tileEnd; i < simdEnd; i += simdSize) {
+            auto mapped = mapSimd(xsimd::load_unaligned(x + i));
+            auto acc = OutBatch(columnCoeffs[0]);
+            forEachCoeff([&](auto k) {
+                acc = detail::fma(acc, mapped, OutBatch(columnCoeffs[std::size_t(k) * stride]));
+            });
+            scatterColumnBatch(acc, out, i, column);
+        }
 
-    for (std::size_t i = simdEnd; i < numPoints; ++i) {
-        auto mapped = mapInput(column, x[i]);
-        OutputType acc = columnCoeffs[0];
-        forEachCoeff([&](auto k) { acc = detail::fma(acc, mapped, columnCoeffs[std::size_t(k) * stride]); });
-        out[i * COUNT + column] = acc;
+        for (std::size_t i = simdEnd; i < numPoints; ++i) {
+            auto mapped = mapInput(column, x[i]);
+            OutputType acc = columnCoeffs[0];
+            forEachCoeff([&](auto k) { acc = detail::fma(acc, mapped, columnCoeffs[std::size_t(k) * stride]); });
+            out[i * COUNT + column] = acc;
+        }
     }
 }
 
-template<typename... EvalTypes> PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::zeroPadCoeffs() {
+template<typename... EvalTypes> PF_CXX20_CONSTEXPR void FuncEvalMany<EvalTypes...>::zeroPadCoeffs() {
     for (std::size_t j = COUNT; j < PADDED_COUNT; ++j)
-        for (std::size_t k = 0; k < coeffs.extent(0); ++k) coeffs(k, j) = OutputType{};
+        for (std::size_t k = 0; k < coeffs.extent(0); ++k) coeffRef(k, j) = OutputType{};
 }
 
 template<typename... EvalTypes>
-PF_C20CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(typename detail::valueTypeOrIdentity<OutputType>::type eps) {
+PF_CXX20_CONSTEXPR void FuncEvalMany<EvalTypes...>::truncate(detail::value_type_or_t<OutputType> eps) {
+    using Scalar = detail::value_type_or_t<OutputType>;
     std::size_t newNCoeffs = coeffs.extent(0);
     while (newNCoeffs > 1) {
-        OutputType rowMax{};
-        for (std::size_t j = 0; j < COUNT; ++j) rowMax = std::max(rowMax, std::abs(coeffs(newNCoeffs - 1, j)));
+        Scalar rowMax{};
+        for (std::size_t j = 0; j < COUNT; ++j) {
+            rowMax = std::max(rowMax, Scalar(std::abs(coeffRef(newNCoeffs - 1, j))));
+        }
         if (rowMax >= eps) break;
         --newNCoeffs;
     }
@@ -541,7 +588,7 @@ constexpr std::size_t FuncEvalND<Func, NCOEFFS>::nCoeffsPerAxis() const noexcept
 
 template<class Func, std::size_t NCOEFFS>
 FuncEvalND<Func, NCOEFFS>::FuncEvalND(const FuncEvalND &other)
-    : invSpan(other.invSpan), sumEndpoints(other.sumEndpoints), coeffsFlat(other.coeffsFlat),
+    : invSpan(other.invSpan), sumEndpoints(other.sumEndpoints), identityDomain(other.identityDomain), coeffsFlat(other.coeffsFlat),
       coeffsMd{coeffsFlat.data(), other.coeffsMd.extents()} {}
 
 template<class Func, std::size_t NCOEFFS>
@@ -549,6 +596,7 @@ auto FuncEvalND<Func, NCOEFFS>::operator=(const FuncEvalND &other) -> FuncEvalND
     if (this != &other) {
         invSpan = other.invSpan;
         sumEndpoints = other.sumEndpoints;
+        identityDomain = other.identityDomain;
         coeffsFlat = other.coeffsFlat;
         coeffsMd = Mdspan{coeffsFlat.data(), other.coeffsMd.extents()};
     }
@@ -557,7 +605,7 @@ auto FuncEvalND<Func, NCOEFFS>::operator=(const FuncEvalND &other) -> FuncEvalND
 
 template<class Func, std::size_t NCOEFFS>
 FuncEvalND<Func, NCOEFFS>::FuncEvalND(FuncEvalND &&other) noexcept
-    : invSpan(std::move(other.invSpan)), sumEndpoints(std::move(other.sumEndpoints)),
+    : invSpan(std::move(other.invSpan)), sumEndpoints(std::move(other.sumEndpoints)), identityDomain(other.identityDomain),
       coeffsFlat(std::move(other.coeffsFlat)), coeffsMd{coeffsFlat.data(), other.coeffsMd.extents()} {}
 
 template<class Func, std::size_t NCOEFFS>
@@ -565,6 +613,7 @@ auto FuncEvalND<Func, NCOEFFS>::operator=(FuncEvalND &&other) noexcept -> FuncEv
     if (this != &other) {
         invSpan = std::move(other.invSpan);
         sumEndpoints = std::move(other.sumEndpoints);
+        identityDomain = other.identityDomain;
         coeffsFlat = std::move(other.coeffsFlat);
         coeffsMd = Mdspan{coeffsFlat.data(), other.coeffsMd.extents()};
     }
@@ -585,7 +634,7 @@ template<class Func, std::size_t NCOEFFS>
 template<typename IdxArray, std::size_t... I>
 constexpr typename FuncEvalND<Func, NCOEFFS>::Scalar &FuncEvalND<Func, NCOEFFS>::coeffImpl(
     const IdxArray &idx, std::size_t k, std::index_sequence<I...>) noexcept {
-    return coeffsMd(static_cast<std::size_t>(idx[I])..., k);
+    return coeffsMd[std::array<std::size_t, DIM + 1>{static_cast<std::size_t>(idx[I])..., k}];
 }
 
 template<class Func, std::size_t NCOEFFS>
@@ -702,18 +751,21 @@ constexpr void FuncEvalND<Func, NCOEFFS>::reverseCoefficientOrder(int nCoeffsPer
 template<class Func, std::size_t NCOEFFS>
 [[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::InputType FuncEvalND<Func, NCOEFFS>::mapToDomain(
     const InputType &x) const noexcept {
+    if (identityDomain) return x;
     return polyfit::internal::helpers::mapToDomainArray<Scalar, DIM>(x, invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS>
 [[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::InputType FuncEvalND<Func, NCOEFFS>::mapFromDomain(
     const InputType &x) const noexcept {
+    if (identityDomain) return x;
     return polyfit::internal::helpers::mapFromDomainArray<Scalar, DIM>(x, invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS>
 constexpr void FuncEvalND<Func, NCOEFFS>::computeScaling(const InputType &a, const InputType &b) noexcept {
     polyfit::internal::helpers::computeScalingArray<Scalar, DIM>(a, b, invSpan, sumEndpoints);
+    identityDomain = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS>
@@ -731,7 +783,7 @@ constexpr void FuncEvalND<Func, NCOEFFS>::forEachIndex(const std::array<int, Ran
 }
 
 template<std::size_t NCOEFFS, class Func, class... Tags>
-[[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
+[[nodiscard]] PF_CXX20_CONSTEXPR auto fit(Func F, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
     using Options = detail::FitOptions<Tags...>;
     static_assert(Options::VALID, "Unsupported or duplicate fit tag");
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
@@ -740,7 +792,7 @@ template<std::size_t NCOEFFS, class Func, class... Tags>
 }
 
 template<class Func, class Spec, class... Tags>
-[[nodiscard]] PF_C20CONSTEXPR auto fit(Func F, Spec spec, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
+[[nodiscard]] PF_CXX20_CONSTEXPR auto fit(Func F, Spec spec, fitInput_t<Func> a, fitInput_t<Func> b, Tags...) {
     using Options = detail::FitOptions<Tags...>;
     static_assert(Options::VALID, "Unsupported or duplicate fit tag");
 
@@ -798,7 +850,7 @@ template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS, std::size_t EVAL_P
 #endif
 
 template<typename... EvalTypes>
-[[nodiscard]] PF_C20CONSTEXPR FuncEvalMany<EvalTypes...> pack(EvalTypes... evals) noexcept {
+[[nodiscard]] PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...> pack(EvalTypes... evals) noexcept {
     return FuncEvalMany<std::decay_t<EvalTypes>...>(std::forward<EvalTypes>(evals)...);
 }
 
