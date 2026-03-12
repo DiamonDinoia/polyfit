@@ -168,11 +168,11 @@ jobs:
 
       - name: Build
         if: steps.march_support.outputs.supported == 'true'
-        run: cmake --build build/valgrind-${{ matrix.march }} -j2
+        run: cmake --build build/valgrind-${{ matrix.march }} -j
 
       - name: Memcheck (CTest)
         if: steps.march_support.outputs.supported == 'true'
-        run: ctest --test-dir build/valgrind-${{ matrix.march }} -T memcheck --output-on-failure -j2
+        run: ctest --test-dir build/valgrind-${{ matrix.march }} -T memcheck --output-on-failure -j
 
       - name: Skip unsupported march
         if: steps.march_support.outputs.supported != 'true'
