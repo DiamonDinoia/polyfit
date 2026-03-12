@@ -145,12 +145,35 @@ constexpr void addCompensation(std::complex<T> *coeffs, const std::vector<T> &co
     for (std::size_t k = 0; k < n; ++k) coeffs[k] += std::complex<T>(compRe[k], compIm[k]);
 }
 
+template<class CoeffT, class ScalarT>
+constexpr void fuseLinearMapHorner(CoeffT *coeffs, std::size_t n, ScalarT alpha, ScalarT beta) noexcept {
+    if (n <= 1) return;
+
+    std::vector<CoeffT> acc{coeffs[0]};
+    for (std::size_t idx = 1; idx < n; ++idx) {
+        std::vector<CoeffT> next(acc.size() + 1, CoeffT{});
+        for (std::size_t i = 0; i < acc.size(); ++i) {
+            next[i] += acc[i] * beta;
+            next[i + 1] += acc[i] * alpha;
+        }
+        next[0] += coeffs[idx];
+        acc = std::move(next);
+    }
+
+    for (std::size_t i = 0; i < n; ++i) coeffs[i] = acc[n - 1 - i];
+}
+
 } // namespace detail
 
 // Fold q(x) = p(alpha * x + beta) into the coefficient array in place.
 template<class T, poly_eval::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
 constexpr void fuseLinearMap(T *coeffs, std::size_t n, T alpha, T beta) noexcept {
     if (n <= 1) return;
+
+#if defined(_MSC_VER) && !defined(__clang__)
+    detail::fuseLinearMapHorner(coeffs, n, alpha, beta);
+    return;
+#endif
 
     std::reverse(coeffs, coeffs + n);
 
@@ -164,6 +187,11 @@ constexpr void fuseLinearMap(T *coeffs, std::size_t n, T alpha, T beta) noexcept
 
 template<class T> constexpr void fuseLinearMap(std::complex<T> *coeffs, std::size_t n, T alpha, T beta) noexcept {
     if (n <= 1) return;
+
+#if defined(_MSC_VER) && !defined(__clang__)
+    detail::fuseLinearMapHorner(coeffs, n, alpha, beta);
+    return;
+#endif
 
     std::reverse(coeffs, coeffs + n);
 

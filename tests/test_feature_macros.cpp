@@ -26,8 +26,10 @@ static_assert(cx() == 5, "constexpr compatibility");
 #endif
 static_assert(local() == 11, "local static constexpr compatibility");
 static_assert(!PF_HAS_CXX23 || PF_HAS_CXX20, "C++23 implies C++20");
+#if PF_HAS_CXX20 || (PF_HAS_BUILTIN(__builtin_is_constant_evaluated) && !defined(_MSC_VER))
 static_assert(poly_eval::detail::math::fma(2.0, 3.0, 1.0) == 7.0, "math::fma constexpr");
 static_assert(poly_eval::detail::math::sqrt(4.0) == 2.0, "math::sqrt constexpr");
+#endif
 
 #if PF_HAS_CXX20 || (PF_HAS_BUILTIN(__builtin_is_constant_evaluated) && !defined(_MSC_VER))
 static_assert(branch() == 1, "constant-evaluated branch");

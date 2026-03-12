@@ -8,13 +8,21 @@
 #include <limits>
 
 #include "polyfit/polyfit.hpp"
+#include "polyfit/internal/macros.h"
 #include "polyfit/internal/utils.h"
 
 namespace m = poly_eval::detail::math;
 
+#if PF_HAS_CXX20 || (!defined(_MSC_VER) && (defined(__clang__) || defined(__GNUC__)))
+#define PF_TEST_CONSTEXPR_MATH 1
+#else
+#define PF_TEST_CONSTEXPR_MATH 0
+#endif
+
 // ---------------------------------------------------------------------------
 // math::fma
 // ---------------------------------------------------------------------------
+#if PF_TEST_CONSTEXPR_MATH
 static_assert(m::fma(2.0, 3.0, 1.0) == 7.0, "fma(2,3,1)");
 static_assert(m::fma(0.0, 1.0, 5.0) == 5.0, "fma(0,1,5)");
 static_assert(m::fma(-1.0, 2.0, 4.0) == 2.0, "fma(-1,2,4)");
@@ -44,6 +52,7 @@ static_assert(m::sqrt(4.0) == 2.0, "sqrt(4)");
 static_assert(m::sqrt(0.0) == 0.0, "sqrt(0)");
 static_assert(m::sqrt(9.0) == 3.0, "sqrt(9)");
 static_assert(m::sqrt(2.0) > 1.41 && m::sqrt(2.0) < 1.42, "sqrt(2) ~= 1.414"); // NOLINT(modernize-use-std-numbers)
+#endif
 
 // ---------------------------------------------------------------------------
 // FuncEval CT construction (C++20+)
@@ -76,3 +85,5 @@ int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+#undef PF_TEST_CONSTEXPR_MATH
