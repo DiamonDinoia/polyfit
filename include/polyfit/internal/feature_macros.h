@@ -48,7 +48,7 @@
 #define PF_HAS_CONSTEXPR_STATIC_LOCAL 0
 #endif
 
-#if PF_HAS_CPP_ATTRIBUTE(likely) >= 201803L
+#if (PF_HAS_CPP_ATTRIBUTE(likely) >= 201803L) && (!defined(_MSC_VER) || PF_HAS_CXX20)
 #define PF_HAS_ATTRIBUTE_LIKELY 1
 #else
 #define PF_HAS_ATTRIBUTE_LIKELY 0
