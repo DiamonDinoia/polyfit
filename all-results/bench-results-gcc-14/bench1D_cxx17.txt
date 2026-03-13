@@ -1,0 +1,28 @@
+Warning, results might be unstable:
+* CPU frequency scaling enabled: CPU 0 between 800.0 and 2,800.0 MHz
+
+Recommendations
+* Use 'pyperf system tune' before benchmarking. See https://github.com/psf/pyperf
+
+|               ns/op |                op/s |    err% |     total | benchmark
+|--------------------:|--------------------:|--------:|----------:|:----------
+|              447.69 |        2,233,691.31 |    0.2% |      0.12 | `float constexpr fit`
+|            1,001.72 |          998,284.84 |    0.2% |      0.12 | `float coefficient-count fit`
+|            1,838.71 |          543,860.67 |    0.1% |      0.12 | `float eps fit`
+|                2.11 |      474,970,932.66 |    0.1% |      0.12 | `float eval`
+|                0.29 |    3,461,957,542.96 |    0.7% |      0.12 | `float eval_many`
+|              468.06 |        2,136,465.14 |    0.0% |      0.12 | `double constexpr fit`
+|            1,146.18 |          872,462.33 |    0.8% |      0.12 | `double coefficient-count fit`
+|            1,988.74 |          502,830.42 |    0.2% |      0.11 | `double eps fit`
+|                2.11 |      474,661,547.00 |    0.0% |      0.12 | `double eval`
+|                0.55 |    1,811,848,161.39 |    0.1% |      0.12 | `double eval_many`
+|              610.43 |        1,638,199.30 |    0.0% |      0.12 | `complex<double> constexpr fit`
+|            1,372.69 |          728,495.67 |    0.1% |      0.12 | `complex<double> coefficient-count fit`
+|            2,212.08 |          452,062.58 |    0.1% |      0.12 | `complex<double> eps fit`
+|                2.31 |      433,434,898.02 |    0.1% |      0.12 | `complex<double> eval`
+|                0.87 |    1,143,435,333.57 |    0.1% |      0.12 | `complex<double> eval_many`
+|              632.20 |        1,581,775.09 |    0.1% |      0.12 | `complex<float> constexpr fit`
+|            1,355.98 |          737,475.21 |    0.1% |      0.12 | `complex<float> coefficient-count fit`
+|            2,301.83 |          434,436.62 |    0.1% |      0.12 | `complex<float> eps fit`
+|                3.60 |      277,721,373.66 |    0.0% |      0.12 | `complex<float> eval`
+|                0.49 |    2,032,943,642.14 |    0.1% |      0.12 | `complex<float> eval_many`

@@ -1,0 +1,23 @@
+
+|               ns/op |                op/s |    err% |     total | benchmark
+|--------------------:|--------------------:|--------:|----------:|:----------
+|              745.94 |        1,340,595.35 |    0.4% |      0.12 | `float constexpr fit`
+|              956.64 |        1,045,324.58 |    0.2% |      0.12 | `float coefficient-count fit`
+|            2,438.80 |          410,037.52 |    0.1% |      0.12 | `float eps fit`
+|                1.76 |      568,663,007.85 |    0.2% |      0.12 | `float eval`
+|                0.17 |    5,983,612,116.70 |    0.4% |      0.12 | `float eval_many`
+|              791.96 |        1,262,697.21 |    0.2% |      0.12 | `double constexpr fit`
+|            1,048.07 |          954,137.91 |    0.2% |      0.12 | `double coefficient-count fit`
+|            2,393.62 |          417,776.94 |    0.1% |      0.12 | `double eps fit`
+|                1.78 |      560,393,399.55 |    1.6% |      0.12 | `double eval`
+|                0.34 |    2,978,440,962.17 |    0.2% |      0.12 | `double eval_many`
+|              674.78 |        1,481,958.20 |    0.1% |      0.12 | `complex<double> constexpr fit`
+|            1,534.65 |          651,614.49 |    0.2% |      0.12 | `complex<double> coefficient-count fit`
+|            2,709.82 |          369,027.92 |    0.0% |      0.12 | `complex<double> eps fit`
+|                1.76 |      568,929,583.58 |    0.1% |      0.12 | `complex<double> eval`
+|                1.19 |      843,002,626.56 |    0.1% |      0.12 | `complex<double> eval_many`
+|              926.85 |        1,078,922.07 |    0.1% |      0.12 | `complex<float> constexpr fit`
+|            1,664.90 |          600,636.73 |    0.1% |      0.12 | `complex<float> coefficient-count fit`
+|            2,800.73 |          357,049.49 |    0.2% |      0.12 | `complex<float> eps fit`
+|                3.47 |      287,858,159.45 |    0.3% |      0.12 | `complex<float> eval`
+|                0.59 |    1,684,527,579.45 |    0.1% |      0.12 | `complex<float> eval_many`
