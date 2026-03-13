@@ -159,6 +159,8 @@ jobs:
             -DCMAKE_CXX_FLAGS="-march=${{ matrix.march }}" \
             -DPOLYFIT_BUILD_TESTS=ON \
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
+            -DPOLYFIT_BUILD_BENCHMARKS=OFF \
+            -DPOLYFIT_TEST_STANDARDS=17 \
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \

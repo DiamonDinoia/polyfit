@@ -10,7 +10,7 @@ Returned type
 -------------
 
 - 1D scalar or complex callables return ``FuncEval``
-- ``std::array``-like inputs return ``FuncEvalND``
+- fixed-size indexable inputs return ``FuncEvalND``
 
 Quick overload guide
 --------------------
@@ -89,6 +89,15 @@ Runtime ND fixed coefficient count
 
 This is the ND runtime path. It uses a runtime coefficient count per axis and
 does not use the 1D tuning tags.
+
+ND evaluator convenience calls:
+
+- ``approx(point)`` for the callable's declared ND input type
+- ``approx(x0, x1, ..., xN)`` when the rank is known at compile time
+- ``approx(points.data(), out.data(), count)`` for canonical ``std::array`` ND batches
+- ``approx(std::span{points}, std::span{out})`` when ``std::span`` is available
+- ``approx(points, out)`` for ``data()``-backed outer containers whose element
+  types are fixed-size ND containers
 
 ND fit with template-parameter bounds
 -------------------------------------

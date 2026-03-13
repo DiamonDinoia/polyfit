@@ -22,9 +22,10 @@ constexpr int validatePositiveCoeffCount(const int n) {
 }
 
 template<typename T> constexpr void validateDomain(const T &a, const T &b) {
-    if constexpr (detail::hasTupleSize_v<T>) {
-        for (std::size_t i = 0; i < std::tuple_size_v<T>; ++i) {
-            if (a[i] == b[i]) PF_UNLIKELY {
+    if constexpr (detail::isFixedIndexable_v<T>) {
+        using Access = detail::FixedContainerAccess<T>;
+        for (std::size_t i = 0; i < Access::size; ++i) {
+            if (Access::get(a, i) == Access::get(b, i)) PF_UNLIKELY {
                 throw std::invalid_argument("Domain endpoints must differ in every dimension");
             }
         }
@@ -553,6 +554,7 @@ constexpr auto FuncEvalMany<EvalTypes...>::extractReal(const std::array<OutputTy
 template<class Func, std::size_t NCOEFFS>
 constexpr FuncEvalND<Func, NCOEFFS>::FuncEvalND(Func f, const InputType &a, const InputType &b)
     : coeffsFlat(), coeffsMd{coeffsFlat.data(), Extents{}} {
+    static_assert(takesNdInput_v<Func>, "FuncEvalND requires fixed-size indexable ND input and output types");
     initialize(detail::CompileTimeCountTag{}, f, a, b);
 }
 
@@ -560,6 +562,7 @@ template<class Func, std::size_t NCOEFFS>
 constexpr FuncEvalND<Func, NCOEFFS>::FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b)
     : coeffsFlat(storageRequired(detail::validatePositiveCoeffCount(nCoeffsPerAxis))),
       coeffsMd{coeffsFlat.data(), makeExtents(nCoeffsPerAxis)} {
+    static_assert(takesNdInput_v<Func>, "FuncEvalND requires fixed-size indexable ND input and output types");
     initialize(detail::RuntimeCountTag{}, f, nCoeffsPerAxis, a, b);
 }
 
@@ -625,10 +628,72 @@ template<class Func, std::size_t NCOEFFS>
 template<bool SIMD>
 constexpr typename FuncEvalND<Func, NCOEFFS>::OutputType FuncEvalND<Func, NCOEFFS>::operator()(
     const InputType &x) const {
-    const int nCoeffsRt = (NCOEFFS ? static_cast<int>(NCOEFFS) : static_cast<int>(coeffsMd.extent(0)));
-    return poly_eval::horner<NCOEFFS, SIMD, OutputType>(mapFromDomain(x), coeffsMd, nCoeffsRt);
+    return evalPoint<SIMD>(x);
 }
 PF_FAST_EVAL_END
+
+PF_FAST_EVAL_BEGIN
+template<class Func, std::size_t NCOEFFS>
+template<bool SIMD, class Point, class>
+constexpr typename FuncEvalND<Func, NCOEFFS>::OutputType FuncEvalND<Func, NCOEFFS>::operator()(const Point &x) const {
+    return evalPoint<SIMD>(x);
+}
+PF_FAST_EVAL_END
+
+template<class Func, std::size_t NCOEFFS>
+template<class... Coords, class>
+constexpr typename FuncEvalND<Func, NCOEFFS>::OutputType FuncEvalND<Func, NCOEFFS>::operator()(Coords... coords) const {
+    return fromCanonicalOutput(evalCanonical(CanonicalInput{static_cast<InputScalar>(coords)...}));
+}
+
+template<class Func, std::size_t NCOEFFS>
+template<bool SIMD, class Point>
+constexpr typename FuncEvalND<Func, NCOEFFS>::OutputType
+FuncEvalND<Func, NCOEFFS>::evalPoint(const Point &x) const {
+    return fromCanonicalOutput(evalCanonical<SIMD>(toCanonicalInput(x)));
+}
+
+PF_FAST_EVAL_BEGIN
+template<class Func, std::size_t NCOEFFS>
+template<bool SIMD>
+constexpr typename FuncEvalND<Func, NCOEFFS>::CanonicalOutput
+FuncEvalND<Func, NCOEFFS>::evalCanonical(const CanonicalInput &x) const noexcept {
+    const int nCoeffsRt = (NCOEFFS ? static_cast<int>(NCOEFFS) : static_cast<int>(coeffsMd.extent(0)));
+    return poly_eval::horner<NCOEFFS, SIMD, CanonicalOutput>(mapFromDomain(x), coeffsMd, nCoeffsRt);
+}
+PF_FAST_EVAL_END
+
+template<class Func, std::size_t NCOEFFS>
+constexpr void FuncEvalND<Func, NCOEFFS>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
+                                                     std::size_t count) const noexcept {
+    for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+}
+
+#if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)
+template<class Func, std::size_t NCOEFFS>
+constexpr void FuncEvalND<Func, NCOEFFS>::operator()(std::span<const CanonicalInput> pts,
+                                                     std::span<CanonicalOutput> out) const {
+    if (pts.size() != out.size()) {
+        throw std::invalid_argument("Input and output spans must have equal length");
+    }
+    operator()(pts.data(), out.data(), pts.size());
+}
+#endif
+
+template<class Func, std::size_t NCOEFFS>
+template<class Points, class Outputs, class>
+constexpr void FuncEvalND<Func, NCOEFFS>::operator()(const Points &pts, Outputs &out) const {
+    if (pts.size() != out.size()) {
+        throw std::invalid_argument("Input and output containers must have equal length");
+    }
+
+    const auto *ptsData = detail::FixedContainerAccess<Points>::data(pts);
+    auto *outData = detail::FixedContainerAccess<Outputs>::data(out);
+    for (std::size_t i = 0; i < static_cast<std::size_t>(pts.size()); ++i) {
+        outData[i] = detail::fixedContainerCast<detail::data_value_t<Outputs>>(
+            evalCanonical(toCanonicalInput(ptsData[i])));
+    }
+}
 
 template<class Func, std::size_t NCOEFFS>
 template<typename IdxArray, std::size_t... I>
@@ -678,9 +743,9 @@ constexpr void FuncEvalND<Func, NCOEFFS>::buildCoeffs(int nCoeffsPerAxis, Func f
 
     // sample f on Chebyshev grid
     forEachIndex<DIM>(extents, [&](const std::array<int, DIM> &idx) {
-        InputType domainPoint{};
+        CanonicalInput domainPoint{};
         for (std::size_t d = 0; d < DIM; ++d) domainPoint[d] = nodes[static_cast<std::size_t>(idx[d])];
-        OutputType y = f(mapToDomain(domainPoint));
+        const auto y = toCanonicalOutput(f(fromCanonicalInput(mapToDomain(domainPoint))));
         for (std::size_t k = 0; k < OUT_DIM; ++k) coeff(idx, k) = y[k];
     });
 
@@ -749,22 +814,48 @@ constexpr void FuncEvalND<Func, NCOEFFS>::reverseCoefficientOrder(int nCoeffsPer
 }
 
 template<class Func, std::size_t NCOEFFS>
-[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::InputType FuncEvalND<Func, NCOEFFS>::mapToDomain(
-    const InputType &x) const noexcept {
+template<class Point>
+constexpr typename FuncEvalND<Func, NCOEFFS>::CanonicalInput FuncEvalND<Func, NCOEFFS>::toCanonicalInput(
+    const Point &x) noexcept {
+    return detail::fixedContainerCast<CanonicalInput>(x);
+}
+
+template<class Func, std::size_t NCOEFFS>
+constexpr typename FuncEvalND<Func, NCOEFFS>::InputType
+FuncEvalND<Func, NCOEFFS>::fromCanonicalInput(const CanonicalInput &x) noexcept {
+    return detail::fixedContainerCast<InputType>(x);
+}
+
+template<class Func, std::size_t NCOEFFS>
+constexpr typename FuncEvalND<Func, NCOEFFS>::CanonicalOutput
+FuncEvalND<Func, NCOEFFS>::toCanonicalOutput(const OutputType &x) noexcept {
+    return detail::fixedContainerCast<CanonicalOutput>(x);
+}
+
+template<class Func, std::size_t NCOEFFS>
+constexpr typename FuncEvalND<Func, NCOEFFS>::OutputType
+FuncEvalND<Func, NCOEFFS>::fromCanonicalOutput(const CanonicalOutput &x) noexcept {
+    return detail::fixedContainerCast<OutputType>(x);
+}
+
+template<class Func, std::size_t NCOEFFS>
+[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::CanonicalInput FuncEvalND<Func, NCOEFFS>::mapToDomain(
+    const CanonicalInput &x) const noexcept {
     if (identityDomain) return x;
     return polyfit::internal::helpers::mapToDomainArray<Scalar, DIM>(x, invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS>
-[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::InputType FuncEvalND<Func, NCOEFFS>::mapFromDomain(
-    const InputType &x) const noexcept {
+[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::CanonicalInput FuncEvalND<Func, NCOEFFS>::mapFromDomain(
+    const CanonicalInput &x) const noexcept {
     if (identityDomain) return x;
     return polyfit::internal::helpers::mapFromDomainArray<Scalar, DIM>(x, invSpan, sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS>
 constexpr void FuncEvalND<Func, NCOEFFS>::computeScaling(const InputType &a, const InputType &b) noexcept {
-    polyfit::internal::helpers::computeScalingArray<Scalar, DIM>(a, b, invSpan, sumEndpoints);
+    polyfit::internal::helpers::computeScalingArray<Scalar, DIM>(toCanonicalInput(a), toCanonicalInput(b), invSpan,
+                                                                 sumEndpoints);
     identityDomain = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
 }
 
@@ -798,7 +889,7 @@ template<class Func, class Spec, class... Tags>
 
     if constexpr (isIntegralLike_v<Spec>) {
         const auto nCoeffs = detail::validatePositiveCoeffCount(static_cast<int>(spec));
-        if constexpr (takesTupleInput_v<Func>) {
+        if constexpr (takesNdInput_v<Func>) {
             return FuncEvalND<Func, 0>(F, nCoeffs, a, b);
         } else {
             using Evaluator = FitEvaluator<Func, 0, Options::ITERS, Options::FUSION_MODE>;
@@ -816,7 +907,6 @@ template<class Func, class Spec, class... Tags>
 #if PF_HAS_CONSTEXPR_EPS_OVERLOAD
 template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS, std::size_t EVAL_POINTS, std::size_t ITERS, class Func>
 [[nodiscard]] constexpr auto fit(Func F) {
-    using RawInputType = poly_eval::remove_cvref_t<typename FunctionTraits<Func>::arg0_type>;
     static_assert(MAX_NCOEFFS > 0, "Max coefficient count must be positive.");
     static_assert(EVAL_POINTS > 1, "Number of evaluation points must be greater than 1.");
 
@@ -834,7 +924,7 @@ template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS, std::size_t EVAL_P
         int result = 0;
         poet::static_for<1, MAX_NCOEFFS + 1>([&](auto i) {
             if (result != 0) return;
-            using Evaluator = std::conditional_t<detail::hasTupleSize_v<RawInputType>, FuncEvalND<Func, i>,
+            using Evaluator = std::conditional_t<takesNdInput_v<Func>, FuncEvalND<Func, i>,
                                                  FuncEval<Func, i, ITERS>>;
             if constexpr (computeError(Evaluator(F, a, b)) <= EPS) {
                 result = i;
@@ -843,7 +933,7 @@ template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS, std::size_t EVAL_P
         return result;
     }();
     static_assert(nCoeffs != 0, "No coefficient count found for requested error tolerance.");
-    using Evaluator = std::conditional_t<detail::hasTupleSize_v<RawInputType>, FuncEvalND<Func, nCoeffs>,
+    using Evaluator = std::conditional_t<takesNdInput_v<Func>, FuncEvalND<Func, nCoeffs>,
                                          FuncEval<Func, nCoeffs, ITERS>>;
     return Evaluator(F, a, b);
 }

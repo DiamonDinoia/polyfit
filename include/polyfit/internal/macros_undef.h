@@ -1,6 +1,7 @@
 #pragma once
 
 #undef PF_ALWAYS_INLINE
+#undef PF_FLATTEN
 #undef PF_NO_INLINE
 #undef PF_RESTRICT
 #undef PF_CPLUSPLUS

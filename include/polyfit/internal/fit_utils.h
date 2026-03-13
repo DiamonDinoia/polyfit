@@ -234,15 +234,18 @@ PF_CXX20_CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = C
         }
         return points;
     } else {
-        constexpr std::size_t dim = std::tuple_size_v<poly_eval::remove_cvref_t<T>>;
-        using Scalar = std::remove_cv_t<decltype(start[0])>;
+        using Access = detail::FixedContainerAccess<T>;
+        constexpr std::size_t dim = Access::size;
+        using Scalar = typename Access::value_type;
         T step{};
         for (std::size_t i = 0; i < dim; ++i) {
-            step[i] = (end[i] - start[i]) / static_cast<Scalar>(count - 1);
+            Access::get(step, i) =
+                (Access::get(end, i) - Access::get(start, i)) / static_cast<Scalar>(count - 1);
         }
         for (std::size_t k = 0; k < count; ++k) {
             for (std::size_t i = 0; i < dim; ++i) {
-                points[k][i] = start[i] + (static_cast<Scalar>(k) * step[i]);
+                detail::FixedContainerAccess<T>::get(points[k], i) =
+                    Access::get(start, i) + (static_cast<Scalar>(k) * Access::get(step, i));
             }
         }
         return points;
@@ -251,9 +254,10 @@ PF_CXX20_CONSTEXPR auto linspace(const T &start, const T &end, int numPoints = C
 
 template<typename T, class Step> PF_ALWAYS_INLINE constexpr void forEachComponent(const T &value, Step &&step) {
     using V = poly_eval::remove_cvref_t<T>;
-    if constexpr (detail::hasTupleSize_v<V> && !detail::isComplex_v<V>) {
-        for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
-            step(value[i]);
+    if constexpr (detail::isFixedIndexable_v<V>) {
+        using Access = detail::FixedContainerAccess<V>;
+        for (std::size_t i = 0; i < Access::size; ++i) {
+            step(Access::get(value, i));
         }
     } else {
         step(value);
@@ -263,9 +267,10 @@ template<typename T, class Step> PF_ALWAYS_INLINE constexpr void forEachComponen
 template<typename T, class Step>
 PF_ALWAYS_INLINE constexpr void forEachComponentPair(const T &lhs, const T &rhs, Step &&step) {
     using V = poly_eval::remove_cvref_t<T>;
-    if constexpr (detail::hasTupleSize_v<V> && !detail::isComplex_v<V>) {
-        for (std::size_t i = 0; i < std::tuple_size_v<poly_eval::remove_cvref_t<T>>; ++i) {
-            step(lhs[i], rhs[i]);
+    if constexpr (detail::isFixedIndexable_v<V>) {
+        using Access = detail::FixedContainerAccess<V>;
+        for (std::size_t i = 0; i < Access::size; ++i) {
+            step(Access::get(lhs, i), Access::get(rhs, i));
         }
     } else {
         step(lhs, rhs);

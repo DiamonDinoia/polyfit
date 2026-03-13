@@ -32,6 +32,7 @@ CPMAddPackage(
 
 option(POLYFIT_ENABLE_BENCH_FAST_MATH "Enable fast-math for benchmark targets" OFF)
 option(POLYFIT_ENABLE_BENCH_NATIVE_TUNING "Enable -march=native for benchmark targets" ${POLYFIT_ENABLE_NATIVE_TUNING})
+option(POLYFIT_BUILD_BENCHMARKS "Build benchmark executables" ON)
 
 function(polyfit_apply_dev_profile target)
     if (POLYFIT_STRICT_WARNINGS)
@@ -75,22 +76,26 @@ endfunction()
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
 # -----------------------------------------------------------------------------
-# Standards to test/build: start at C++17 and add every later standard the compiler supports.
-# Compiler- and library-specific features are guarded by PF_HAS_* macros in the
-# headers, so later standards can use the same mdspan fallback as earlier ones.
-set(POLYFIT_TEST_STANDARDS 17)
-include(CheckCXXCompilerFlag)
-foreach(_std IN ITEMS 20 23 26)
-    check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
-    if (_POLYFIT_CXX${_std})
-        list(APPEND POLYFIT_TEST_STANDARDS ${_std})
-    endif ()
-endforeach()
+# Standards to test/build: by default start at C++17 and add every later
+# standard the compiler supports. CI jobs may override this cache variable to
+# trim expensive configurations, for example Valgrind-only memory checks.
+set(POLYFIT_TEST_STANDARDS "" CACHE STRING
+        "Semicolon-separated C++ standards to build for tests and benchmarks; empty means auto-detect from C++17 upward")
+if (POLYFIT_TEST_STANDARDS STREQUAL "")
+    set(POLYFIT_TEST_STANDARDS 17)
+    include(CheckCXXCompilerFlag)
+    foreach(_std IN ITEMS 20 23 26)
+        check_cxx_compiler_flag("-std=c++${_std}" _POLYFIT_CXX${_std})
+        if (_POLYFIT_CXX${_std})
+            list(APPEND POLYFIT_TEST_STANDARDS ${_std})
+        endif ()
+    endforeach()
+endif ()
 message(STATUS "Polyfit test standards: ${POLYFIT_TEST_STANDARDS}")
 
-function(add_polyfit_test_for_std BASENAME SRC STD)
+function(add_polyfit_test_for_std BASENAME STD)
     set(TGT "${BASENAME}_cxx${STD}")
-    add_executable(${TGT} ${SRC})
+    add_executable(${TGT} ${ARGN})
     target_link_libraries(${TGT}
             PRIVATE polyfit::polyfit gtest_main
     )
@@ -104,39 +109,47 @@ function(add_polyfit_test_for_std BASENAME SRC STD)
     set_property(GLOBAL APPEND PROPERTY POLYFIT_TEST_TARGETS ${TGT})
 endfunction()
 
-function(add_polyfit_test_matrix NAME SRC)
+function(add_polyfit_test_matrix NAME)
     foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
-        add_polyfit_test_for_std(${NAME} ${SRC} ${STD})
+        add_polyfit_test_for_std(${NAME} ${STD} ${ARGN})
     endforeach()
 endfunction()
 
 # Benchmarks matrix across standards (where supported)
-function(add_polyfit_benchmark_for_std BASENAME SRC STD)
+function(add_polyfit_benchmark_for_std BASENAME STD)
     set(TGT "${BASENAME}_cxx${STD}")
-    add_executable(${TGT} ${SRC})
+    add_executable(${TGT} ${ARGN})
     polyfit_configure_benchmark_target(${TGT} ${STD})
     set_property(GLOBAL APPEND PROPERTY POLYFIT_BENCHMARK_TARGETS_${STD} ${TGT})
 endfunction()
 
-function(add_polyfit_benchmark_matrix NAME SRC)
+function(add_polyfit_benchmark_matrix NAME)
     foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
-        add_polyfit_benchmark_for_std(${NAME} ${SRC} ${STD})
+        add_polyfit_benchmark_for_std(${NAME} ${STD} ${ARGN})
     endforeach()
 endfunction()
 
 add_polyfit_test_matrix(test_horner test_horner.cpp)
-add_polyfit_benchmark_matrix(bench_horner bench_horner.cpp)
-add_polyfit_benchmark_matrix(bench_unroll_sweep bench_unroll_sweep.cpp)
+if (POLYFIT_BUILD_BENCHMARKS)
+    add_polyfit_benchmark_matrix(bench_horner bench_horner.cpp)
+    add_polyfit_benchmark_matrix(bench_unroll_sweep bench_unroll_sweep.cpp)
+endif ()
 
 add_polyfit_test_matrix(test1D test_1D.cpp)
-add_polyfit_benchmark_matrix(bench1D bench_1D.cpp)
+if (POLYFIT_BUILD_BENCHMARKS)
+    add_polyfit_benchmark_matrix(bench1D bench_1D.cpp)
+endif ()
 
 
 add_polyfit_test_matrix(testMany test_many.cpp)
-add_polyfit_benchmark_matrix(benchMany bench_many.cpp)
+if (POLYFIT_BUILD_BENCHMARKS)
+    add_polyfit_benchmark_matrix(benchMany bench_many.cpp)
+endif ()
 
-add_polyfit_test_matrix(test_ND test_ND.cpp)
-add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
+add_polyfit_test_matrix(test_ND test_ND_accuracy.cpp test_ND_api.cpp)
+if (POLYFIT_BUILD_BENCHMARKS)
+    add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
+endif ()
 
 add_polyfit_test_matrix(test_general test_general.cpp)
 add_polyfit_test_matrix(test_copy_move test_copy_move.cpp)
@@ -148,29 +161,31 @@ add_polyfit_test_matrix(test_edge_cases test_edge_cases.cpp)
 add_polyfit_test_matrix(test_constexpr test_constexpr.cpp)
 add_polyfit_test_matrix(test_feature_macros test_feature_macros.cpp)
 
-foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
-    get_property(_polyfit_bench_targets GLOBAL PROPERTY POLYFIT_BENCHMARK_TARGETS_${STD})
-    if (_polyfit_bench_targets)
-        set(_runner "run_benchmarks_cxx${STD}")
-        set(_runner_commands
-                COMMAND ${CMAKE_COMMAND} -E echo "Benchmark note: use a tuned system for stable numbers."
-                COMMAND ${CMAKE_COMMAND} -E echo "Recommended: pyperf system tune, performance governor, and native tuning if desired."
-        )
-        foreach(_bench_target IN LISTS _polyfit_bench_targets)
-            list(APPEND _runner_commands COMMAND $<TARGET_FILE:${_bench_target}>)
-        endforeach ()
-        add_custom_target(${_runner}
-                ${_runner_commands}
-                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                COMMENT "Running polyfit benchmarks for C++${STD}"
-                VERBATIM
-        )
-        add_dependencies(${_runner} ${_polyfit_bench_targets})
-        if (STD EQUAL 20)
-            add_custom_target(run_benchmarks DEPENDS ${_runner})
+if (POLYFIT_BUILD_BENCHMARKS)
+    foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
+        get_property(_polyfit_bench_targets GLOBAL PROPERTY POLYFIT_BENCHMARK_TARGETS_${STD})
+        if (_polyfit_bench_targets)
+            set(_runner "run_benchmarks_cxx${STD}")
+            set(_runner_commands
+                    COMMAND ${CMAKE_COMMAND} -E echo "Benchmark note: use a tuned system for stable numbers."
+                    COMMAND ${CMAKE_COMMAND} -E echo "Recommended: pyperf system tune, performance governor, and native tuning if desired."
+            )
+            foreach(_bench_target IN LISTS _polyfit_bench_targets)
+                list(APPEND _runner_commands COMMAND $<TARGET_FILE:${_bench_target}>)
+            endforeach ()
+            add_custom_target(${_runner}
+                    ${_runner_commands}
+                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                    COMMENT "Running polyfit benchmarks for C++${STD}"
+                    VERBATIM
+            )
+            add_dependencies(${_runner} ${_polyfit_bench_targets})
+            if (STD EQUAL 20)
+                add_custom_target(run_benchmarks DEPENDS ${_runner})
+            endif ()
         endif ()
-    endif ()
-endforeach ()
+    endforeach ()
+endif ()
 
 if (POLYFIT_ENABLE_COVERAGE)
     find_program(LCOV_EXECUTABLE lcov)

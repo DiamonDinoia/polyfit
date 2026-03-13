@@ -21,7 +21,7 @@ It exposes two main entry points:
 | `fit(f, nCoeffs, a, b, tags...)` | 1D | Yes | No | Fixed coefficient count |
 | `fit(f, eps, a, b, tags...)` | 1D | Yes | No | Adaptive search |
 | `fit<NCOEFFS>(f, a, b, tags...)` | 1D | Yes | Yes, in C++20 | Fixed coefficient count |
-| `fit(f, nCoeffs, a, b)` | ND | Yes | No | Runtime-sized ND fit |
+| `fit(f, nCoeffs, a, b)` | ND | Yes | No | Runtime-sized ND fit for fixed-size indexable containers |
 | `fit<NCOEFFS, a, b>(f)` | ND | Yes | Yes, in C++20 | Fixed-count ND fit with template bounds |
 | `fit<EPS, a, b, MAX_NCOEFFS, EVAL_POINTS, ITERS>(f)` | 1D | No | Yes, when `PF_HAS_CONSTEXPR_EPS_OVERLOAD` is enabled | Compile-time epsilon search |
 
@@ -127,7 +127,17 @@ auto approx = poly_eval::fit([](const std::array<double, 2> &p) {
 }, 10, {-1.0, -1.0}, {1.0, 1.0});
 
 auto y = approx({0.25, -0.5});
+auto y2 = approx(0.25, -0.5);
 ```
+
+ND evaluators also accept any fixed-size container type with `size()` and
+`operator[]` for point inputs and outputs. For repeated evaluation:
+
+- `approx(pts.data(), out.data(), count)` evaluates canonical ND arrays in bulk
+- `approx(std::span{pts}, std::span{out})` is available when `std::span` is
+  supported
+- `approx(points, out)` accepts `data()`-backed outer containers whose element
+  types are fixed-size ND containers
 
 For fixed-count ND fits, the template-bounds form supports constexpr
 construction in C++20 when the callable is `constexpr`:

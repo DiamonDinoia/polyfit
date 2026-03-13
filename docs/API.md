@@ -22,7 +22,7 @@ Supported overloads:
 Returned type:
 
 - `FuncEval` for 1D scalar or complex callables
-- `FuncEvalND` for `std::array`-like inputs
+- `FuncEvalND` for fixed-size indexable ND inputs and outputs
 
 Support matrix:
 
@@ -131,7 +131,7 @@ auto approx = poly_eval::fit<8, a, b>([](const std::array<double, 2> &p) {
 Notes:
 
 - C++20 only
-- for `std::array`-like inputs
+- for fixed-size indexable inputs
 - uses template parameters for the domain bounds and coefficient count
 - can be constant-evaluated when the callable is `constexpr`
 - runtime-sized ND fits remain runtime-only
@@ -253,7 +253,17 @@ ND evaluator returned by ND `fit(...)` overloads.
 Useful members:
 
 - `operator()(x)` evaluates one point
+- `operator()(x0, x1, ..., xN)` evaluates from separate coordinates
+- `operator()(pts, out, count)` evaluates a batch of canonical ND points
+- `operator()(span_pts, span_out)` evaluates a batch through `std::span` when available
+- `operator()(points, out)` evaluates batches stored in `data()`-backed outer containers
 - `nCoeffsPerAxis()` returns the active coefficient count used on each axis
+
+Input/output model:
+
+- the callable's declared ND point and return types must be fixed-size containers
+- accepted point types expose `size()` and `operator[]`
+- the container-pair `operator()` also requires `data()` on the outer point/output containers
 
 ### `FuncEvalMany`
 

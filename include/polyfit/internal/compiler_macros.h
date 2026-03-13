@@ -10,6 +10,14 @@
 #define PF_ALWAYS_INLINE inline
 #endif
 
+#ifndef PF_FLATTEN
+#if defined(__GNUC__) || defined(__clang__)
+#define PF_FLATTEN __attribute__((flatten))
+#else
+#define PF_FLATTEN
+#endif
+#endif
+
 #if defined(__GNUC__) || defined(__clang__)
 #define PF_NO_INLINE __attribute__((noinline))
 #elif defined(_MSC_VER)

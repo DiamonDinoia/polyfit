@@ -3,6 +3,11 @@
 #include <array>
 #include <cmath>
 #include <type_traits>
+#if defined(__has_include)
+#  if __has_include(<span>)
+#    include <span>
+#  endif
+#endif
 
 #if __cpp_lib_mdspan >= 202310L
 #include <mdspan>
@@ -202,25 +207,43 @@ template<typename... EvalTypes> class FuncEvalMany {
  */
 template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
   public:
-    using Input0 = fitInput_t<Func>;
-    using InputType = poly_eval::remove_cvref_t<Input0>;
-    using OutputType = fitOutput_t<Func>;
-    using Scalar = typename OutputType::value_type;
+    using InputType = poly_eval::remove_cvref_t<fitInput_t<Func>>;
+    using OutputType = poly_eval::remove_cvref_t<fitOutput_t<Func>>;
+    using InputScalar = detail::index_value_t<InputType>;
+    using Scalar = detail::index_value_t<OutputType>;
 
-    static constexpr std::size_t DIM = std::tuple_size_v<InputType>;
-    static constexpr std::size_t OUT_DIM = std::tuple_size_v<OutputType>;
+    static constexpr std::size_t DIM = detail::fixed_size_v<InputType>;
+    static constexpr std::size_t OUT_DIM = detail::fixed_size_v<OutputType>;
     static constexpr bool IS_STATIC = (NCOEFFS > 0);
+    using CanonicalInput = std::array<InputScalar, DIM>;
+    using CanonicalOutput = std::array<Scalar, OUT_DIM>;
 
     using Extents = std::conditional_t<
         IS_STATIC, decltype(detail::makeStaticExtents<NCOEFFS, DIM, OUT_DIM>(std::make_index_sequence<DIM>{})),
         stdex::dextents<std::size_t, DIM + 1>>;
     using Mdspan = stdex::mdspan<Scalar, Extents, stdex::layout_right>;
+    template<class... Coords> static constexpr bool acceptsCoords_v = detail::isCompatibleNdCoordPack_v<DIM, InputScalar, Coords...>;
+    template<class Points, class Outputs>
+    static constexpr bool acceptsBatchContainers_v =
+        detail::isCompatibleNdBatchContainers_v<Points, Outputs, DIM, InputScalar, OutputType>;
 
     constexpr FuncEvalND(Func f, const InputType &a, const InputType &b);
 
     constexpr FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b);
 
-    template<bool SIMD = true> constexpr OutputType operator()(const InputType &x) const;
+    template<bool SIMD = true> PF_FLATTEN constexpr OutputType operator()(const InputType &x) const;
+    template<bool SIMD = true, class Point,
+             class = enable_if_t<!std::is_same_v<remove_cvref_t<Point>, InputType> &&
+                                  detail::isCompatibleNdPoint_v<Point, DIM, InputScalar>>>
+    PF_FLATTEN constexpr OutputType operator()(const Point &x) const;
+    template<class... Coords, class = enable_if_t<acceptsCoords_v<Coords...>>>
+    PF_FLATTEN constexpr OutputType operator()(Coords... coords) const;
+    constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, std::size_t count) const noexcept;
+#if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)
+    PF_FLATTEN constexpr void operator()(std::span<const CanonicalInput> pts, std::span<CanonicalOutput> out) const;
+#endif
+    template<class Points, class Outputs, class = enable_if_t<acceptsBatchContainers_v<Points, Outputs>>>
+    PF_FLATTEN constexpr void operator()(const Points &pts, Outputs &out) const;
     [[nodiscard]] constexpr std::size_t nCoeffsPerAxis() const noexcept;
 
     FuncEvalND(const FuncEvalND &other);
@@ -232,7 +255,7 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
     static constexpr std::size_t COEFF_STORAGE = detail::storageRequired<Scalar, NCOEFFS, DIM, OUT_DIM>();
 
-    InputType invSpan{}, sumEndpoints{};
+    CanonicalInput invSpan{}, sumEndpoints{};
     bool identityDomain = false;
     alignas(xsimd::best_arch::alignment())
         AlignedBuffer<Scalar, COEFF_STORAGE, xsimd::best_arch::alignment()> coeffsFlat;
@@ -254,8 +277,14 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
     constexpr void buildCoeffs(int nCoeffsPerAxis, Func f);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);
     constexpr void reverseCoefficientOrder(int nCoeffsPerAxis);
-    [[nodiscard]] constexpr InputType mapToDomain(const InputType &x) const noexcept;
-    [[nodiscard]] constexpr InputType mapFromDomain(const InputType &x) const noexcept;
+    template<bool SIMD, class Point> [[nodiscard]] constexpr OutputType evalPoint(const Point &x) const;
+    template<class Point> [[nodiscard]] static constexpr CanonicalInput toCanonicalInput(const Point &x) noexcept;
+    [[nodiscard]] static constexpr InputType fromCanonicalInput(const CanonicalInput &x) noexcept;
+    [[nodiscard]] static constexpr CanonicalOutput toCanonicalOutput(const OutputType &x) noexcept;
+    [[nodiscard]] static constexpr OutputType fromCanonicalOutput(const CanonicalOutput &x) noexcept;
+    template<bool SIMD = true> [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x) const noexcept;
+    [[nodiscard]] constexpr CanonicalInput mapToDomain(const CanonicalInput &x) const noexcept;
+    [[nodiscard]] constexpr CanonicalInput mapFromDomain(const CanonicalInput &x) const noexcept;
     constexpr void computeScaling(const InputType &a, const InputType &b) noexcept;
 
     template<std::size_t Rank, class F>
