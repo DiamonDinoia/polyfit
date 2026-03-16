@@ -354,6 +354,12 @@ template<typename... EvalTypes> constexpr std::size_t FuncEvalMany<EvalTypes...>
     return coeffs.extent(0);
 }
 
+template<typename... EvalTypes>
+constexpr const typename FuncEvalMany<EvalTypes...>::OutputType &
+FuncEvalMany<EvalTypes...>::coeff(std::size_t coeffIndex, std::size_t polyIndex) const noexcept {
+    return coeffRef(coeffIndex, polyIndex);
+}
+
 PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 auto FuncEvalMany<EvalTypes...>::operator()(InputType x) const noexcept -> std::array<OutputType, COUNT> {
@@ -716,6 +722,20 @@ template<class Func, std::size_t NCOEFFS>
 template<class IdxArray>
 [[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS>::Scalar &FuncEvalND<Func, NCOEFFS>::coeff(
     const IdxArray &idx, std::size_t k) noexcept {
+    return coeffImpl<IdxArray>(idx, k, std::make_index_sequence<DIM>{});
+}
+
+template<class Func, std::size_t NCOEFFS>
+template<typename IdxArray, std::size_t... I>
+constexpr const typename FuncEvalND<Func, NCOEFFS>::Scalar &FuncEvalND<Func, NCOEFFS>::coeffImpl(
+    const IdxArray &idx, std::size_t k, std::index_sequence<I...>) const noexcept {
+    return coeffsMd[std::array<std::size_t, DIM + 1>{static_cast<std::size_t>(idx[I])..., k}];
+}
+
+template<class Func, std::size_t NCOEFFS>
+template<class IdxArray>
+[[nodiscard]] constexpr const typename FuncEvalND<Func, NCOEFFS>::Scalar &FuncEvalND<Func, NCOEFFS>::coeff(
+    const IdxArray &idx, std::size_t k) const noexcept {
     return coeffImpl<IdxArray>(idx, k, std::make_index_sequence<DIM>{});
 }
 

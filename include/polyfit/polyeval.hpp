@@ -163,6 +163,11 @@ template<typename... EvalTypes> class FuncEvalMany {
     [[nodiscard]] constexpr std::size_t size() const noexcept;
     [[nodiscard]] constexpr std::size_t nCoeffs() const noexcept;
 
+    /**
+     * @brief Access the coefficient at (coeffIndex, polyIndex) in Horner order.
+     */
+    [[nodiscard]] constexpr const OutputType &coeff(std::size_t coeffIndex, std::size_t polyIndex) const noexcept;
+
     std::array<OutputType, COUNT> operator()(InputType x) const noexcept;
     std::array<OutputType, COUNT> operator()(const std::array<InputType, COUNT> &xs) const noexcept;
     void operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept;
@@ -265,6 +270,14 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
     PF_FLATTEN constexpr void operator()(const Points &pts, Outputs &out) const;
     [[nodiscard]] constexpr std::size_t nCoeffsPerAxis() const noexcept;
 
+    /**
+     * @brief Access the coefficient at spatial index @p idx for output dimension @p k.
+     *
+     * Coefficients are in Horner order (highest-degree first along each axis).
+     */
+    template<class IdxArray>
+    [[nodiscard]] constexpr const Scalar &coeff(const IdxArray &idx, std::size_t k) const noexcept;
+
     FuncEvalND(const FuncEvalND &other);
     FuncEvalND &operator=(const FuncEvalND &other);
     FuncEvalND(FuncEvalND &&other) noexcept;
@@ -286,6 +299,8 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
 
     template<typename IdxArray, std::size_t... I>
     constexpr Scalar &coeffImpl(const IdxArray &idx, std::size_t k, std::index_sequence<I...>) noexcept;
+    template<typename IdxArray, std::size_t... I>
+    constexpr const Scalar &coeffImpl(const IdxArray &idx, std::size_t k, std::index_sequence<I...>) const noexcept;
 
     template<class IdxArray> [[nodiscard]] constexpr Scalar &coeff(const IdxArray &idx, std::size_t k) noexcept;
 
