@@ -19,9 +19,11 @@ jobs:
       matrix:
         include:
           # Ubuntu Debug
-          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Debug}
+          # gcc/gcc-14 sanitizer builds are memory-intensive; limit to C++17
+          # to avoid OOM on the 7 GB GitHub Actions runner
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Debug, test_standards: "17"}
           - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Debug}
-          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Debug}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Debug, test_standards: "17"}
           - {os: ubuntu-24.04, toolchain: llvm,    build_type: Debug}
           - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Debug}
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Debug}
@@ -59,6 +61,10 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ] && [ "${{ matrix.build_type }}" = "Debug" ]; then
             SANITIZERS=ON
           fi
+          TEST_STANDARDS_ARG=""
+          if [ -n "${{ matrix.test_standards }}" ]; then
+            TEST_STANDARDS_ARG="-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
+          fi
           cmake -S . -B build/${{ matrix.build_type }} \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -66,7 +72,8 @@ jobs:
             -DPOLYFIT_BUILD_EXAMPLES=ON \
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
-            -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS}
+            -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS} \
+            ${TEST_STANDARDS_ARG}
 
       - name: Build
         if: ${{ !matrix.multi_config }}
