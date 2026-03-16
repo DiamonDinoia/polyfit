@@ -72,38 +72,45 @@ template<class Evaluator, class Func, class Spec, class InputType>
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const int nCoeffs, const InputType a,
-                                                                 const InputType b, const InputType *pts)
-    : invSpan(InputType(1) / (b - a)), sumEndpoints(b + a) {
-    identityMap = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
-    initialize(detail::RuntimeCountTag{}, F, nCoeffs, a, b, pts);
+                                                                 const InputType b, const InputType *pts) {
+    DomainParams dp;
+    dp.invSpan = InputType(1) / (b - a);
+    dp.sumEndpoints = b + a;
+    dp.identityMap = polyfit::internal::helpers::isIdMap(dp.invSpan, dp.sumEndpoints);
+    initialize(detail::RuntimeCountTag{}, F, nCoeffs, a, b, pts, dp);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION>::FuncEval(Func F, const InputType a, const InputType b,
-                                                                 const InputType *pts)
-    : invSpan(InputType(1) / (b - a)), sumEndpoints(b + a) {
-    identityMap = polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints);
-    initialize(detail::CompileTimeCountTag{}, F, a, b, pts);
+                                                                 const InputType *pts) {
+    DomainParams dp;
+    dp.invSpan = InputType(1) / (b - a);
+    dp.sumEndpoints = b + a;
+    dp.identityMap = polyfit::internal::helpers::isIdMap(dp.invSpan, dp.sumEndpoints);
+    initialize(detail::CompileTimeCountTag{}, F, a, b, pts, dp);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 PF_CXX20_CONSTEXPR void
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::CompileTimeCountTag, Func F, const InputType a,
-                                                   const InputType b, const InputType *pts) {
+                                                   const InputType b, const InputType *pts, DomainParams &dp) {
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
     detail::validateDomain(a, b);
-    initializeCoeffs(F, pts);
+    initializeCoeffs(F, pts, dp);
+    if constexpr (kStoresDomain) domain_ = dp;
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detail::RuntimeCountTag, Func F,
                                                                          const int nCoeffs, const InputType a,
-                                                                         const InputType b, const InputType *pts) {
+                                                                         const InputType b, const InputType *pts,
+                                                                         DomainParams &dp) {
     static_assert(NCOEFFS == 0, "Runtime coefficient count is only valid for runtime-sized evaluators");
     detail::validateDomain(a, b);
     const auto validatedNCoeffs = detail::validatePositiveCoeffCount(nCoeffs);
     coeffsBuf.resize(static_cast<std::size_t>(validatedNCoeffs));
-    initializeCoeffs(F, pts);
+    initializeCoeffs(F, pts, dp);
+    if constexpr (kStoresDomain) domain_ = dp;
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
@@ -161,28 +168,31 @@ constexpr std::size_t FuncEval<Func, NCOEFFS, ITERS, FUSION>::nCoeffs() const no
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 template<class T>
 [[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION>::mapToDomain(
-    const T value) const noexcept {
-    if (identityMap) return value;
-    return polyfit::internal::helpers::mapToDomainScalar(value, invSpan, sumEndpoints);
+    const DomainParams &dp, const T value) noexcept {
+    if (dp.identityMap) return value;
+    return polyfit::internal::helpers::mapToDomainScalar(value, dp.invSpan, dp.sumEndpoints);
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 template<class T>
 [[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION>::mapFromDomain(
     const T value) const noexcept {
-    if constexpr (FUSION == FusionMode::Always)
+    if constexpr (FUSION == FusionMode::Always) {
         return value;
-    if (identityMap) return value;
-    return polyfit::internal::helpers::mapFromDomainScalar(value, invSpan, sumEndpoints);
+    } else {
+        if (domain_.identityMap) return value;
+        return polyfit::internal::helpers::mapFromDomainScalar(value, domain_.invSpan, domain_.sumEndpoints);
+    }
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs(Func F, const InputType *pts) {
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs(Func F, const InputType *pts,
+                                                                                DomainParams &dp) {
     auto grid = makeBuffer<InputType, NCOEFFS>(coeffsBuf.size());
     auto samples = makeBuffer<OutputType, NCOEFFS>(coeffsBuf.size());
 
     buildNodeGrid(grid, pts);
-    sampleOnGrid(samples, grid, F);
+    sampleOnGrid(samples, grid, F, dp);
     computeMonomialCoeffs(grid, samples);
     refine(grid, samples);
 
@@ -192,7 +202,7 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs
 #else
         PF_IF_NOT_CONSTEVAL {
 #endif
-            if (shouldFuseDomain()) fuseDomain();
+            if (shouldFuseDomain(dp)) fuseDomain(dp);
         }
     }
 }
@@ -210,10 +220,10 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION>::buildNodeGrid(InputBuffer &grid, const I
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::sampleOnGrid(
-    OutputBuffer &samples, const InputBuffer &grid, Func F) const {
+    OutputBuffer &samples, const InputBuffer &grid, Func F, const DomainParams &dp) const {
     const auto coeffCount = coeffsBuf.size();
     for (std::size_t sampleIdx = 0; sampleIdx < coeffCount; ++sampleIdx) {
-        samples[sampleIdx] = F(mapToDomain(grid[sampleIdx]));
+        samples[sampleIdx] = F(mapToDomain(dp, grid[sampleIdx]));
     }
 }
 
@@ -227,13 +237,13 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::computeMonomialC
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain() const noexcept {
+PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain(const DomainParams &dp) const noexcept {
     if constexpr (FUSION == FusionMode::Always) {
         return true;
     } else {
         using Scalar = detail::value_type_or_t<InputType>;
-        const auto alpha = Scalar(2) * static_cast<Scalar>(invSpan);
-        const auto beta = -static_cast<Scalar>(sumEndpoints) * static_cast<Scalar>(invSpan);
+        const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan);
+        const auto beta = -static_cast<Scalar>(dp.sumEndpoints) * static_cast<Scalar>(dp.invSpan);
         const auto coeffCount = static_cast<int>(coeffsBuf.size());
         const auto condBase = detail::math::abs(alpha) + detail::math::abs(beta) + Scalar(1);
         constexpr auto maxLog = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
@@ -242,15 +252,15 @@ PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION>::shouldFuseDomain
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::fuseDomain() {
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::fuseDomain(DomainParams &dp) {
     using Scalar = detail::value_type_or_t<InputType>;
-    const auto alpha = Scalar(2) * static_cast<Scalar>(invSpan);
-    const auto beta = -static_cast<Scalar>(sumEndpoints) * static_cast<Scalar>(invSpan);
+    const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan);
+    const auto beta = -static_cast<Scalar>(dp.sumEndpoints) * static_cast<Scalar>(dp.invSpan);
 
     polyfit::internal::helpers::fuseLinearMap(coeffsBuf.data(), coeffsBuf.size(), alpha, beta);
-    invSpan = InputType(0.5);
-    sumEndpoints = InputType(0);
-    identityMap = true;
+    dp.invSpan = InputType(0.5);
+    dp.sumEndpoints = InputType(0);
+    dp.identityMap = true;
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
@@ -286,10 +296,10 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::truncate(
 }
 
 template<typename... EvalTypes> PF_CXX20_CONSTEXPR FuncEvalMany<EvalTypes...>::FuncEvalMany(const EvalTypes &...evals) {
-    invSpan = {evals.invSpan...};
-    sumEndpoints = {evals.sumEndpoints...};
-    identityMap = {evals.identityMap...};
-    allIdentityMap = (... && evals.identityMap);
+    invSpan = {evals.domainInvSpan()...};
+    sumEndpoints = {evals.domainSumEndpoints()...};
+    identityMap = {evals.domainIsIdentity()...};
+    allIdentityMap = (... && evals.domainIsIdentity());
 
     if constexpr (MAX_NCOEFFS == 0) {
         bindCoeffView(std::max({std::size_t(evals.coeffsBuf.size())...}));

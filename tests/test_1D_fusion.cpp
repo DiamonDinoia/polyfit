@@ -53,6 +53,15 @@ TEST(PolyEval, FusionAlwaysOnWideDomainLosesAccuracy) {
         << "auto: " << maxErr_auto << ", force: " << maxErr_force;
 }
 
+TEST(PolyEval, FuseAlwaysDoesNotStoreDomainParams) {
+    auto func = [](double x) { return x * x; };
+    using FE_fused = decltype(poly_eval::fit<4>(func, -1.0, 1.0, poly_eval::FuseAlways{}));
+    using FE_never = decltype(poly_eval::fit<4>(func, -1.0, 1.0, poly_eval::FuseNever{}));
+    // FuseAlways should not store invSpan, sumEndpoints, identityMap
+    static_assert(sizeof(FE_fused) < sizeof(FE_never),
+                  "FuseAlways evaluator should be smaller than FuseNever (no domain params stored)");
+}
+
 TEST(PolyEval, TagOrderIndependence) {
     auto func = [](double x) { return std::sin(x); };
     auto p1 = poly_eval::fit<16>(func, -1.0, 1.0, poly_eval::Iters<2>{}, poly_eval::FuseNever{});

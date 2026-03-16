@@ -75,24 +75,43 @@ class FuncEval {
 
   private:
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
-    InputType invSpan, sumEndpoints;
-    bool identityMap = false;
+    struct DomainParams {
+        InputType invSpan{}, sumEndpoints{};
+        bool identityMap = false;
+    };
+    static constexpr bool kStoresDomain = (FUSION_MODE != FusionMode::Always);
+    struct EmptyDomain {};
+    PF_NO_UNIQUE_ADDRESS std::conditional_t<kStoresDomain, DomainParams, EmptyDomain> domain_;
     OutputBuffer coeffsBuf;
 
+    constexpr InputType domainInvSpan() const noexcept {
+        if constexpr (kStoresDomain) return domain_.invSpan;
+        else return InputType(0.5);
+    }
+    constexpr InputType domainSumEndpoints() const noexcept {
+        if constexpr (kStoresDomain) return domain_.sumEndpoints;
+        else return InputType(0);
+    }
+    constexpr bool domainIsIdentity() const noexcept {
+        if constexpr (kStoresDomain) return domain_.identityMap;
+        else return true;
+    }
+
     PF_CXX20_CONSTEXPR void initialize(detail::CompileTimeCountTag, Func F, InputType a, InputType b,
-                                    const InputType *pts);
+                                    const InputType *pts, DomainParams &dp);
     PF_CXX20_CONSTEXPR void initialize(detail::RuntimeCountTag, Func F, int nCoeffs, InputType a, InputType b,
-                                    const InputType *pts);
+                                    const InputType *pts, DomainParams &dp);
 
     PF_CXX20_CONSTEXPR void buildNodeGrid(InputBuffer &grid, const InputType *pts) const;
-    PF_CXX20_CONSTEXPR void sampleOnGrid(OutputBuffer &samples, const InputBuffer &grid, Func F) const;
+    PF_CXX20_CONSTEXPR void sampleOnGrid(OutputBuffer &samples, const InputBuffer &grid, Func F,
+                                       const DomainParams &dp) const;
     PF_CXX20_CONSTEXPR void computeMonomialCoeffs(const InputBuffer &grid, const OutputBuffer &samples);
-    [[nodiscard]] PF_CXX20_CONSTEXPR bool shouldFuseDomain() const noexcept;
-    PF_CXX20_CONSTEXPR void fuseDomain();
+    [[nodiscard]] PF_CXX20_CONSTEXPR bool shouldFuseDomain(const DomainParams &dp) const noexcept;
+    PF_CXX20_CONSTEXPR void fuseDomain(DomainParams &dp);
 
-    PF_CXX20_CONSTEXPR void initializeCoeffs(Func F, const InputType *pts);
+    PF_CXX20_CONSTEXPR void initializeCoeffs(Func F, const InputType *pts, DomainParams &dp);
 
-    template<class T> PF_ALWAYS_INLINE constexpr T mapToDomain(T value) const noexcept;
+    template<class T> static PF_ALWAYS_INLINE constexpr T mapToDomain(const DomainParams &dp, T value) noexcept;
     template<class T> PF_ALWAYS_INLINE constexpr T mapFromDomain(T value) const noexcept;
 
     template<int OuterUnrollFactor, bool ptsAligned, bool outAligned>
