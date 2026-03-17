@@ -59,6 +59,12 @@ class FuncEval {
 
     template<bool = false> constexpr OutputType operator()(InputType pt) const noexcept;
 
+    template<bool = false, class V>
+    constexpr auto operator()(V pt) const noexcept
+        -> enable_if_t<!std::is_same_v<remove_cvref_t<V>, InputType> &&
+                           std::is_constructible_v<remove_cvref_t<V>, OutputType>,
+                       remove_cvref_t<V>>;
+
     template<bool ptsAligned = false, bool outAligned = false>
     constexpr void operator()(const InputType *pts, OutputType *out, std::size_t numPoints) const noexcept;
 

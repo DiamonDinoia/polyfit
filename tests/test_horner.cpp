@@ -106,11 +106,21 @@ template<typename T, size_t Dim, size_t Deg> void run_nd_horner() {
 }
 
 // simple scalar Horner reference
-template<typename T> T naive_horner_scalar(T x, const T *c, size_t n) {
-    T acc = c[0];
+template<typename Output, typename Input> constexpr Output naive_horner_scalar(Input x, const Output *c, size_t n) {
+    Output acc = c[0];
     for (size_t i = 1; i < n; ++i) acc = acc * x + c[i];
     return acc;
 }
+
+struct AffineValue {
+    double value = 0.0;
+
+    constexpr AffineValue() = default;
+    constexpr explicit AffineValue(double v) : value(v) {}
+};
+
+constexpr AffineValue operator*(AffineValue lhs, double rhs) noexcept { return AffineValue(lhs.value * rhs); }
+constexpr AffineValue operator+(AffineValue lhs, AffineValue rhs) noexcept { return AffineValue(lhs.value + rhs.value); }
 
 // element-wise reference for horner_transposed
 template<typename T> T naive_horner_transposed_elem(const T *x, const T *c, size_t M, size_t N, size_t i) {
@@ -160,6 +170,20 @@ TYPED_TEST(HornerTyped, ScalarHorner_CompileTime) {
     T ct = poly_eval::horner<N>(x, c.data());
     T ex = naive_horner_scalar(x, c.data(), N);
     EXPECT_NEAR(ct, ex, eps<T>);
+}
+
+TEST(HornerCustomValue, ScalarHorner_UsesOperatorFallback) {
+    constexpr std::array<AffineValue, 4> c{
+        AffineValue(2.0),
+        AffineValue(-3.0),
+        AffineValue(5.0),
+        AffineValue(7.0),
+    };
+    constexpr double x = 1.25;
+    constexpr auto expected = naive_horner_scalar(x, c.data(), c.size());
+    constexpr auto actual = poly_eval::horner(x, c.data(), c.size());
+    static_assert(actual.value == expected.value);
+    EXPECT_DOUBLE_EQ(actual.value, expected.value);
 }
 
 // SIMD Horner runtime

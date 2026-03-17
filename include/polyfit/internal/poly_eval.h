@@ -12,8 +12,8 @@
 namespace poly_eval {
 
 // Evaluate one polynomial at one point. Coefficients are in Horner order.
-template<std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr OutputType horner(InputType xin, const OutputType *c_ptr, std::size_t c_size = 0) noexcept;
+template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr CoeffType horner(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
 
 // Evaluate one polynomial across many points, optionally with SIMD and a point mapping step.
 template<std::size_t NMONOMIALS = 0, bool PTS_ALIGNED = false, bool OUT_ALIGNED = false, int UNROLL = 0,
@@ -81,7 +81,7 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(ScalarEvalTag, const InVec &x, co
             poet::static_for<OUT>([&](auto i) { inner[i] = detail::coeffAt<Dim>(coeffs, idx, i); });
         }
 
-        poet::static_for<OUT>([&](auto i) { res[i] = std::fma(res[i], x[axis], inner[i]); });
+        poet::static_for<OUT>([&](auto i) { res[i] = detail::fma(res[i], x[axis], inner[i]); });
     };
 
     forEachCoeff<NCOEFFS>(nCoeffsRt, step);
@@ -132,11 +132,11 @@ constexpr std::complex<T> compensated_horner(InputType x, const std::complex<T> 
 
 } // namespace poly_eval
 
-namespace poly_eval {
+namespace poly_eval::detail {
 
-template<std::size_t NCOEFFS, typename OutputType, typename InputType>
-PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType *c_ptr,
-                                             const std::size_t c_size) noexcept {
+template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr EvalType horner_impl(const InputType x, const CoeffType *c_ptr,
+                                                const std::size_t c_size) noexcept {
     if constexpr (NCOEFFS != 0) {
         // CT path: full unroll (N is known, serial chain)
         // GCC false positive: deep static_for inlining confuses -Wmaybe-uninitialized
@@ -144,19 +144,28 @@ PF_ALWAYS_INLINE constexpr OutputType horner(const InputType x, const OutputType
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-        OutputType acc = c_ptr[0];
-        poet::static_for<1, NCOEFFS>([&](auto i) { acc = detail::fma(acc, x, c_ptr[i]); });
+        EvalType acc = static_cast<EvalType>(c_ptr[0]);
+        poet::static_for<1, NCOEFFS>([&](auto i) { acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[i])); });
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
         return acc;
     } else {
-        OutputType acc = c_ptr[0];
+        EvalType acc = static_cast<EvalType>(c_ptr[0]);
         for (std::size_t k = 1; k < c_size; ++k) {
-            acc = detail::fma(acc, x, c_ptr[k]);
+            acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[k]));
         }
         return acc;
     }
+}
+
+} // namespace poly_eval::detail
+
+namespace poly_eval {
+
+template<std::size_t NCOEFFS, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr CoeffType horner(const InputType x, const CoeffType *c_ptr, const std::size_t c_size) noexcept {
+    return detail::horner_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
 }
 
 template<std::size_t NCOEFFS, typename OutputType, typename InputType>

@@ -120,6 +120,18 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(const InputType pt) const noe
     const auto xi = mapFromDomain(pt);
     return horner<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
 }
+
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
+template<bool Dummy, class V>
+constexpr auto PF_ALWAYS_INLINE FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(V pt) const noexcept
+    -> enable_if_t<!std::is_same_v<remove_cvref_t<V>, InputType> &&
+                       std::is_constructible_v<remove_cvref_t<V>, OutputType>,
+                   remove_cvref_t<V>> {
+    using EvalType = remove_cvref_t<V>;
+    const auto xi = mapFromDomain(EvalType(pt));
+    return detail::horner_impl<NCOEFFS, EvalType>(xi, coeffsBuf.data(), coeffsBuf.size());
+}
+
 PF_FAST_EVAL_BEGIN
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 template<int OuterUnrollFactor, bool ptsAligned, bool outAligned>

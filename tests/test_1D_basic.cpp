@@ -4,6 +4,16 @@
 
 static std::mt19937 gen(42);
 
+struct EvalCarrier {
+    double value = 0.0;
+
+    constexpr EvalCarrier() = default;
+    constexpr EvalCarrier(double v) : value(v) {}
+};
+
+constexpr EvalCarrier operator*(EvalCarrier lhs, EvalCarrier rhs) noexcept { return EvalCarrier(lhs.value * rhs.value); }
+constexpr EvalCarrier operator+(EvalCarrier lhs, EvalCarrier rhs) noexcept { return EvalCarrier(lhs.value + rhs.value); }
+
 // 1. Runtime Coefficient Count (double, default iters)
 TEST(PolyEval, RuntimeDegreeDoubleRandom) {
     double a = -0.5, b = 0.5;
@@ -151,6 +161,37 @@ TEST(PolyEval, FullCompileTimeRandom) {
     std::vector<double> ys(kNumRandomTests);
     poly(xs.data(), ys.data(), xs.size());
     batch_verify<double>(double_constexpr_func, xs, ys, 1e-7);
+}
+
+TEST(PolyEval, GenericScalarOperatorAcceptsBatchCarrier) {
+    constexpr double a = -1.0;
+    constexpr double b = 1.0;
+    constexpr std::size_t nCoeffs = 6;
+    const auto poly = poly_eval::fit<nCoeffs>(double_func, a, b);
+
+    using Batch = xsimd::batch<double>;
+    alignas(Batch::arch_type::alignment()) std::array<double, Batch::size> xs{};
+    alignas(Batch::arch_type::alignment()) std::array<double, Batch::size> ys{};
+    for (std::size_t i = 0; i < xs.size(); ++i) xs[i] = a + (b - a) * (static_cast<double>(i) / static_cast<double>(xs.size()));
+
+    const auto xb = Batch::load_aligned(xs.data());
+    const auto yb = poly(xb);
+    yb.store_aligned(ys.data());
+
+    for (std::size_t i = 0; i < xs.size(); ++i) {
+        EXPECT_NEAR(ys[i], poly(xs[i]), 1e-15);
+    }
+}
+
+TEST(PolyEval, GenericScalarOperatorAcceptsCustomCarrier) {
+    constexpr double a = -1.0;
+    constexpr double b = 1.0;
+    constexpr std::size_t nCoeffs = 6;
+    const auto poly = poly_eval::fit<nCoeffs>(double_func, a, b, poly_eval::FuseAlways{});
+
+    const EvalCarrier x(0.25);
+    const auto y = poly(x);
+    EXPECT_NEAR(y.value, poly(x.value), 1e-15);
 }
 
 #if PF_HAS_CONSTEXPR_EPS_OVERLOAD

@@ -97,12 +97,16 @@ constexpr PF_ALWAYS_INLINE xsimd::batch<std::complex<T>, A> fma(const xsimd::bat
     return xsimd::fma(a, b, c);
 }
 
-template<typename T, typename = enable_if_t<!isXsimdBatch_v<T> && std::is_arithmetic_v<T>>>
-constexpr PF_ALWAYS_INLINE T fma(const T &a, const T &b, const T &c) noexcept {
-    if constexpr (std::is_floating_point_v<T>) {
-        return math::fma(a, b, c);
+template<typename A, typename B, typename C,
+         typename R = std::common_type_t<remove_cvref_t<A>, remove_cvref_t<B>, remove_cvref_t<C>>,
+         typename = enable_if_t<!isXsimdBatch_v<A> && !isXsimdBatch_v<B> && !isXsimdBatch_v<C> &&
+                                std::is_arithmetic_v<remove_cvref_t<A>> && std::is_arithmetic_v<remove_cvref_t<B>> &&
+                                std::is_arithmetic_v<remove_cvref_t<C>> && std::is_arithmetic_v<R>>>
+constexpr PF_ALWAYS_INLINE R fma(const A &a, const B &b, const C &c) noexcept {
+    if constexpr (std::is_floating_point_v<R>) {
+        return math::fma(static_cast<R>(a), static_cast<R>(b), static_cast<R>(c));
     } else {
-        return (a * b) + c;
+        return static_cast<R>(a) * static_cast<R>(b) + static_cast<R>(c);
     }
 }
 
@@ -118,6 +122,14 @@ template<typename T, typename B, typename = enable_if_t<std::is_arithmetic_v<B>>
 constexpr PF_ALWAYS_INLINE std::complex<T> fma(const std::complex<T> &a, const B &b,
                                                const std::complex<T> &c) noexcept {
     return fma(a, static_cast<T>(b), c);
+}
+
+template<typename A, typename B, typename C,
+         typename = enable_if_t<!isXsimdBatch_v<A> && !isXsimdBatch_v<B> && !isXsimdBatch_v<C> &&
+                                !std::is_arithmetic_v<remove_cvref_t<A>> && !isComplex_v<A> && !isComplex_v<C>>>
+constexpr PF_ALWAYS_INLINE auto fma(const A &a, const B &b, const C &c) noexcept(noexcept(a * b + c))
+    -> decltype(a * b + c) {
+    return a * b + c;
 }
 
 } // namespace detail
