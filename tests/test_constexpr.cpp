@@ -65,6 +65,16 @@ static_assert(decltype(ct_poly)::NCOEFFS == 4, "FuncEval CT: NCOEFFS");
 static_assert(poly_eval::detail::relativeL2Norm(ct_poly(0.0), 1.0) < 1e-12,
               "FuncEval CT: eval at x=0 should approximate x^2+1=1");
 
+static constexpr auto ct_fused_poly = poly_eval::fit<3>(
+    [](double x) constexpr { return x * x + 2.0 * x + 1.0; }, 2.0, 4.0, poly_eval::FuseAlways{});
+static constexpr auto ct_fused_coeffs = ct_fused_poly.coeffs();
+
+static_assert(poly_eval::detail::relativeL2Norm(ct_fused_poly(3.0), 16.0) < 1e-12,
+              "FuncEval CT FuseAlways: evaluator should use fused coefficients on the original domain");
+static_assert(poly_eval::detail::relativeL2Norm(
+                  poly_eval::horner(3.0, ct_fused_coeffs.data(), ct_fused_coeffs.size()), 16.0) < 1e-12,
+              "FuncEval CT FuseAlways: coeffs() should match runtime Horner evaluation on the original domain");
+
 static constexpr std::array<double, 2> nd_a{-1.0, -1.0};
 static constexpr std::array<double, 2> nd_b{1.0, 1.0};
 static constexpr auto ct_nd = poly_eval::fit<4, nd_a, nd_b>([](const std::array<double, 2> &p) constexpr {

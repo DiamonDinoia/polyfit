@@ -209,13 +209,7 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initializeCoeffs
     refine(grid, samples);
 
     if constexpr (FUSION != FusionMode::Never) {
-#if __cplusplus >= 202602L
-        {
-#else
-        PF_IF_NOT_CONSTEVAL {
-#endif
-            if (shouldFuseDomain(dp)) fuseDomain(dp);
-        }
+        if (shouldFuseDomain(dp)) fuseDomain(dp);
     }
 }
 
