@@ -53,6 +53,25 @@ TEST(PolyEval, FusionAlwaysOnWideDomainLosesAccuracy) {
         << "auto: " << maxErr_auto << ", force: " << maxErr_force;
 }
 
+TEST(PolyEval, ErrorDrivenFuseAlwaysHandlesZeroCrossings) {
+    auto func = [](double x) { return std::sin(x); };
+    constexpr double a = 0.0;
+    constexpr double b = 2.0;
+    constexpr double eps = 1e-12;
+
+    auto poly_auto  = poly_eval::fit(func, eps, a, b);
+    auto poly_force = poly_eval::fit(func, eps, a, b, poly_eval::FuseAlways{});
+
+    EXPECT_NEAR(poly_force(0.0), func(0.0), eps);
+
+    std::uniform_real_distribution<double> dist(a, b);
+    for (std::size_t i = 0; i < kNumRandomTests; ++i) {
+        double x = dist(gen);
+        EXPECT_LE(poly_eval::detail::relativeL2Norm(poly_force(x), func(x)), eps) << "x=" << x;
+        EXPECT_NEAR(poly_force(x), poly_auto(x), 1e-12) << "x=" << x;
+    }
+}
+
 TEST(PolyEval, FuseAlwaysDoesNotStoreDomainParams) {
     auto func = [](double x) { return x * x; };
     using FE_fused = decltype(poly_eval::fit<4>(func, -1.0, 1.0, poly_eval::FuseAlways{}));

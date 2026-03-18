@@ -94,6 +94,20 @@ TEST(PolyEval, ErrorDrivenRuntimeEpsRandom) {
     batch_verify<double>(double_func, xs, ys, eps);
 }
 
+TEST(PolyEval, ErrorDrivenRuntimeEpsFuseAlwaysHandlesZeros) {
+    constexpr double a = 0.0;
+    constexpr double b = 2.0;
+    constexpr double eps = 1e-12;
+    auto sin_func = [](double x) { return std::sin(x); };
+
+    const auto poly = poly_eval::fit(sin_func, eps, a, b, poly_eval::FuseAlways{});
+
+    EXPECT_NEAR(poly(0.0), sin_func(0.0), eps);
+    EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(0.5), sin_func(0.5)), eps);
+    EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(1.0), sin_func(1.0)), eps);
+    EXPECT_LE(poly_eval::detail::relativeL2Norm(poly(2.0), sin_func(2.0)), eps);
+}
+
 // 5. Runtime Coefficient Count with complex<double>
 TEST(PolyEval, RuntimeDegreeComplexRandom) {
     double a = -1.0, b = 1.0;

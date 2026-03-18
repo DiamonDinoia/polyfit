@@ -40,7 +40,7 @@ template<class Evaluator, class Func, class Points>
 [[nodiscard]] double maxRelativeError(Func F, const Evaluator &evaluator, const Points &points) {
     double maxErr = 0.0;
     for (const auto &pt : points) {
-        maxErr = std::max(maxErr, relativeL2Norm(F(pt), evaluator(pt)));
+        maxErr = std::max(maxErr, relativeL2Norm(evaluator(pt), F(pt)));
     }
     return maxErr;
 }
@@ -953,7 +953,7 @@ template<double EPS, auto a, auto b, std::size_t MAX_NCOEFFS, std::size_t EVAL_P
             for (const auto &pt : ep) {
                 const auto actual = F(pt);
                 const auto approx = evaluator.template operator()<false>(pt);
-                maxErr = std::max(detail::relativeL2Norm(actual, approx), maxErr);
+                maxErr = std::max(detail::relativeL2Norm(approx, actual), maxErr);
             }
             return maxErr;
         };
