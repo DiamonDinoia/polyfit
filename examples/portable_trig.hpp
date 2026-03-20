@@ -3,6 +3,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -135,6 +137,46 @@ template<typename T> PF_ALWAYS_INLINE std::pair<T, T> nan_pair() noexcept {
     return std::pair<T, T>{nan, nan};
 }
 
+template<typename To, typename From> PF_ALWAYS_INLINE To bitwise_cast_runtime(const From &src) noexcept {
+    static_assert(sizeof(To) == sizeof(From), "bitwise_cast_runtime requires equal-size types");
+    static_assert(std::is_trivially_copyable<To>::value, "destination type must be trivially copyable");
+    static_assert(std::is_trivially_copyable<From>::value, "source type must be trivially copyable");
+
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+}
+
+template<typename I> PF_ALWAYS_INLINE unsigned quadrant_from_rounded_multiple(I qi) noexcept {
+    static_assert(std::is_integral<I>::value, "quadrant_from_rounded_multiple requires an integral type");
+    using unsigned_type = typename std::make_unsigned<I>::type;
+    return static_cast<unsigned>(static_cast<unsigned_type>(qi) & unsigned_type{3});
+}
+
+template<typename T> PF_ALWAYS_INLINE std::pair<T, T> remap_quadrant(unsigned quadrant, T s1, T c1) noexcept {
+    if constexpr (std::is_same<T, float>::value || std::is_same<T, double>::value) {
+        using bits_type = typename std::conditional<std::is_same<T, float>::value, std::uint32_t, std::uint64_t>::type;
+        constexpr unsigned sign_shift = std::is_same<T, float>::value ? 31U : 63U;
+
+        const bits_type s_bits = bitwise_cast_runtime<bits_type>(s1);
+        const bits_type c_bits = bitwise_cast_runtime<bits_type>(c1);
+        const bits_type swap_mask = bits_type(0) - static_cast<bits_type>(quadrant & 1U);
+        const bits_type mixed = (s_bits ^ c_bits) & swap_mask;
+        const bits_type sin_sign_mask = static_cast<bits_type>(quadrant & 2U) << (sign_shift - 1U);
+        const bits_type cos_sign_mask = sin_sign_mask ^ (static_cast<bits_type>(quadrant & 1U) << sign_shift);
+        const bits_type sin_bits = (s_bits ^ mixed) ^ sin_sign_mask;
+        const bits_type cos_bits = (c_bits ^ mixed) ^ cos_sign_mask;
+        return std::pair<T, T>{bitwise_cast_runtime<T>(sin_bits), bitwise_cast_runtime<T>(cos_bits)};
+    } else {
+        const bool swap = (quadrant & 1U) != 0U;
+        const bool sin_neg = (quadrant & 2U) != 0U;
+        const bool cos_neg = sin_neg != swap;
+        const T sin_mag = swap ? c1 : s1;
+        const T cos_mag = swap ? s1 : c1;
+        return std::pair<T, T>{sin_neg ? -sin_mag : sin_mag, cos_neg ? -cos_mag : cos_mag};
+    }
+}
+
 PF_FAST_EVAL_BEGIN
 template<int TolDigits, typename T> PF_ALWAYS_INLINE std::pair<T, T> sincos_impl(T angle) noexcept {
     static_assert(std::is_floating_point<T>::value, "portable_trig::sincos only supports floating-point inputs");
@@ -149,14 +191,8 @@ template<int TolDigits, typename T> PF_ALWAYS_INLINE std::pair<T, T> sincos_impl
     const std::pair<work_type, work_type> reduced_sc = evaluate_reduced_baseline<TolDigits>(reduced);
     const T s1 = static_cast<T>(reduced_sc.first);
     const T c1 = static_cast<T>(reduced_sc.second);
-
-    int quadrant = static_cast<int>(qi % 4LL);
-    if (quadrant < 0) quadrant += 4;
-
-    if (quadrant == 0) return std::pair<T, T>{s1, c1};
-    if (quadrant == 1) return std::pair<T, T>{c1, -s1};
-    if (quadrant == 2) return std::pair<T, T>{-s1, -c1};
-    return std::pair<T, T>{-c1, s1};
+    const unsigned quadrant = quadrant_from_rounded_multiple(qi);
+    return remap_quadrant(quadrant, s1, c1);
 }
 PF_FAST_EVAL_END
 

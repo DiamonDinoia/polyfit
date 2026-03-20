@@ -163,6 +163,7 @@ add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.
 add_polyfit_test_matrix(test_edge_cases test_edge_cases.cpp)
 add_polyfit_test_matrix(test_constexpr test_constexpr.cpp)
 add_polyfit_test_matrix(test_feature_macros test_feature_macros.cpp)
+add_polyfit_test_matrix(test_portable_trig test_portable_trig.cpp)
 
 if (POLYFIT_BUILD_BENCHMARKS)
     foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)
