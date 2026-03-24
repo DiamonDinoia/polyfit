@@ -30,6 +30,7 @@ set(SOURCES
         runtime_1D_eps.cpp
         runtime_ND_fixed.cpp
         pack.cpp
+        portable_trig_generate.cpp
         tags.cpp
 )
 set(SOURCES_CXX20)

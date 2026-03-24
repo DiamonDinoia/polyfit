@@ -11,10 +11,10 @@
 
 #include "polyfit/internal/macros.h"
 #include "polyfit/internal/numeric_utils.h"
-
 #include <poet/poet.hpp>
 
 #if PF_HAS_CXX20
+#include <bit>
 #include <numbers>
 #endif
 
@@ -24,23 +24,12 @@ namespace portable_trig {
 template<typename T> struct default_approx_digits;
 
 template<> struct default_approx_digits<float> : std::integral_constant<int, 7> {};
-template<> struct default_approx_digits<double> : std::integral_constant<int, 15> {};
-template<> struct default_approx_digits<long double> : std::integral_constant<int, 15> {};
-
+template<> struct default_approx_digits<double> : std::integral_constant<int, 16> {};
+template<> struct default_approx_digits<long double> : std::integral_constant<int, 16> {};
 namespace detail {
 
-#if defined(__FMA__)
-inline constexpr bool kPreferHardwareFma = true;
-#else
-inline constexpr bool kPreferHardwareFma = false;
-#endif
-
 template<typename T> PF_CXX20_CONSTEXPR T pi() noexcept {
-#if PF_HAS_CXX20
-    return std::numbers::pi_v<T>;
-#else
     return static_cast<T>(poly_eval::detail::constants::pi);
-#endif
 }
 
 template<typename T> PF_CXX20_CONSTEXPR T pi_over_2() noexcept { return pi<T>() / static_cast<T>(2); }
@@ -48,40 +37,18 @@ template<typename T> PF_CXX20_CONSTEXPR T pi_over_2() noexcept { return pi<T>() 
 template<typename T> PF_CXX20_CONSTEXPR T inv_pi_over_2() noexcept { return static_cast<T>(1) / pi_over_2<T>(); }
 
 inline constexpr std::array<double, 6> sin_coeffs = {
-    0x1.5e585f68f956ep-33, -0x1.ae5f687b275b3p-26, 0x1.71de33799ebc6p-19,
-    -0x1.a01a019367fdp-13, 0x1.1111111104f1dp-7,   -0x1.555555555541bp-3,
+    0x1.5e0f86a545d1fp-33, -0x1.ae6015d2aa2ap-26, 0x1.71de379c19d39p-19,
+    -0x1.a01a019e7d0c4p-13, 0x1.1111111110afep-7, -0x1.5555555555554p-3,
 };
 
 inline constexpr std::array<double, 6> cos_coeffs = {
-    0x1.1b88ad1c62723p-29,  -0x1.27df3a1e26a95p-22, 0x1.a019f7fcecefp-16,
-    -0x1.6c16c163eaf27p-10, 0x1.555555554ef27p-5,   -0x1.fffffffffff91p-2,
+    0x1.1c0948cd3683ep-29,  -0x1.27e0fe56c4828p-22, 0x1.a019fc8d5ba89p-16,
+    -0x1.6c16c1692bdf3p-10, 0x1.5555555554198p-5,   -0x1.ffffffffffffap-2,
 };
 
-// These tables were generated offline with polyfit on the reduced interval
-// [a, b] = [-pi/4, pi/4], then rewritten into the
-//   sin(t) ~= t + t^3 * P(t^2)
-//   cos(t) ~= 1 + t^2 * Q(t^2)
-// form used below. A representative generation sketch is:
-//
-//   using poly_eval::FuseAlways;
-//   const double a = -poly_eval::detail::constants::pi / 4.0;
-//   const double b =  poly_eval::detail::constants::pi / 4.0;
-//   const auto sin_tail = poly_eval::fit<6>(
-//       [](double t) { return (std::sin(t) - t) / (t * t * t); },
-//       a, b, FuseAlways{});
-//   const auto cos_tail = poly_eval::fit<6>(
-//       [](double t) { return (std::cos(t) - 1.0) / (t * t); },
-//       a, b, FuseAlways{});
-//
-// The stored coefficients are the Horner-order coefficients of P and Q in u=t^2.
-//
-// Local performance note from this example on one x86-64 machine, compared to
-// std::sin(x) + std::cos(x) in the same harness:
-//   -march=x86-64    : roughly 1.2x to 1.6x faster
-//   -march=x86-64-v2 : roughly 1.6x to 1.75x faster
-//   -march=x86-64-v3 : roughly 1.55x to 1.8x faster
-// These numbers are workload- and machine-dependent; rerun portable_trig.cpp on
-// the target machine if you need a trustworthy comparison.
+// Generated offline on u=t^2 over [0, (pi/4)^2] with the numerically stable
+// kernels in examples/portable_trig_generate.cpp. Direct t-domain fits of
+// (sin(t) - t) / t^3 and (cos(t) - 1) / t^2 do not reproduce these tables.
 
 template<std::size_t N, std::size_t M>
 PF_CXX20_CONSTEVAL std::array<double, N> tail(const std::array<double, M> &src) noexcept {
@@ -99,65 +66,71 @@ PF_CXX20_CONSTEVAL std::size_t nterms_for_digits(int tol_digits) noexcept {
                                 : 6U;
 }
 
-template<int TolDigits> struct approx_coefficients {
+template<int TolDigits> struct trig_coefficients {
     static constexpr auto sin_poly = tail<nterms_for_digits(TolDigits)>(sin_coeffs);
     static constexpr auto cos_poly = tail<nterms_for_digits(TolDigits)>(cos_coeffs);
 };
 
 template<typename T> PF_ALWAYS_INLINE T range_reduce_mul_add(T a, T b, T c) noexcept {
-    if constexpr (kPreferHardwareFma && (std::is_same<T, float>::value || std::is_same<T, double>::value)) {
-        return poly_eval::detail::math::fma(a, b, c);
-    } else {
-        return a * b + c;
-    }
-}
-
-template<typename T> PF_ALWAYS_INLINE T plain_mul_add(T a, T b, T c) noexcept {
+#if defined(__FMA__)
+    return std::fma(a, b, c);
+#else
     return a * b + c;
+#endif
 }
 
-template<std::size_t N, typename T> PF_ALWAYS_INLINE T eval_horner_baseline(const std::array<double, N> &coeffs, T x) noexcept {
+template<std::size_t N, typename T> PF_ALWAYS_INLINE T eval_poly_horner(const std::array<double, N> &coeffs, T x) noexcept {
     T acc = static_cast<T>(coeffs[0]);
     poet::static_for<1, N>([&](auto i) {
-        acc = plain_mul_add(acc, x, static_cast<T>(coeffs[i]));
+        acc = acc * x + static_cast<T>(coeffs[i]);
     });
     return acc;
 }
 
-template<int TolDigits, typename T> PF_ALWAYS_INLINE std::pair<T, T> evaluate_reduced_baseline(T t) noexcept {
+template<int TolDigits, typename T> PF_ALWAYS_INLINE std::pair<T, T> eval_reduced_sincos(T t) noexcept {
     const T t2 = t * t;
     const T t3 = t2 * t;
-    const T sp = eval_horner_baseline(approx_coefficients<TolDigits>::sin_poly, t2);
-    const T cp = eval_horner_baseline(approx_coefficients<TolDigits>::cos_poly, t2);
-    return std::pair<T, T>{plain_mul_add(sp, t3, t), plain_mul_add(cp, t2, static_cast<T>(1))};
-}
-
-template<typename T> PF_ALWAYS_INLINE std::pair<T, T> nan_pair() noexcept {
-    const T nan = std::numeric_limits<T>::quiet_NaN();
-    return std::pair<T, T>{nan, nan};
+    const T sp = eval_poly_horner(trig_coefficients<TolDigits>::sin_poly, t2);
+    const T cp = eval_poly_horner(trig_coefficients<TolDigits>::cos_poly, t2);
+    return std::pair<T, T>{sp * t3 + t, cp * t2 + static_cast<T>(1)};
 }
 
 template<typename To, typename From> PF_ALWAYS_INLINE To bitwise_cast_runtime(const From &src) noexcept {
     static_assert(sizeof(To) == sizeof(From), "bitwise_cast_runtime requires equal-size types");
     static_assert(std::is_trivially_copyable<To>::value, "destination type must be trivially copyable");
     static_assert(std::is_trivially_copyable<From>::value, "source type must be trivially copyable");
-
+#if PF_HAS_CXX20
+    return std::bit_cast<To>(src);
+#else
     To dst;
     std::memcpy(&dst, &src, sizeof(To));
     return dst;
+#endif
+}
+
+template<typename T> PF_ALWAYS_INLINE bool is_finite_value(T value) noexcept {
+    if constexpr (std::is_same<T, float>::value) {
+        constexpr std::uint32_t exponent_mask = 0x7f800000u;
+        return (bitwise_cast_runtime<std::uint32_t>(value) & exponent_mask) != exponent_mask;
+    } else if constexpr (std::is_same<T, double>::value) {
+        constexpr std::uint64_t exponent_mask = 0x7ff0000000000000ull;
+        return (bitwise_cast_runtime<std::uint64_t>(value) & exponent_mask) != exponent_mask;
+    } else {
+        constexpr T max_value = std::numeric_limits<T>::max();
+        return value >= -max_value && value <= max_value;
+    }
 }
 
 template<typename I> PF_ALWAYS_INLINE unsigned quadrant_from_rounded_multiple(I qi) noexcept {
     static_assert(std::is_integral<I>::value, "quadrant_from_rounded_multiple requires an integral type");
-    using unsigned_type = typename std::make_unsigned<I>::type;
+    using unsigned_type = std::make_unsigned_t<I>;
     return static_cast<unsigned>(static_cast<unsigned_type>(qi) & unsigned_type{3});
 }
 
 template<typename T> PF_ALWAYS_INLINE std::pair<T, T> remap_quadrant(unsigned quadrant, T s1, T c1) noexcept {
     if constexpr (std::is_same<T, float>::value || std::is_same<T, double>::value) {
-        using bits_type = typename std::conditional<std::is_same<T, float>::value, std::uint32_t, std::uint64_t>::type;
-        constexpr unsigned sign_shift = std::is_same<T, float>::value ? 31U : 63U;
-
+        using bits_type = std::conditional_t<std::is_same<T, float>::value, std::uint32_t, std::uint64_t>;
+        constexpr unsigned sign_shift = std::numeric_limits<bits_type>::digits - 1U;
         const bits_type s_bits = bitwise_cast_runtime<bits_type>(s1);
         const bits_type c_bits = bitwise_cast_runtime<bits_type>(c1);
         const bits_type swap_mask = bits_type(0) - static_cast<bits_type>(quadrant & 1U);
@@ -178,21 +151,57 @@ template<typename T> PF_ALWAYS_INLINE std::pair<T, T> remap_quadrant(unsigned qu
 }
 
 PF_FAST_EVAL_BEGIN
+template<int TolDigits> PF_ALWAYS_INLINE std::pair<float, float> sincos_impl(float angle) noexcept {
+    if (!is_finite_value(angle)) PF_UNLIKELY {
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        return std::pair<float, float>{nan, nan};
+    }
+
+    const float qf = std::nearbyint(angle * inv_pi_over_2<float>());
+    const std::int32_t qi = static_cast<std::int32_t>(qf);
+    float reduced = angle;
+    if constexpr (TolDigits >= 6) {
+        constexpr float float_pio2_1 = 0x1.920000p+0f;
+        constexpr float float_pio2_2 = 0x1.fb4p-12f;
+        constexpr float float_pio2_3 = 0x1.4442d2p-24f;
+        reduced = range_reduce_mul_add(-qf, float_pio2_1, reduced);
+        reduced = range_reduce_mul_add(-qf, float_pio2_2, reduced);
+        reduced = range_reduce_mul_add(-qf, float_pio2_3, reduced);
+    } else {
+        reduced = range_reduce_mul_add(-qf, pi_over_2<float>(), reduced);
+    }
+    const std::pair<float, float> reduced_sc = eval_reduced_sincos<TolDigits>(reduced);
+    return remap_quadrant(quadrant_from_rounded_multiple(qi), reduced_sc.first, reduced_sc.second);
+}
+
 template<int TolDigits, typename T> PF_ALWAYS_INLINE std::pair<T, T> sincos_impl(T angle) noexcept {
     static_assert(std::is_floating_point<T>::value, "portable_trig::sincos only supports floating-point inputs");
+    if (!is_finite_value(angle)) PF_UNLIKELY {
+        const T nan = std::numeric_limits<T>::quiet_NaN();
+        return std::pair<T, T>{nan, nan};
+    }
 
-    if (!std::isfinite(angle)) return nan_pair<T>();
-
-    using work_type = typename std::conditional<std::is_same<T, float>::value, double, T>::type;
-    const work_type angle_w = static_cast<work_type>(angle);
-    const work_type qf = std::nearbyint(angle_w * inv_pi_over_2<work_type>());
-    const long long qi = static_cast<long long>(qf);
-    const work_type reduced = range_reduce_mul_add(-qf, pi_over_2<work_type>(), angle_w);
-    const std::pair<work_type, work_type> reduced_sc = evaluate_reduced_baseline<TolDigits>(reduced);
-    const T s1 = static_cast<T>(reduced_sc.first);
-    const T c1 = static_cast<T>(reduced_sc.second);
-    const unsigned quadrant = quadrant_from_rounded_multiple(qi);
-    return remap_quadrant(quadrant, s1, c1);
+    if constexpr (std::is_same<T, double>::value && TolDigits > 14) {
+        using index_type = std::int64_t;
+        constexpr double medium_inv_pio2 = 0x1.45f306dc9c883p-1;
+        constexpr double medium_pio2_1 = 0x1.921fb54400000p+0;
+        constexpr double medium_pio2_2 = 0x1.0b4611a626331p-34;
+        constexpr double medium_pio2_3 = 0x1.1701b839a2520p-88;
+        const double qf = std::nearbyint(angle * medium_inv_pio2);
+        const index_type qi = static_cast<index_type>(qf);
+        double reduced = angle;
+        reduced = range_reduce_mul_add(-qf, medium_pio2_1, reduced);
+        reduced = range_reduce_mul_add(-qf, medium_pio2_2, reduced);
+        if constexpr (TolDigits > 15) { reduced = range_reduce_mul_add(-qf, medium_pio2_3, reduced); }
+        const std::pair<double, double> reduced_sc = eval_reduced_sincos<TolDigits>(reduced);
+        return remap_quadrant(quadrant_from_rounded_multiple(qi), reduced_sc.first, reduced_sc.second);
+    } else {
+        const T qf = std::nearbyint(angle * inv_pi_over_2<T>());
+        const std::int64_t qi = static_cast<std::int64_t>(qf);
+        const T reduced = range_reduce_mul_add(-qf, pi_over_2<T>(), angle);
+        const std::pair<T, T> reduced_sc = eval_reduced_sincos<TolDigits>(reduced);
+        return remap_quadrant(quadrant_from_rounded_multiple(qi), reduced_sc.first, reduced_sc.second);
+    }
 }
 PF_FAST_EVAL_END
 

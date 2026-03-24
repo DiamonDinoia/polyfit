@@ -2,7 +2,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <gtest/gtest.h>
 #include <limits>
 #include <type_traits>
@@ -12,20 +11,11 @@
 
 namespace {
 
-template<typename T> struct BitPattern;
+template<typename T>
+using BitPattern = std::conditional_t<std::is_same<T, float>::value, std::uint32_t, std::uint64_t>;
 
-template<> struct BitPattern<float> {
-    using type = std::uint32_t;
-};
-
-template<> struct BitPattern<double> {
-    using type = std::uint64_t;
-};
-
-template<typename T> typename BitPattern<T>::type to_bits(T value) noexcept {
-    typename BitPattern<T>::type bits = 0;
-    std::memcpy(&bits, &value, sizeof(T));
-    return bits;
+template<typename T> BitPattern<T> to_bits(T value) noexcept {
+    return polyfit_examples::portable_trig::detail::bitwise_cast_runtime<BitPattern<T>>(value);
 }
 
 template<typename T> bool same_bits(T lhs, T rhs) noexcept {
@@ -34,8 +24,10 @@ template<typename T> bool same_bits(T lhs, T rhs) noexcept {
 
 template<typename T> using Pair = std::pair<T, T>;
 
-template<typename T> Pair<T> eval_angle(T angle) noexcept {
-    return polyfit_examples::portable_trig::sincos<T>(angle);
+template<typename T,
+         int TolDigits = polyfit_examples::portable_trig::default_approx_digits<T>::value>
+Pair<T> eval_angle(T angle) noexcept {
+    return polyfit_examples::portable_trig::sincos<T, TolDigits>(angle);
 }
 
 template<typename T> Pair<T> remap(unsigned quadrant, T s, T c) noexcept {
@@ -146,7 +138,7 @@ TYPED_TEST(PortableTrigTyped, SincosMatchesStdOnDenseSweep) {
     }
 }
 
-TEST(PortableTrigSpecialValues, NonFiniteInputsStillReturnNaNPairs) {
+TEST(PortableTrigSpecialValues, NonFiniteInputsReturnNaNPairs) {
     using polyfit_examples::portable_trig::sincos;
 
     const auto inf_pair = sincos<double>(std::numeric_limits<double>::infinity());
@@ -156,6 +148,54 @@ TEST(PortableTrigSpecialValues, NonFiniteInputsStillReturnNaNPairs) {
     EXPECT_TRUE(std::isnan(inf_pair.second));
     EXPECT_TRUE(std::isnan(nan_pair.first));
     EXPECT_TRUE(std::isnan(nan_pair.second));
+}
+
+TEST(PortableTrigApi, ExplicitDigitsTemplateArgumentCompilesInSecondSlot) {
+    const auto default_digits = polyfit_examples::portable_trig::sincos<double>(0.5);
+    const auto explicit_digits = polyfit_examples::portable_trig::sincos<double, 14>(0.5);
+
+    EXPECT_TRUE(std::isfinite(default_digits.first));
+    EXPECT_TRUE(std::isfinite(default_digits.second));
+    EXPECT_TRUE(std::isfinite(explicit_digits.first));
+    EXPECT_TRUE(std::isfinite(explicit_digits.second));
+}
+
+TEST(PortableTrigAccuracy, DefaultHighDigitPathMatchesStdOnPrimaryRangeForDouble) {
+    const double pi = polyfit_examples::portable_trig::detail::pi<double>();
+
+    for (int i = 0; i <= 4000; ++i) {
+        const double alpha = static_cast<double>(i) / 4000.0;
+        const double angle = (alpha * 2.0 - 1.0) * pi;
+        const Pair<double> approx = eval_angle<double, 15>(angle);
+        EXPECT_NEAR(approx.first, std::sin(angle), 5.0e-15);
+        EXPECT_NEAR(approx.second, std::cos(angle), 5.0e-15);
+    }
+}
+
+TEST(PortableTrigAccuracy, HighDigitPathHandlesVeryWideDoubleRanges) {
+    const double pi = polyfit_examples::portable_trig::detail::pi<double>();
+    constexpr double wide_scale = 1000000.123;
+
+    for (int i = 0; i <= 4000; ++i) {
+        const double alpha = static_cast<double>(i) / 4000.0;
+        const double angle = (alpha * 2.0 - 1.0) * wide_scale * pi;
+        const Pair<double> approx = eval_angle<double, 15>(angle);
+        EXPECT_NEAR(approx.first, std::sin(angle), 5.0e-13);
+        EXPECT_NEAR(approx.second, std::cos(angle), 5.0e-13);
+    }
+}
+
+TEST(PortableTrigAccuracy, HighDigitPathHandlesMultiMillionPiRanges) {
+    const double pi = polyfit_examples::portable_trig::detail::pi<double>();
+    constexpr double wide_scale = 4000000.0;
+
+    for (int i = 0; i <= 4000; ++i) {
+        const double alpha = static_cast<double>(i) / 4000.0;
+        const double angle = (alpha * 2.0 - 1.0) * wide_scale * pi;
+        const Pair<double> approx = eval_angle<double, 15>(angle);
+        EXPECT_NEAR(approx.first, std::sin(angle), 5.0e-13);
+        EXPECT_NEAR(approx.second, std::cos(angle), 5.0e-13);
+    }
 }
 
 } // namespace

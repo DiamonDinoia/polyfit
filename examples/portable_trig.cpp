@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -73,11 +74,13 @@ template<typename T> std::vector<T> make_angles(std::size_t count, T range_scale
     std::uint64_t state = 0x123456789abcdefULL;
     const long double pi = static_cast<long double>(polyfit_examples::portable_trig::detail::pi<T>());
     const long double range = static_cast<long double>(range_scale) * pi;
-    const long double inv53 = 1.0L / static_cast<long double>(static_cast<std::uint64_t>(1) << 53);
+    constexpr int unit_bits = std::numeric_limits<double>::digits;
+    const long double inv_unit = 1.0L / static_cast<long double>(static_cast<std::uint64_t>(1) << unit_bits);
+    constexpr int discard_bits = std::numeric_limits<std::uint64_t>::digits - unit_bits;
 
     for (std::size_t i = 0; i < count; ++i) {
         state = state * 6364136223846793005ULL + 1442695040888963407ULL;
-        const long double unit = static_cast<long double>(state >> 11) * inv53;
+        const long double unit = static_cast<long double>(state >> discard_bits) * inv_unit;
         angles[i] = static_cast<T>((2.0L * unit - 1.0L) * range);
     }
     return angles;
@@ -141,18 +144,16 @@ TimingSummary benchmark_repeated(std::string_view label, std::size_t warmup_roun
     return TimingSummary{label, median_of_samples(samples), *minmax.first, *minmax.second, checksum};
 }
 
-void print_timing_table(const TimingSummary &fast, const TimingSummary &std_impl) {
-    const double speedup = std_impl.median_ns / fast.median_ns;
-    const double delta_pct = (std_impl.median_ns - fast.median_ns) * 100.0 / std_impl.median_ns;
-
+void print_timing_table(const std::vector<TimingSummary> &portable_rows, const TimingSummary &std_impl) {
     std::cout << "| implementation | median ns/call | min-max ns | checksum | vs std |\n";
     std::cout << "|---|---:|---:|---:|---:|\n";
-    std::cout << "| portable_trig::sincos | " << fast.median_ns << " | " << fast.min_ns << "-" << fast.max_ns << " | "
-              << fast.checksum << " | "
-              << speedup << "x faster |\n";
+    for (const TimingSummary &row : portable_rows) {
+        const double speedup = std_impl.median_ns / row.median_ns;
+        std::cout << "| " << row.label << " | " << row.median_ns << " | " << row.min_ns << "-" << row.max_ns << " | "
+                  << row.checksum << " | " << speedup << "x faster |\n";
+    }
     std::cout << "| std::sin + std::cos | " << std_impl.median_ns << " | " << std_impl.min_ns << "-" << std_impl.max_ns
               << " | " << std_impl.checksum << " | baseline |\n";
-    std::cout << "relative improvement: " << delta_pct << "%\n";
 }
 
 const char *feature_summary() noexcept {
@@ -166,13 +167,23 @@ const char *feature_summary() noexcept {
 }
 
 template<typename T>
-TimingResult run_portable_benchmark(const std::vector<T> &angles, std::size_t passes) {
+TimingResult run_portable_benchmark(std::string_view label, const std::vector<T> &angles, std::size_t passes) {
     T checksum = T(0);
     const double ns = benchmark_ns_per_call(
         angles, passes,
         [](T angle) { return polyfit_examples::portable_trig::sincos<T>(angle); },
         checksum);
-    return TimingResult{"portable_trig::sincos", ns, static_cast<double>(checksum)};
+    return TimingResult{label, ns, static_cast<double>(checksum)};
+}
+
+template<typename T, int TolDigits>
+TimingResult run_portable_benchmark(std::string_view label, const std::vector<T> &angles, std::size_t passes) {
+    T checksum = T(0);
+    const double ns = benchmark_ns_per_call(
+        angles, passes,
+        [](T angle) { return polyfit_examples::portable_trig::sincos<T, TolDigits>(angle); },
+        checksum);
+    return TimingResult{label, ns, static_cast<double>(checksum)};
 }
 
 template<typename T>
@@ -208,26 +219,66 @@ int main() {
     std::cout << "demo polar(2, 0.5) -> (" << z2.real() << ", " << z2.imag() << ")\n";
 
     const std::size_t accuracy_samples = 250001;
-    std::cout << "accuracy sweep: " << accuracy_samples << " samples over [-256*pi, 256*pi]\n";
-    print_accuracy("float ", measure_accuracy<float>(accuracy_samples, 256.0f));
-    print_accuracy("double", measure_accuracy<double>(accuracy_samples, 256.0));
+    std::cout << "accuracy sweeps (" << accuracy_samples << " samples each)\n";
+    print_accuracy("float default   [-256*pi, 256*pi]",
+                   measure_accuracy<float>(accuracy_samples, 256.0f));
+    print_accuracy("double default  [-1*pi,   1*pi ]",
+                   measure_accuracy<double>(accuracy_samples, 1.0));
+    print_accuracy("double digits14 [-256*pi, 256*pi]",
+                   measure_accuracy<double, 14>(accuracy_samples, 256.0));
+    print_accuracy("double default  [-256*pi, 256*pi]",
+                   measure_accuracy<double>(accuracy_samples, 256.0));
+    print_accuracy("double default  [-1.000000123e6*pi, 1.000000123e6*pi]",
+                   measure_accuracy<double>(accuracy_samples, 1000000.123));
 
     const std::size_t timing_samples = 1U << 19;
     const std::size_t timing_passes = 8;
-    const auto angles = make_angles<double>(timing_samples, 256.0);
+    const auto primary_angles = make_angles<double>(timing_samples, 1.0);
+    const auto moderate_angles = make_angles<double>(timing_samples, 256.0);
     constexpr std::size_t warmup_rounds = 2;
     constexpr std::size_t measured_rounds = 9;
-    std::cout << "timing sweep: " << timing_samples << " angles, " << timing_passes << " passes, "
+    std::cout << "timing sweeps: " << timing_samples << " angles, " << timing_passes << " passes, "
               << warmup_rounds << " warmups, " << measured_rounds << " measured rounds\n";
 
-    const TimingSummary fast = benchmark_repeated(
-        "portable_trig::sincos", warmup_rounds, measured_rounds,
-        [&] { return run_portable_benchmark(angles, timing_passes); });
-    const TimingSummary std_impl = benchmark_repeated(
+    std::cout << "primary-range timing over [-pi, pi]\n";
+    const std::vector<TimingSummary> primary_rows = {
+        benchmark_repeated(
+            "sincos<double>", warmup_rounds, measured_rounds,
+            [&] {
+                return run_portable_benchmark<double, 15>(
+                    "sincos<double>", primary_angles, timing_passes);
+            }),
+        benchmark_repeated(
+            "sincos<double,14>", warmup_rounds, measured_rounds,
+            [&] {
+                return run_portable_benchmark<double, 14>(
+                    "sincos<double,14>", primary_angles, timing_passes);
+            }),
+    };
+    const TimingSummary primary_std = benchmark_repeated(
         "std::sin + std::cos", warmup_rounds, measured_rounds,
-        [&] { return run_std_benchmark(angles, timing_passes); });
+        [&] { return run_std_benchmark(primary_angles, timing_passes); });
+    print_timing_table(primary_rows, primary_std);
 
-    print_timing_table(fast, std_impl);
+    std::cout << "moderate-range timing over [-256*pi, 256*pi]\n";
+    const std::vector<TimingSummary> moderate_rows = {
+        benchmark_repeated(
+            "sincos<double,14>", warmup_rounds, measured_rounds,
+            [&] {
+                return run_portable_benchmark<double, 14>(
+                    "sincos<double,14>", moderate_angles, timing_passes);
+            }),
+        benchmark_repeated(
+            "sincos<double>", warmup_rounds, measured_rounds,
+            [&] {
+                return run_portable_benchmark<double, 15>(
+                    "sincos<double>", moderate_angles, timing_passes);
+            }),
+    };
+    const TimingSummary moderate_std = benchmark_repeated(
+        "std::sin + std::cos", warmup_rounds, measured_rounds,
+        [&] { return run_std_benchmark(moderate_angles, timing_passes); });
+    print_timing_table(moderate_rows, moderate_std);
 
     return 0;
 }
