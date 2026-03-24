@@ -1,0 +1,266 @@
+benchmark,gcc-14,gcc-15,llvm-20,llvm-21
+bench1D_cxx17::float constexpr fit,466.0300,457.9300,732.5500,772.3100
+bench1D_cxx17::float coefficient-count fit,1016.6600,952.2900,941.2200,928.5400
+bench1D_cxx17::float eps fit,2355.2100,2284.8800,2260.9200,2397.7100
+bench1D_cxx17::float eval,1.7500,1.7300,2.0700,1.8300
+bench1D_cxx17::float eval_many,0.2500,0.2600,0.1700,0.1700
+bench1D_cxx17::double constexpr fit,504.3600,501.0900,750.4100,795.5500
+bench1D_cxx17::double coefficient-count fit,1193.6500,1091.0900,1034.3200,1050.8800
+bench1D_cxx17::double eps fit,2457.4500,2415.7900,2247.3300,2395.4400
+bench1D_cxx17::double eval,2.0300,2.0400,2.0200,1.7900
+bench1D_cxx17::double eval_many,0.5100,0.5200,0.3500,0.3300
+bench1D_cxx17::complex<double> constexpr fit,581.6100,586.8300,634.2000,671.2000
+bench1D_cxx17::complex<double> coefficient-count fit,1388.9700,1390.5600,1463.6400,1535.2200
+bench1D_cxx17::complex<double> eps fit,2669.5700,2706.6300,2553.2000,2712.3700
+bench1D_cxx17::complex<double> eval,2.1800,2.4000,2.0800,1.8600
+bench1D_cxx17::complex<double> eval_many,1.3500,1.3400,1.4000,1.3200
+bench1D_cxx17::complex<float> constexpr fit,622.1200,584.3900,852.1200,922.2100
+bench1D_cxx17::complex<float> coefficient-count fit,1311.6700,1269.7500,1572.9800,1643.9600
+bench1D_cxx17::complex<float> eps fit,2660.6800,2635.4800,2644.4200,2754.2000
+bench1D_cxx17::complex<float> eval,3.9000,3.8800,3.4300,3.5100
+bench1D_cxx17::complex<float> eval_many,0.6800,0.6800,0.6600,0.6700
+bench1D_cxx20::float constexpr fit,442.3500,436.0500,733.9800,774.0300
+bench1D_cxx20::float coefficient-count fit,1027.6100,1008.0200,944.7900,923.8400
+bench1D_cxx20::float eps fit,2343.7100,2349.2700,2253.4000,2368.6700
+bench1D_cxx20::float eval,1.6900,2.0300,2.1100,1.7600
+bench1D_cxx20::float eval_many,0.2500,0.2600,0.1700,0.1700
+bench1D_cxx20::double constexpr fit,481.1900,476.0800,750.1400,800.8800
+bench1D_cxx20::double coefficient-count fit,1193.5000,1174.3300,1028.5500,1041.8700
+bench1D_cxx20::double eps fit,2525.0200,2515.3800,2255.0400,2385.1600
+bench1D_cxx20::double eval,1.7400,1.7300,2.0900,1.8700
+bench1D_cxx20::double eval_many,0.5100,0.5000,0.3800,0.3400
+bench1D_cxx20::complex<double> constexpr fit,560.8500,581.6100,639.3000,671.1000
+bench1D_cxx20::complex<double> coefficient-count fit,1360.4300,1392.3000,1458.3800,1622.0300
+bench1D_cxx20::complex<double> eps fit,2776.8500,2776.3300,2562.5600,2689.8400
+bench1D_cxx20::complex<double> eval,2.4700,2.3300,2.1100,1.8000
+bench1D_cxx20::complex<double> eval_many,1.3600,1.3500,1.3900,1.1900
+bench1D_cxx20::complex<float> constexpr fit,641.2400,574.5100,855.6300,924.1100
+bench1D_cxx20::complex<float> coefficient-count fit,1398.5000,1401.9500,1572.6400,1647.5800
+bench1D_cxx20::complex<float> eps fit,2736.2400,2706.8600,2610.5100,2728.2600
+bench1D_cxx20::complex<float> eval,3.8700,3.8900,3.5100,3.4700
+bench1D_cxx20::complex<float> eval_many,0.6800,0.6800,0.6700,0.6000
+benchMany_cxx17::1 funcs,7.5500,7.6400,5.6600,5.2800
+benchMany_cxx17::1 funcs (non-many),4.5900,4.3700,5.1500,4.5800
+benchMany_cxx17::2 funcs,8.4900,7.9700,5.8800,5.2800
+benchMany_cxx17::2 funcs (non-many),9.3800,9.2800,10.0000,8.5600
+benchMany_cxx17::3 funcs,8.6100,8.6300,6.1400,5.0800
+benchMany_cxx17::3 funcs (non-many),19.2800,13.4600,14.8200,12.8700
+benchMany_cxx17::4 funcs,8.4700,8.5700,5.6600,5.2400
+benchMany_cxx17::4 funcs (non-many),18.3200,18.0400,19.3400,17.0200
+benchMany_cxx17::5 funcs,10.7000,10.6200,8.1500,7.9300
+benchMany_cxx17::5 funcs (non-many),22.4200,21.6100,24.0800,21.3500
+benchMany_cxx17::6 funcs,11.1200,10.8000,8.0300,8.0600
+benchMany_cxx17::6 funcs (non-many),27.6300,38.2000,29.3500,25.4000
+benchMany_cxx17::7 funcs,11.7200,11.9800,8.3700,8.1700
+benchMany_cxx17::7 funcs (non-many),32.1600,32.8700,33.9700,30.5500
+benchMany_cxx17::8 funcs,10.9500,11.2000,8.1900,8.0200
+benchMany_cxx17::8 funcs (non-many),35.7500,35.0200,38.5400,35.3400
+benchMany_cxx17::9 funcs,14.4300,14.2300,11.1300,12.7900
+benchMany_cxx17::9 funcs (non-many),56.7200,39.0700,43.0000,39.1500
+benchMany_cxx17::10 funcs,14.4800,14.7100,11.2100,13.0900
+benchMany_cxx17::10 funcs (non-many),61.8100,43.6300,47.9600,43.2600
+benchMany_cxx17::11 funcs,15.9800,16.2000,10.9200,11.1500
+benchMany_cxx17::11 funcs (non-many),49.0400,62.4700,52.2900,46.5700
+benchMany_cxx17::12 funcs,14.9000,14.5500,11.3100,13.3000
+benchMany_cxx17::12 funcs (non-many),75.6100,52.4300,62.0100,52.5400
+benchMany_cxx17::13 funcs,17.1800,16.8800,13.7500,14.3800
+benchMany_cxx17::13 funcs (non-many),79.1100,73.9200,66.9700,56.9000
+benchMany_cxx17::14 funcs,18.2400,17.6800,13.9100,17.0400
+benchMany_cxx17::14 funcs (non-many),68.2200,65.2800,72.1900,61.3800
+benchMany_cxx17::15 funcs,19.0800,19.0800,13.3900,15.2900
+benchMany_cxx17::15 funcs (non-many),72.4100,88.7600,82.6200,65.6300
+benchMany_cxx17::16 funcs,17.2500,16.8900,13.4100,16.5900
+benchMany_cxx17::16 funcs (non-many),102.2200,73.2100,88.7100,69.9600
+benchMany_cxx17::8 funcs (mixed domains),11.1100,11.1800,8.9200,8.3500
+"benchMany_cxx17::8 funcs (mixed domains, non-many)",35.7800,35.0000,38.5100,33.8200
+benchMany_cxx17::16 funcs (mixed domains),17.2100,16.9000,13.7500,15.8200
+"benchMany_cxx17::16 funcs (mixed domains, non-many)",102.2900,73.0900,88.1900,70.0000
+"benchMany_cxx17::8 funcs (complex outputs, bulk)",38.5300,38.5300,43.5600,39.4800
+benchMany_cxx20::1 funcs,7.7600,7.5400,5.5900,5.2500
+benchMany_cxx20::1 funcs (non-many),4.5800,4.3900,5.2400,4.6200
+benchMany_cxx20::2 funcs,8.5300,7.8500,5.6500,5.2600
+benchMany_cxx20::2 funcs (non-many),9.3800,9.2800,10.1300,8.5500
+benchMany_cxx20::3 funcs,8.5200,8.6500,6.1400,5.0800
+benchMany_cxx20::3 funcs (non-many),19.2700,13.4200,15.1100,12.8700
+benchMany_cxx20::4 funcs,8.2700,8.9900,5.6000,5.3400
+benchMany_cxx20::4 funcs (non-many),18.4300,17.9800,19.6200,17.4100
+benchMany_cxx20::5 funcs,14.2100,10.9100,8.1300,7.9800
+benchMany_cxx20::5 funcs (non-many),22.4300,21.5200,24.3300,21.2100
+benchMany_cxx20::6 funcs,14.3500,10.9500,8.3300,8.0900
+benchMany_cxx20::6 funcs (non-many),27.6600,38.1900,29.3500,25.6300
+benchMany_cxx20::7 funcs,11.7300,11.7900,8.3300,8.6000
+benchMany_cxx20::7 funcs (non-many),32.1700,32.7900,33.3500,29.7300
+benchMany_cxx20::8 funcs,10.9500,11.0100,8.4100,8.3800
+benchMany_cxx20::8 funcs (non-many),35.7300,35.0300,38.6200,33.7800
+benchMany_cxx20::9 funcs,14.3200,14.3400,11.1600,12.8400
+benchMany_cxx20::9 funcs (non-many),56.7600,39.0800,43.3200,38.0800
+benchMany_cxx20::10 funcs,14.9000,14.7500,11.4400,13.1100
+benchMany_cxx20::10 funcs (non-many),61.7700,43.6600,48.0900,42.1700
+benchMany_cxx20::11 funcs,16.1500,16.2100,11.6300,11.1900
+benchMany_cxx20::11 funcs (non-many),49.0000,62.5200,52.5900,48.5500
+benchMany_cxx20::12 funcs,15.0800,15.2900,9.7800,12.7700
+benchMany_cxx20::12 funcs (non-many),75.5900,52.4400,61.8700,55.0300
+benchMany_cxx20::13 funcs,17.0300,16.9700,13.8400,14.2000
+benchMany_cxx20::13 funcs (non-many),79.1000,73.9100,66.9800,56.8800
+benchMany_cxx20::14 funcs,17.7100,17.6100,13.7600,17.0100
+benchMany_cxx20::14 funcs (non-many),68.2600,65.9400,73.1800,64.9400
+benchMany_cxx20::15 funcs,18.9200,18.8500,13.6000,15.3600
+benchMany_cxx20::15 funcs (non-many),72.2400,88.6600,81.9900,67.7200
+benchMany_cxx20::16 funcs,17.4500,16.8900,14.5800,16.3300
+benchMany_cxx20::16 funcs (non-many),102.1900,73.2100,88.3600,72.0900
+benchMany_cxx20::8 funcs (mixed domains),10.9300,10.7600,8.1400,7.9600
+"benchMany_cxx20::8 funcs (mixed domains, non-many)",35.7400,34.9900,38.7500,34.0600
+benchMany_cxx20::16 funcs (mixed domains),17.2400,16.8900,13.8200,15.9100
+"benchMany_cxx20::16 funcs (mixed domains, non-many)",102.1300,73.1000,87.7000,72.1400
+"benchMany_cxx20::8 funcs (complex outputs, bulk)",38.4700,38.5400,43.3300,39.0300
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 build",61165.1500,60677.7600,78371.7000,82089.4500
+"bench_ND_cxx17::F:ℝ²→ℝ³, D=16 build",88934.3800,88077.6600,106211.9500,107031.8900
+"bench_ND_cxx17::F:ℝ³→ℝ², D=16 build",1522891.4300,1504598.2500,1951045.8300,2034865.8300
+"bench_ND_cxx17::F:ℝ³→ℝ³, D=8 build",239395.2500,236470.0500,347781.4500,389170.5500
+"bench_ND_cxx17::F:ℝ³→ℝ⁴, D=8 build",315753.5100,312675.8500,474028.5000,523252.4500
+"bench_ND_cxx17::F:ℝ⁴→ℝ³, D=8 build",2540961.6000,2568958.5000,3827850.0000,4246491.3300
+"bench_ND_cxx17::F:ℝ⁴→ℝ⁴, D=8 build",3336448.5000,3396934.0000,5137245.0000,5455129.0000
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16",51.6300,52.1900,900.6200,1303.4100
+"bench_ND_cxx17::F:ℝ²→ℝ³, D=16",112.1600,112.3100,998.0200,1157.6000
+"bench_ND_cxx17::F:ℝ³→ℝ², D=16",1272.5400,1279.3200,14840.7700,18485.6900
+"bench_ND_cxx17::F:ℝ³→ℝ³, D=8",197.0400,197.2500,2104.2800,2788.5800
+"bench_ND_cxx17::F:ℝ³→ℝ⁴, D=8",107.5400,107.1000,1960.5900,2142.5800
+"bench_ND_cxx17::F:ℝ⁴→ℝ³, D=8",2606.0400,2606.0000,17271.1400,20893.6900
+"bench_ND_cxx17::F:ℝ⁴→ℝ⁴, D=8",1725.4300,1718.0200,16136.9500,19258.3300
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 generic point",51.5800,52.2400,900.0000,1298.8500
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 canonical point",51.5800,52.2100,899.6400,1299.5700
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 array",51.5900,52.2200,901.7100,1304.3600
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 variadic",92.9600,92.8200,902.4500,1302.8200
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 manual loop",52823.3200,52897.8700,922685.6800,1336022.9400
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 canonical batch",113119.7500,111943.0400,922154.7800,1307962.5600
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 generic loop",52782.8900,52845.8000,922462.8800,1340326.3100
+"bench_ND_cxx17::F:ℝ²→ℝ², D=16 container batch",112508.6400,113545.8100,920775.2600,1328822.1200
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 build",60955.0900,60889.1500,78682.8400,82974.6900
+"bench_ND_cxx20::F:ℝ²→ℝ³, D=16 build",88646.2300,88674.3600,106259.3900,106704.8100
+"bench_ND_cxx20::F:ℝ³→ℝ², D=16 build",1523178.5000,1529561.8600,1972320.3300,2054643.8000
+"bench_ND_cxx20::F:ℝ³→ℝ³, D=8 build",232991.2900,233790.0600,346429.5400,388536.1500
+"bench_ND_cxx20::F:ℝ³→ℝ⁴, D=8 build",307652.4600,309811.6600,473820.9200,522542.3000
+"bench_ND_cxx20::F:ℝ⁴→ℝ³, D=8 build",2483787.0000,2535113.5000,3829209.3300,4037419.6700
+"bench_ND_cxx20::F:ℝ⁴→ℝ⁴, D=8 build",3265262.3300,3366031.6700,5149277.5000,5661660.5000
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16",51.5800,52.2800,901.5600,1298.5500
+"bench_ND_cxx20::F:ℝ²→ℝ³, D=16",111.9300,112.3200,1003.1400,1179.4700
+"bench_ND_cxx20::F:ℝ³→ℝ², D=16",1263.4100,1272.8400,14834.1000,18165.0600
+"bench_ND_cxx20::F:ℝ³→ℝ³, D=8",197.5400,197.4800,2141.0600,2620.7100
+"bench_ND_cxx20::F:ℝ³→ℝ⁴, D=8",104.6900,104.7400,1983.7400,2168.7900
+"bench_ND_cxx20::F:ℝ⁴→ℝ³, D=8",2603.8900,2606.6400,17253.5900,21276.6100
+"bench_ND_cxx20::F:ℝ⁴→ℝ⁴, D=8",1727.7500,1718.4300,16116.7200,19273.1100
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 generic point",51.6100,52.2200,901.3500,1309.1400
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 canonical point",51.5600,52.2100,902.4300,1302.3000
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 array",51.5800,52.2000,901.6300,1300.3600
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 variadic",93.1700,97.0500,901.9100,1299.5200
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 manual loop",52875.8200,52896.7900,923805.5200,1343363.5600
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 canonical batch",111150.3100,111804.5000,925206.1300,1304838.8300
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 span batch",92218.0000,92261.0900,923622.7400,1307846.1700
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 generic loop",52855.0800,52830.8600,925420.3200,1339538.4400
+"bench_ND_cxx20::F:ℝ²→ℝ², D=16 container batch",112525.4400,113781.3400,924652.2800,1337858.2400
+"bench_horner_cxx17::Dim=1, nCoeffs=8, SIMD=No, scalar-runtime",2.1600,2.1900,3.4000,3.5300
+"bench_horner_cxx17::Dim=1, nCoeffs=8, SIMD=Yes, simd-aligned",0.3500,0.3500,0.3500,0.3400
+"bench_horner_cxx17::Dim=1, nCoeffs=8, SIMD=Yes, simd-unaligned",0.3500,0.3600,0.3500,0.3400
+"bench_horner_cxx17::Dim=1, nCoeffs=16, SIMD=No, scalar-runtime",4.3700,4.3800,5.1500,4.6700
+"bench_horner_cxx17::Dim=1, nCoeffs=16, SIMD=Yes, simd-aligned",0.6600,0.6700,0.6700,0.7100
+"bench_horner_cxx17::Dim=1, nCoeffs=16, SIMD=Yes, simd-unaligned",0.6600,0.6700,0.6800,0.7100
+"bench_horner_cxx17::Dim=1, nCoeffs=24, SIMD=No, scalar-runtime",7.5600,7.5400,7.6300,6.8000
+"bench_horner_cxx17::Dim=1, nCoeffs=24, SIMD=Yes, simd-aligned",1.0500,1.0500,1.0500,1.1400
+"bench_horner_cxx17::Dim=1, nCoeffs=24, SIMD=Yes, simd-unaligned",1.0500,1.0500,1.0500,1.1300
+"bench_horner_cxx17::Dim=1, nCoeffs=32, SIMD=No, scalar-runtime",11.1200,11.1800,10.5600,10.2100
+"bench_horner_cxx17::Dim=1, nCoeffs=32, SIMD=Yes, simd-aligned",1.4300,1.4500,1.4300,1.5600
+"bench_horner_cxx17::Dim=1, nCoeffs=32, SIMD=Yes, simd-unaligned",1.4300,1.4400,1.4000,1.5600
+"bench_horner_cxx17::Dim=1, horner_many M=4, nCoeffs=8, SIMD=No, many-runtime",2.5300,2.4500,5.4800,5.5600
+"bench_horner_cxx17::Dim=1, horner_many M=8, nCoeffs=8, SIMD=No, many-runtime",2.8100,2.5400,4.6000,4.2800
+"bench_horner_cxx17::Dim=1, horner_many M=12, nCoeffs=8, SIMD=No, many-runtime",2.5700,2.2900,4.0200,3.8800
+"bench_horner_cxx17::Dim=1, horner_many M=16, nCoeffs=8, SIMD=No, many-runtime",2.3700,2.0800,3.8600,3.6500
+"bench_horner_cxx17::Dim=1, horner_many M=4, nCoeffs=16, SIMD=No, many-runtime",4.7600,4.6500,8.4300,7.3400
+"bench_horner_cxx17::Dim=1, horner_many M=8, nCoeffs=16, SIMD=No, many-runtime",5.1800,4.6600,7.6100,5.7900
+"bench_horner_cxx17::Dim=1, horner_many M=12, nCoeffs=16, SIMD=No, many-runtime",4.8500,4.4900,6.4900,5.1600
+"bench_horner_cxx17::Dim=1, horner_many M=16, nCoeffs=16, SIMD=No, many-runtime",4.4800,4.1400,6.1600,4.9400
+"bench_horner_cxx17::Dim=1, horner_many M=4, nCoeffs=24, SIMD=No, many-runtime",7.6100,8.0100,11.2300,10.3000
+"bench_horner_cxx17::Dim=1, horner_many M=8, nCoeffs=24, SIMD=No, many-runtime",8.2400,7.6700,10.6700,8.3700
+"bench_horner_cxx17::Dim=1, horner_many M=12, nCoeffs=24, SIMD=No, many-runtime",7.9800,7.5600,9.6000,7.6700
+"bench_horner_cxx17::Dim=1, horner_many M=16, nCoeffs=24, SIMD=No, many-runtime",7.4900,7.1200,9.0900,7.4100
+"bench_horner_cxx17::Dim=1, horner_many M=4, nCoeffs=32, SIMD=No, many-runtime",12.5700,12.7100,15.2000,12.7800
+"bench_horner_cxx17::Dim=1, horner_many M=8, nCoeffs=32, SIMD=No, many-runtime",12.2500,11.8500,13.7600,11.9200
+"bench_horner_cxx17::Dim=1, horner_many M=12, nCoeffs=32, SIMD=No, many-runtime",11.7900,11.5200,12.7600,10.8200
+"bench_horner_cxx17::Dim=1, horner_many M=16, nCoeffs=32, SIMD=No, many-runtime",11.2500,10.5700,12.2100,10.9000
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=4, nCoeffs=8",8.8600,8.7900,6.2400,6.3600
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=8, nCoeffs=8",2.8600,3.1100,2.4600,2.9300
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=12, nCoeffs=8",2.4700,2.3600,2.8900,3.2300
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=16, nCoeffs=8",2.2800,2.0300,2.0600,2.2100
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=4, nCoeffs=16",18.6600,18.6600,13.8600,13.3800
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=8, nCoeffs=16",6.7100,6.6600,6.5300,7.0800
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=12, nCoeffs=16",4.4600,4.2700,5.3800,6.0100
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=16, nCoeffs=16",4.3800,4.3100,4.4000,4.5800
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=4, nCoeffs=24",28.0700,27.9900,21.8200,21.3000
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=8, nCoeffs=24",10.3200,9.9100,8.9100,11.1500
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=12, nCoeffs=24",8.5900,8.2700,9.1700,10.0600
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=16, nCoeffs=24",7.0400,6.7400,6.9700,7.4500
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=4, nCoeffs=32",37.4100,37.3200,30.0300,30.6800
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=8, nCoeffs=32",14.6100,14.3000,13.2600,13.5500
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=12, nCoeffs=32",12.3300,11.8200,12.1100,13.4300
+"bench_horner_cxx17::Dim=1, horner_transposed_scalar M=16, nCoeffs=32",9.3700,9.0900,9.5400,10.4700
+"bench_horner_cxx17::Dim=2, nCoeffs=4, SIMD=No, ND2D",8.5700,8.0900,7.0500,7.2300
+"bench_horner_cxx17::Dim=2, nCoeffs=8, SIMD=No, ND2D",27.5500,27.4100,16.9000,16.9000
+"bench_horner_cxx17::Dim=2, nCoeffs=16, SIMD=No, ND2D",132.6800,132.3300,63.1400,61.3700
+"bench_horner_cxx17::Dim=2, nCoeffs=24, SIMD=No, ND2D",337.7500,332.4100,163.7300,167.7100
+"bench_horner_cxx17::Dim=3, nCoeffs=4, SIMD=No, ND3D",35.6500,35.6000,35.4800,39.7700
+"bench_horner_cxx17::Dim=3, nCoeffs=8, SIMD=No, ND3D",236.2500,232.5800,202.9300,238.8000
+"bench_horner_cxx17::Dim=3, nCoeffs=16, SIMD=No, ND3D",2171.4800,2115.5900,1764.7700,1818.2800
+"bench_horner_cxx17::Dim=4, nCoeffs=4, SIMD=No, ND4D",146.5000,136.8100,129.2500,128.1000
+"bench_horner_cxx17::Dim=4, nCoeffs=8, SIMD=No, ND4D",2003.8900,2188.2200,1592.9200,1614.1500
+"bench_horner_cxx20::Dim=1, nCoeffs=8, SIMD=No, scalar-runtime",2.1500,2.1700,3.3700,3.4700
+"bench_horner_cxx20::Dim=1, nCoeffs=8, SIMD=Yes, simd-aligned",0.3500,0.3500,0.3400,0.3400
+"bench_horner_cxx20::Dim=1, nCoeffs=8, SIMD=Yes, simd-unaligned",0.3500,0.3600,0.3500,0.3400
+"bench_horner_cxx20::Dim=1, nCoeffs=16, SIMD=No, scalar-runtime",4.3600,4.3900,5.1500,4.6500
+"bench_horner_cxx20::Dim=1, nCoeffs=16, SIMD=Yes, simd-aligned",0.6700,0.6600,0.6800,0.7100
+"bench_horner_cxx20::Dim=1, nCoeffs=16, SIMD=Yes, simd-unaligned",0.6600,0.6700,0.6700,0.7100
+"bench_horner_cxx20::Dim=1, nCoeffs=24, SIMD=No, scalar-runtime",7.5600,7.5600,7.6300,6.7500
+"bench_horner_cxx20::Dim=1, nCoeffs=24, SIMD=Yes, simd-aligned",1.0600,1.0500,1.0600,1.1300
+"bench_horner_cxx20::Dim=1, nCoeffs=24, SIMD=Yes, simd-unaligned",1.0500,1.0500,1.0600,1.1300
+"bench_horner_cxx20::Dim=1, nCoeffs=32, SIMD=No, scalar-runtime",11.1100,11.1800,10.5600,10.2100
+"bench_horner_cxx20::Dim=1, nCoeffs=32, SIMD=Yes, simd-aligned",1.4400,1.4400,1.4000,1.5600
+"bench_horner_cxx20::Dim=1, nCoeffs=32, SIMD=Yes, simd-unaligned",1.4300,1.4400,1.4300,1.5600
+"bench_horner_cxx20::Dim=1, horner_many M=4, nCoeffs=8, SIMD=No, many-runtime",2.7700,2.4600,5.3600,5.5200
+"bench_horner_cxx20::Dim=1, horner_many M=8, nCoeffs=8, SIMD=No, many-runtime",2.7900,2.5300,4.6400,4.2900
+"bench_horner_cxx20::Dim=1, horner_many M=12, nCoeffs=8, SIMD=No, many-runtime",2.5900,2.3300,4.1000,3.9000
+"bench_horner_cxx20::Dim=1, horner_many M=16, nCoeffs=8, SIMD=No, many-runtime",2.3100,2.0700,3.9000,3.6700
+"bench_horner_cxx20::Dim=1, horner_many M=4, nCoeffs=16, SIMD=No, many-runtime",4.8800,4.6500,8.4700,7.3200
+"bench_horner_cxx20::Dim=1, horner_many M=8, nCoeffs=16, SIMD=No, many-runtime",5.1400,4.6700,7.6600,5.8000
+"bench_horner_cxx20::Dim=1, horner_many M=12, nCoeffs=16, SIMD=No, many-runtime",4.9600,4.5100,6.4500,5.1900
+"bench_horner_cxx20::Dim=1, horner_many M=16, nCoeffs=16, SIMD=No, many-runtime",4.4700,4.1400,6.0900,4.8600
+"bench_horner_cxx20::Dim=1, horner_many M=4, nCoeffs=24, SIMD=No, many-runtime",8.1400,8.0100,11.6300,10.3000
+"bench_horner_cxx20::Dim=1, horner_many M=8, nCoeffs=24, SIMD=No, many-runtime",8.2800,7.6900,10.6700,8.4600
+"bench_horner_cxx20::Dim=1, horner_many M=12, nCoeffs=24, SIMD=No, many-runtime",7.9700,7.5100,9.6100,7.6600
+"bench_horner_cxx20::Dim=1, horner_many M=16, nCoeffs=24, SIMD=No, many-runtime",7.4700,7.1200,9.0900,7.7200
+"bench_horner_cxx20::Dim=1, horner_many M=4, nCoeffs=32, SIMD=No, many-runtime",12.7600,12.7200,15.0300,12.7300
+"bench_horner_cxx20::Dim=1, horner_many M=8, nCoeffs=32, SIMD=No, many-runtime",12.1900,11.8800,13.6800,11.8400
+"bench_horner_cxx20::Dim=1, horner_many M=12, nCoeffs=32, SIMD=No, many-runtime",11.8700,11.5100,12.7800,10.7200
+"bench_horner_cxx20::Dim=1, horner_many M=16, nCoeffs=32, SIMD=No, many-runtime",11.3400,10.6800,12.4000,10.9800
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=4, nCoeffs=8",8.8600,8.7900,6.1200,6.3600
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=8, nCoeffs=8",2.9100,3.1000,2.6100,2.9100
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=12, nCoeffs=8",2.4600,2.3500,2.8700,3.2600
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=16, nCoeffs=8",2.2000,2.0300,2.0300,2.2000
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=4, nCoeffs=16",18.6600,18.6600,13.1200,13.4000
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=8, nCoeffs=16",6.6600,6.6200,6.4400,7.0700
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=12, nCoeffs=16",4.4900,4.2200,5.3600,6.0200
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=16, nCoeffs=16",4.3900,4.3100,4.4400,4.5700
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=4, nCoeffs=24",28.0100,27.9800,20.6300,21.6500
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=8, nCoeffs=24",10.3100,9.9100,8.9600,11.1400
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=12, nCoeffs=24",8.6000,8.2700,9.1500,10.0400
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=16, nCoeffs=24",6.9600,6.7600,6.9200,7.4500
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=4, nCoeffs=32",37.3200,37.3600,28.5200,30.6700
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=8, nCoeffs=32",14.6100,14.2600,13.2700,13.5500
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=12, nCoeffs=32",12.3400,11.8200,12.2100,13.4100
+"bench_horner_cxx20::Dim=1, horner_transposed_scalar M=16, nCoeffs=32",9.3700,9.0900,9.5700,10.4700
+"bench_horner_cxx20::Dim=2, nCoeffs=4, SIMD=No, ND2D",8.6400,8.0900,7.0500,7.3900
+"bench_horner_cxx20::Dim=2, nCoeffs=8, SIMD=No, ND2D",27.5500,27.3600,16.8200,19.0000
+"bench_horner_cxx20::Dim=2, nCoeffs=16, SIMD=No, ND2D",132.6700,132.2300,64.5000,64.0400
+"bench_horner_cxx20::Dim=2, nCoeffs=24, SIMD=No, ND2D",337.6800,332.3800,172.7600,167.9200
+"bench_horner_cxx20::Dim=3, nCoeffs=4, SIMD=No, ND3D",35.5000,35.6000,35.4800,40.1100
+"bench_horner_cxx20::Dim=3, nCoeffs=8, SIMD=No, ND3D",236.2200,232.6600,201.1900,237.7900
+"bench_horner_cxx20::Dim=3, nCoeffs=16, SIMD=No, ND3D",2104.3300,2135.2000,1769.7000,1821.1100
+"bench_horner_cxx20::Dim=4, nCoeffs=4, SIMD=No, ND4D",146.1300,137.0900,126.2000,129.8900
+"bench_horner_cxx20::Dim=4, nCoeffs=8, SIMD=No, ND4D",2148.6300,2074.7100,1584.2900,1559.0200

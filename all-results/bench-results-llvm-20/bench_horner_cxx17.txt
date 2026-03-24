@@ -1,0 +1,69 @@
+
+|             ns/eval |              eval/s |    err% |     total | poly_eval Horner Suite
+|--------------------:|--------------------:|--------:|----------:|:-----------------------
+|                3.40 |      294,112,829.53 |    1.2% |      1.09 | `Dim=1, nCoeffs=8, SIMD=No, scalar-runtime`
+|                0.35 |    2,878,658,024.70 |    0.1% |      1.09 | `Dim=1, nCoeffs=8, SIMD=Yes, simd-aligned`
+|                0.35 |    2,885,289,902.95 |    0.1% |      1.09 | `Dim=1, nCoeffs=8, SIMD=Yes, simd-unaligned`
+|                5.15 |      194,182,335.90 |    0.3% |      1.10 | `Dim=1, nCoeffs=16, SIMD=No, scalar-runtime`
+|                0.67 |    1,482,246,779.14 |    0.1% |      1.11 | `Dim=1, nCoeffs=16, SIMD=Yes, simd-aligned`
+|                0.68 |    1,479,821,118.00 |    0.1% |      1.07 | `Dim=1, nCoeffs=16, SIMD=Yes, simd-unaligned`
+|                7.63 |      131,120,848.20 |    0.3% |      1.10 | `Dim=1, nCoeffs=24, SIMD=No, scalar-runtime`
+|                1.05 |      949,187,622.50 |    0.1% |      1.10 | `Dim=1, nCoeffs=24, SIMD=Yes, simd-aligned`
+|                1.05 |      948,121,594.83 |    0.0% |      1.10 | `Dim=1, nCoeffs=24, SIMD=Yes, simd-unaligned`
+|               10.56 |       94,720,358.18 |    0.1% |      1.10 | `Dim=1, nCoeffs=32, SIMD=No, scalar-runtime`
+|                1.43 |      698,946,033.64 |    0.1% |      1.10 | `Dim=1, nCoeffs=32, SIMD=Yes, simd-aligned`
+|                1.40 |      712,451,883.97 |    0.1% |      1.10 | `Dim=1, nCoeffs=32, SIMD=Yes, simd-unaligned`
+|                5.48 |      182,325,521.41 |    0.2% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=8, SIMD=No, many-runtime`
+|                4.60 |      217,621,738.15 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=8, SIMD=No, many-runtime`
+|                4.02 |      248,904,001.67 |    0.1% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=8, SIMD=No, many-runtime`
+|                3.86 |      259,203,295.87 |    0.2% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=8, SIMD=No, many-runtime`
+|                8.43 |      118,617,596.42 |    0.1% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=16, SIMD=No, many-runtime`
+|                7.61 |      131,355,632.01 |    0.2% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=16, SIMD=No, many-runtime`
+|                6.49 |      154,149,551.46 |    0.1% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=16, SIMD=No, many-runtime`
+|                6.16 |      162,432,891.03 |    0.4% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=16, SIMD=No, many-runtime`
+|               11.23 |       89,041,443.11 |    0.2% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=24, SIMD=No, many-runtime`
+|               10.67 |       93,685,848.61 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=24, SIMD=No, many-runtime`
+|                9.60 |      104,162,896.22 |    0.1% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=24, SIMD=No, many-runtime`
+|                9.09 |      110,042,054.78 |    0.2% |      1.09 | `Dim=1, horner_many M=16, nCoeffs=24, SIMD=No, many-runtime`
+|               15.20 |       65,806,626.18 |    0.2% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=32, SIMD=No, many-runtime`
+|               13.76 |       72,671,557.56 |    0.2% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=32, SIMD=No, many-runtime`
+|               12.76 |       78,353,840.55 |    0.1% |      1.09 | `Dim=1, horner_many M=12, nCoeffs=32, SIMD=No, many-runtime`
+|               12.21 |       81,868,207.13 |    0.1% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=32, SIMD=No, many-runtime`
+|                6.24 |      160,352,002.97 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=8`
+|                2.46 |      406,199,010.23 |    0.4% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=8`
+|                2.89 |      345,743,292.00 |    0.5% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=8`
+|                2.06 |      485,698,009.08 |    0.4% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=8`
+|               13.86 |       72,163,750.67 |    0.4% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=16`
+|                6.53 |      153,145,095.99 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=16`
+|                5.38 |      185,954,884.22 |    0.3% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=16`
+|                4.40 |      227,404,955.64 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=16`
+|               21.82 |       45,824,214.35 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=24`
+|                8.91 |      112,278,480.52 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=24`
+|                9.17 |      109,105,814.38 |    0.3% |      1.11 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=24`
+|                6.97 |      143,437,995.58 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=24`
+|               30.03 |       33,297,589.75 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=32`
+|               13.26 |       75,430,110.11 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=32`
+|               12.11 |       82,592,298.38 |    0.2% |      1.09 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=32`
+|                9.54 |      104,807,169.34 |    0.1% |      1.09 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=32`
+|                7.05 |      141,767,282.26 |    0.4% |      1.10 | `Dim=2, nCoeffs=4, SIMD=No, ND2D`
+|               16.90 |       59,182,574.36 |    0.5% |      1.09 | `Dim=2, nCoeffs=8, SIMD=No, ND2D`
+|               63.14 |       15,838,437.79 |    0.2% |      1.10 | `Dim=2, nCoeffs=16, SIMD=No, ND2D`
+|              163.73 |        6,107,767.60 |    0.2% |      1.10 | `Dim=2, nCoeffs=24, SIMD=No, ND2D`
+|               35.48 |       28,182,463.56 |    0.1% |      1.10 | `Dim=3, nCoeffs=4, SIMD=No, ND3D`
+|              202.93 |        4,927,804.43 |    0.1% |      1.10 | `Dim=3, nCoeffs=8, SIMD=No, ND3D`
+|            1,764.77 |          566,646.11 |    0.1% |      1.10 | `Dim=3, nCoeffs=16, SIMD=No, ND3D`
+|              129.25 |        7,737,135.06 |    0.4% |      1.10 | `Dim=4, nCoeffs=4, SIMD=No, ND4D`
+|            1,592.92 |          627,776.73 |    0.1% |      1.10 | `Dim=4, nCoeffs=8, SIMD=No, ND4D`
+
+SIMD Horner peak throughput (4-wide AVX2, 2 FMA ports, 4096 pts)
+TSC base: 0.00 GHz | Est. AVX2 turbo: 2.52 GHz | HW DP peak: 40.3 GFLOPS
+benchmark      ns/pt    GFLOPS  % HW peak
+----------- -------- --------- ----------
+N=8  aln     0.347      40.3     100.0%
+N=8  uln     0.347      40.4     100.2%
+N=16 aln     0.675      44.5     110.3%
+N=16 uln     0.676      44.4     110.2%
+N=24 aln     1.054      43.7     108.3%
+N=24 uln     1.055      43.6     108.2%
+N=32 aln     1.431      43.3     107.5%
+N=32 uln     1.404      44.2     109.6%

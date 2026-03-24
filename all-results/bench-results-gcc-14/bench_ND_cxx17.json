@@ -1,0 +1,159 @@
+{
+  "title": "bench_ND_cxx17",
+  "rows": [
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 build",
+      "ns_per_op": 61165.15,
+      "ops_per_sec": 16349.18,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b3, D=16 build",
+      "ns_per_op": 88934.38,
+      "ops_per_sec": 11244.25,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b2, D=16 build",
+      "ns_per_op": 1522891.43,
+      "ops_per_sec": 656.65,
+      "err_pct": 0.0,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b3, D=8 build",
+      "ns_per_op": 239395.25,
+      "ops_per_sec": 4177.19,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u2074, D=8 build",
+      "ns_per_op": 315753.51,
+      "ops_per_sec": 3167.03,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u00b3, D=8 build",
+      "ns_per_op": 2540961.6,
+      "ops_per_sec": 393.55,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u2074, D=8 build",
+      "ns_per_op": 3336448.5,
+      "ops_per_sec": 299.72,
+      "err_pct": 0.1,
+      "ins_per_op": 0.11
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16",
+      "ns_per_op": 51.63,
+      "ops_per_sec": 19367249.99,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b3, D=16",
+      "ns_per_op": 112.16,
+      "ops_per_sec": 8915963.28,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b2, D=16",
+      "ns_per_op": 1272.54,
+      "ops_per_sec": 785830.76,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b3, D=8",
+      "ns_per_op": 197.04,
+      "ops_per_sec": 5075170.22,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u2074, D=8",
+      "ns_per_op": 107.54,
+      "ops_per_sec": 9298901.63,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u00b3, D=8",
+      "ns_per_op": 2606.04,
+      "ops_per_sec": 383724.69,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u2074, D=8",
+      "ns_per_op": 1725.43,
+      "ops_per_sec": 579566.23,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 generic point",
+      "ns_per_op": 51.58,
+      "ops_per_sec": 19387862.31,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 canonical point",
+      "ns_per_op": 51.58,
+      "ops_per_sec": 19388793.12,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 array",
+      "ns_per_op": 51.59,
+      "ops_per_sec": 19385401.8,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 variadic",
+      "ns_per_op": 92.96,
+      "ops_per_sec": 10757841.99,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 manual loop",
+      "ns_per_op": 52823.32,
+      "ops_per_sec": 18931.03,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 canonical batch",
+      "ns_per_op": 113119.75,
+      "ops_per_sec": 8840.19,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 generic loop",
+      "ns_per_op": 52782.89,
+      "ops_per_sec": 18945.53,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 container batch",
+      "ns_per_op": 112508.64,
+      "ops_per_sec": 8888.21,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    }
+  ]
+}

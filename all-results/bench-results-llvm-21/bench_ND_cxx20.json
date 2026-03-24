@@ -1,0 +1,166 @@
+{
+  "title": "bench_ND_cxx20",
+  "rows": [
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 build",
+      "ns_per_op": 82974.69,
+      "ops_per_sec": 12051.87,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b3, D=16 build",
+      "ns_per_op": 106704.81,
+      "ops_per_sec": 9371.65,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b2, D=16 build",
+      "ns_per_op": 2054643.8,
+      "ops_per_sec": 486.7,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b3, D=8 build",
+      "ns_per_op": 388536.15,
+      "ops_per_sec": 2573.76,
+      "err_pct": 0.5,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u2074, D=8 build",
+      "ns_per_op": 522542.3,
+      "ops_per_sec": 1913.72,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u00b3, D=8 build",
+      "ns_per_op": 4037419.67,
+      "ops_per_sec": 247.68,
+      "err_pct": 0.1,
+      "ins_per_op": 0.13
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u2074, D=8 build",
+      "ns_per_op": 5661660.5,
+      "ops_per_sec": 176.63,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16",
+      "ns_per_op": 1298.55,
+      "ops_per_sec": 770087.01,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b3, D=16",
+      "ns_per_op": 1179.47,
+      "ops_per_sec": 847839.42,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b2, D=16",
+      "ns_per_op": 18165.06,
+      "ops_per_sec": 55050.74,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u00b3, D=8",
+      "ns_per_op": 2620.71,
+      "ops_per_sec": 381576.34,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b3\u2192\u211d\u2074, D=8",
+      "ns_per_op": 2168.79,
+      "ops_per_sec": 461085.54,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u00b3, D=8",
+      "ns_per_op": 21276.61,
+      "ops_per_sec": 46999.96,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u2074\u2192\u211d\u2074, D=8",
+      "ns_per_op": 19273.11,
+      "ops_per_sec": 51885.77,
+      "err_pct": 0.8,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 generic point",
+      "ns_per_op": 1309.14,
+      "ops_per_sec": 763857.39,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 canonical point",
+      "ns_per_op": 1302.3,
+      "ops_per_sec": 767874.05,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 array",
+      "ns_per_op": 1300.36,
+      "ops_per_sec": 769016.87,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 variadic",
+      "ns_per_op": 1299.52,
+      "ops_per_sec": 769516.51,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 manual loop",
+      "ns_per_op": 1343363.56,
+      "ops_per_sec": 744.4,
+      "err_pct": 0.3,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 canonical batch",
+      "ns_per_op": 1304838.83,
+      "ops_per_sec": 766.38,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 span batch",
+      "ns_per_op": 1307846.17,
+      "ops_per_sec": 764.62,
+      "err_pct": 0.0,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 generic loop",
+      "ns_per_op": 1339538.44,
+      "ops_per_sec": 746.53,
+      "err_pct": 0.2,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "F:\u211d\u00b2\u2192\u211d\u00b2, D=16 container batch",
+      "ns_per_op": 1337858.24,
+      "ops_per_sec": 747.46,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    }
+  ]
+}
