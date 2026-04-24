@@ -113,6 +113,8 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detai
     if constexpr (kStoresDomain) domain_ = dp;
 }
 
+// ---------- ND runtime init: same one-shot fusion gating as compile-time ----
+
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
 template<bool>
 constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION>::OutputType PF_ALWAYS_INLINE
@@ -596,7 +598,10 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::Compil
     DomainParams dp;
     computeScaling(a, b, dp);
     buildCoeffs(static_cast<int>(NCOEFFS), f, dp);
-    if constexpr (FUSION_MODE != FusionMode::Never) {
+    // Only the Always mode applies fusion up front; Auto keeps the baseline
+    // eval-time mapFromDomain path so multi-panel fits don't pay the per-leaf
+    // fusion cost by default.
+    if constexpr (FUSION_MODE == FusionMode::Always) {
         fuseNDDomain(dp, static_cast<int>(NCOEFFS));
     }
     if constexpr (kStoresDomain) domain_ = dp;
@@ -610,7 +615,7 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::Runtim
     DomainParams dp;
     computeScaling(a, b, dp);
     buildCoeffs(nCoeffsPerAxis, f, dp);
-    if constexpr (FUSION_MODE != FusionMode::Never) {
+    if constexpr (FUSION_MODE == FusionMode::Always) {
         fuseNDDomain(dp, nCoeffsPerAxis);
     }
     if constexpr (kStoresDomain) domain_ = dp;
