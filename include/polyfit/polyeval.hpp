@@ -235,7 +235,7 @@ template<typename... EvalTypes> class FuncEvalMany {
 /**
  * @brief Multi-dimensional polynomial evaluator.
  */
-template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEvalND {
   public:
     using InputType = poly_eval::remove_cvref_t<fitInput_t<Func>>;
     using OutputType = poly_eval::remove_cvref_t<fitOutput_t<Func>>;
@@ -293,8 +293,14 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
     static constexpr std::size_t COEFF_STORAGE = detail::storageRequired<Scalar, NCOEFFS, DIM, OUT_DIM>();
 
-    CanonicalInput invSpan{}, sumEndpoints{};
-    bool identityDomain = false;
+    struct DomainParams {
+        CanonicalInput invSpan{}, sumEndpoints{};
+        bool identityDomain = false;
+    };
+    static constexpr bool kStoresDomain = (FUSION_MODE != FusionMode::Always);
+    struct EmptyDomain {};
+    PF_NO_UNIQUE_ADDRESS std::conditional_t<kStoresDomain, DomainParams, EmptyDomain> domain_{};
+
     alignas(xsimd::best_arch::alignment())
         AlignedBuffer<Scalar, COEFF_STORAGE, xsimd::best_arch::alignment()> coeffsFlat;
     Mdspan coeffsMd;
@@ -314,7 +320,7 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
     template<std::size_t... Is> static Extents makeExtents(int nCoeffsPerAxis, std::index_sequence<Is...>) noexcept;
     static constexpr std::size_t storageRequired(int nCoeffsPerAxis) noexcept;
 
-    constexpr void buildCoeffs(int nCoeffsPerAxis, Func f);
+    constexpr void buildCoeffs(int nCoeffsPerAxis, Func f, const DomainParams &dp);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);
     constexpr void reverseCoefficientOrder(int nCoeffsPerAxis);
     template<bool SIMD, class Point> [[nodiscard]] constexpr OutputType evalPoint(const Point &x) const;
@@ -323,9 +329,11 @@ template<class Func, std::size_t NCOEFFS = 0> class FuncEvalND {
     [[nodiscard]] static constexpr CanonicalOutput toCanonicalOutput(const OutputType &x) noexcept;
     [[nodiscard]] static constexpr OutputType fromCanonicalOutput(const CanonicalOutput &x) noexcept;
     template<bool SIMD = true> [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x) const noexcept;
-    [[nodiscard]] constexpr CanonicalInput mapToDomain(const CanonicalInput &x) const noexcept;
+    [[nodiscard]] static constexpr CanonicalInput mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept;
     [[nodiscard]] constexpr CanonicalInput mapFromDomain(const CanonicalInput &x) const noexcept;
-    constexpr void computeScaling(const InputType &a, const InputType &b) noexcept;
+    [[nodiscard]] constexpr bool shouldFuseAxis(const DomainParams &dp, std::size_t axis, int nCoeffsPerAxis) const noexcept;
+    constexpr void fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis);
+    constexpr void computeScaling(const InputType &a, const InputType &b, DomainParams &dp) const noexcept;
 
     template<std::size_t Rank, class F>
     static constexpr void forEachIndex(const std::array<int, Rank> &ext, F &&body);
