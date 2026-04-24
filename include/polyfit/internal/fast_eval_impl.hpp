@@ -923,10 +923,16 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fuseNDDomain(DomainParams
     std::array<int, DIM> baseIndex{};
 
     for (std::size_t axis = 0; axis < DIM; ++axis) {
-        if (!shouldFuseAxis(dp, axis, nCoeffsPerAxis)) continue;
-
         const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan[axis]);
         const auto beta = -static_cast<Scalar>(dp.sumEndpoints[axis]) * static_cast<Scalar>(dp.invSpan[axis]);
+        // Axis already maps to [-1,1] — fuseLinearMap(alpha=1, beta=0) is
+        // a numerical no-op; skip the ~n^2-per-fiber work.
+        if (alpha == Scalar(1) && beta == Scalar(0)) {
+            dp.invSpan[axis] = Scalar(0.5);
+            dp.sumEndpoints[axis] = Scalar(0);
+            continue;
+        }
+        if (!shouldFuseAxis(dp, axis, nCoeffsPerAxis)) continue;
 
         auto innerExtents = extents;
         innerExtents[axis] = 1;
