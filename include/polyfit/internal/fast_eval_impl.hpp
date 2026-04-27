@@ -699,7 +699,53 @@ PF_FAST_EVAL_END
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
                                                      std::size_t count) const noexcept {
-    for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+    // Across-points vectorization: only profitable when OUT_DIM == 1, where
+    // the existing OUT-dim SIMD path degenerates to scalar FMAs. For wider
+    // outputs the per-point evaluator already vectorises across OUT_DIM.
+    if constexpr (OUT_DIM != 1) {
+        for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+        return;
+    } else {
+        using batch_t = xsimd::batch<Scalar>;
+        constexpr std::size_t B = batch_t::size;
+        if constexpr (B <= 1) {
+            for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+            return;
+        } else {
+            constexpr std::size_t kAlign = batch_t::arch_type::alignment();
+            const int nCoeffsRt = nCoeffsPerAxis();
+            std::size_t i = 0;
+            for (; i + B <= count; i += B) {
+                // AoS -> SoA transpose of the next B points.
+                alignas(kAlign) Scalar buf[DIM][B];
+                for (std::size_t b = 0; b < B; ++b)
+                    for (std::size_t d = 0; d < DIM; ++d)
+                        buf[d][b] = pts[i + b][d];
+
+                std::array<batch_t, DIM> x_v;
+                for (std::size_t d = 0; d < DIM; ++d) {
+                    batch_t v = batch_t::load_aligned(buf[d]);
+                    if constexpr (FUSION_MODE != FusionMode::Always) {
+                        if (!domain_.identityDomain) {
+                            v = polyfit::internal::helpers::mapFromDomainScalar<batch_t, Scalar>(
+                                v, domain_.invSpan[d], domain_.sumEndpoints[d]);
+                        }
+                    }
+                    x_v[d] = v;
+                }
+
+                std::array<std::size_t, DIM> idx{};
+                batch_t res = detail::horner_nd_acrossPts<DIM, DIM, NCOEFFS, batch_t>(
+                    x_v, coeffsMd, idx, nCoeffsRt);
+
+                alignas(kAlign) Scalar outbuf[B];
+                res.store_aligned(outbuf);
+                for (std::size_t b = 0; b < B; ++b) out[i + b][0] = outbuf[b];
+            }
+            // Tail: scalar fallback for the leftover < B points.
+            for (; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+        }
+    }
 }
 
 #if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)

@@ -122,6 +122,37 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &
     return res;
 }
 
+// Across-points vectorized ND Horner: evaluates the same polynomial at B
+// independent points in lockstep, where B = Batch::size. Each batch lane
+// carries one point's intermediate accumulator; FMAs become packed instead
+// of scalar. Coefficients are scalar — broadcast to a batch on each step.
+//
+// Specialised to OUT_DIM = 1 (the common scalar-output case). Multi-output
+// fits keep using the existing OUT-dim SIMD path.
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS,
+         typename Batch, typename Mdspan>
+PF_ALWAYS_INLINE Batch
+horner_nd_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
+                    std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
+    constexpr std::size_t axis = Dim - Level;
+    Batch res(0);
+
+    auto step = [&](std::size_t k) {
+        idx[axis] = k;
+        Batch inner;
+        if constexpr (Level > 1) {
+            inner = horner_nd_acrossPts<Level - 1, Dim, NCOEFFS, Batch>(x_v, coeffs, idx, nCoeffsRt);
+        } else {
+            // OUT_DIM = 1: leaf coefficient is scalar, broadcast to all lanes.
+            inner = Batch(coeffAt<Dim>(coeffs, idx, 0));
+        }
+        res = xsimd::fma(res, x_v[axis], inner);
+    };
+
+    forEachCoeff<NCOEFFS>(nCoeffsRt, step);
+    return res;
+}
+
 } // namespace detail
 
 template<std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
