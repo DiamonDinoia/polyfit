@@ -58,7 +58,27 @@ inline constexpr double pi = 3.14159265358979323846;
 namespace math {
 
 template<typename T> constexpr T fma(T a, T b, T c) noexcept {
-    return constEval([=] { return a * b + c; }, [=] { return std::fma(a, b, c); });
+    // Runtime path: prefer compiler builtins so the FMA gets emitted as a
+    // single hardware instruction instead of a libm call. GCC/Clang's
+    // __builtin_fma{,f,l} always lower to vfmadd*/vfnmadd*/etc. when the
+    // target supports FMA; libstdc++'s std::fma for `double` otherwise
+    // dispatches to libm's __fma_fma3 through the PLT, which dominates the
+    // runtime in tight Horner loops.
+    return constEval([=] { return a * b + c; }, [=]() -> T {
+#if defined(__GNUC__) || defined(__clang__)
+        if constexpr (std::is_same_v<T, float>) {
+            return __builtin_fmaf(a, b, c);
+        } else if constexpr (std::is_same_v<T, double>) {
+            return __builtin_fma(a, b, c);
+        } else if constexpr (std::is_same_v<T, long double>) {
+            return __builtin_fmal(a, b, c);
+        } else {
+            return std::fma(a, b, c);
+        }
+#else
+        return std::fma(a, b, c);
+#endif
+    });
 }
 
 template<typename T> constexpr T abs(T x) noexcept {
