@@ -54,7 +54,7 @@ PF_ALWAYS_INLINE constexpr auto coeffAt(const MdspanType &coeffs, const std::arr
 template<std::size_t NCOEFFS, class Step>
 PF_ALWAYS_INLINE constexpr void forEachCoeff(int nCoeffsRt, Step &&step) {
     if constexpr (NCOEFFS != 0) {
-        poet::static_for<NCOEFFS>([&](auto k) { step(std::size_t(k)); });
+        poet::static_for<NCOEFFS>([&](auto k) PF_ALWAYS_INLINE_LAMBDA { step(std::size_t(k)); });
     } else {
         for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
     }
@@ -129,28 +129,41 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &
 //
 // Specialised to OUT_DIM = 1 (the common scalar-output case). Multi-output
 // fits keep using the existing OUT-dim SIMD path.
-template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS,
+//
+// Implementation: the per-axis Horner is written as a generic
+// `Axis`-recursive helper using `poet::static_for` (via `forEachCoeff`)
+// at every level. Both helper and entry point carry `PF_FLATTEN` so GCC
+// is forced to inline every recursive instance — without it, deep
+// instantiations get outlined and the inner-axis FMAs degrade to real
+// `call` instructions instead of a single packed FMA stream.
+template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS,
          typename Batch, typename Mdspan>
-PF_ALWAYS_INLINE Batch
-horner_nd_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
-                    std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
-    constexpr std::size_t axis = Dim - Level;
-    Batch res(0);
-
-    auto step = [&](std::size_t k) {
-        idx[axis] = k;
+PF_ALWAYS_INLINE PF_FLATTEN Batch
+horner_axis_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
+                      std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
+    static_assert(Axis < Dim, "Axis must be < Dim");
+    Batch acc(0);
+    forEachCoeff<NCOEFFS>(nCoeffsRt, [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA {
+        idx[Axis] = k;
         Batch inner;
-        if constexpr (Level > 1) {
-            inner = horner_nd_acrossPts<Level - 1, Dim, NCOEFFS, Batch>(x_v, coeffs, idx, nCoeffsRt);
-        } else {
+        if constexpr (Axis + 1 == Dim) {
             // OUT_DIM = 1: leaf coefficient is scalar, broadcast to all lanes.
             inner = Batch(coeffAt<Dim>(coeffs, idx, 0));
+        } else {
+            inner = horner_axis_acrossPts<Axis + 1, Dim, NCOEFFS, Batch>(
+                x_v, coeffs, idx, nCoeffsRt);
         }
-        res = xsimd::fma(res, x_v[axis], inner);
-    };
+        acc = xsimd::fma(acc, x_v[Axis], inner);
+    });
+    return acc;
+}
 
-    forEachCoeff<NCOEFFS>(nCoeffsRt, step);
-    return res;
+template<std::size_t Dim, std::size_t NCOEFFS, typename Batch, typename Mdspan>
+PF_ALWAYS_INLINE PF_FLATTEN Batch
+horner_nd_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs, int nCoeffsRt) {
+    static_assert(Dim >= 1, "horner_nd_acrossPts requires Dim >= 1");
+    std::array<std::size_t, Dim> idx{};
+    return horner_axis_acrossPts<0, Dim, NCOEFFS, Batch>(x_v, coeffs, idx, nCoeffsRt);
 }
 
 } // namespace detail

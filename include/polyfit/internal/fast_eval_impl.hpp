@@ -713,14 +713,19 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Canonica
             return;
         } else {
             constexpr std::size_t kAlign = batch_t::arch_type::alignment();
+            // Unroll factor across batches: independent Horner accumulator
+            // chains per outer iteration so the FMA-throughput-bound inner
+            // loop can run multiple chains in parallel and increase ILP.
+            // Higher Dim builds deeper nested accumulator state per chain,
+            // so unrolling spills registers; restrict unroll to low Dim.
+            constexpr std::size_t U = (DIM <= 2) ? 2 : 1;
             const int nCoeffsRt = nCoeffsPerAxis();
-            std::size_t i = 0;
-            for (; i + B <= count; i += B) {
-                // AoS -> SoA transpose of the next B points.
+
+            auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
                 alignas(kAlign) Scalar buf[DIM][B];
                 for (std::size_t b = 0; b < B; ++b)
                     for (std::size_t d = 0; d < DIM; ++d)
-                        buf[d][b] = pts[i + b][d];
+                        buf[d][b] = pts[base + b][d];
 
                 std::array<batch_t, DIM> x_v;
                 for (std::size_t d = 0; d < DIM; ++d) {
@@ -733,14 +738,33 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Canonica
                     }
                     x_v[d] = v;
                 }
+                return x_v;
+            };
 
-                std::array<std::size_t, DIM> idx{};
-                batch_t res = detail::horner_nd_acrossPts<DIM, DIM, NCOEFFS, batch_t>(
-                    x_v, coeffsMd, idx, nCoeffsRt);
-
+            auto storeBatch = [&](std::size_t base, batch_t res) PF_ALWAYS_INLINE_LAMBDA {
                 alignas(kAlign) Scalar outbuf[B];
                 res.store_aligned(outbuf);
-                for (std::size_t b = 0; b < B; ++b) out[i + b][0] = outbuf[b];
+                for (std::size_t b = 0; b < B; ++b) out[base + b][0] = outbuf[b];
+            };
+
+            std::size_t i = 0;
+            for (; i + U * B <= count; i += U * B) {
+                std::array<std::array<batch_t, DIM>, U> x_vU;
+                for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
+
+                std::array<batch_t, U> resU;
+                for (std::size_t u = 0; u < U; ++u) {
+                    resU[u] = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                        x_vU[u], coeffsMd, nCoeffsRt);
+                }
+
+                for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
+            }
+            for (; i + B <= count; i += B) {
+                auto x_v = loadPointsAt(i);
+                batch_t res = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                    x_v, coeffsMd, nCoeffsRt);
+                storeBatch(i, res);
             }
             // Tail: scalar fallback for the leftover < B points.
             for (; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
