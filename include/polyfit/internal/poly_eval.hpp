@@ -388,32 +388,28 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
     constexpr std::size_t lead_zeros = K - kFirst;
 
-    // Flat enumeration over (g, j, l). MSVC rejected the prior triple-nested
-    // `poet::static_for` form: `std::size_t(g)` was not accepted as a core
-    // constant expression on the by-value lambda parameter, and even after
-    // reading through `decltype(g)::value` the three-deep instantiation tree
-    // tripped C1202 (recursive type/function dependency context too complex).
-    // A single linear `static_for` over the flattened index trivially gives
-    // both true `constexpr`-extracted indices and a flat instantiation tree.
-    constexpr std::size_t kTotal = G * K * W;
-    poet::static_for<kTotal>([&](auto idx) PF_ALWAYS_INLINE_LAMBDA {
-        constexpr std::size_t i = decltype(idx)::value;
-        constexpr std::size_t gi = i / (K * W);
-        constexpr std::size_t ji = (i / W) % K;
-        constexpr std::size_t li = i % W;
-        constexpr std::size_t b = gi * W + li;
-        constexpr std::size_t out_idx = gi * (K * W) + ji * W + li;
-        if constexpr (b >= B) {
-            c_out[out_idx] = CoeffType{0};
-        } else {
-            constexpr std::size_t pad_idx = b * K + ji;
-            if constexpr (pad_idx < lead_zeros) {
-                c_out[out_idx] = CoeffType{0};
-            } else {
-                c_out[out_idx] = c_in[pad_idx - lead_zeros];
+    // Plain runtime loop — this is a one-shot setup helper called once per
+    // evaluator construction, so the inner `static_for` unrolling buys
+    // nothing here, and the prior triple-nested form blew MSVC's
+    // template-instantiation-context limit (C1202) when `test_horner.cpp`
+    // instantiates this for N = 5..32. The loop is `constexpr`-clean and the
+    // compiler still folds `b >= B` / `pad_idx < lead_zeros` decisions because
+    // every operand is a compile-time constant inside the body.
+    for (std::size_t g = 0; g < G; ++g) {
+        for (std::size_t j = 0; j < K; ++j) {
+            for (std::size_t l = 0; l < W; ++l) {
+                const std::size_t b = g * W + l;
+                const std::size_t out_idx = g * (K * W) + j * W + l;
+                if (b >= B) {
+                    c_out[out_idx] = CoeffType{0};
+                } else {
+                    const std::size_t pad_idx = b * K + j;
+                    c_out[out_idx] = (pad_idx < lead_zeros) ? CoeffType{0}
+                                                            : c_in[pad_idx - lead_zeros];
+                }
             }
         }
-    });
+    }
 }
 
 template<std::size_t NCOEFFS, typename Batch, typename InputType>
