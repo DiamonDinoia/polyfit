@@ -19,9 +19,9 @@ namespace stdex = std::experimental;
 #endif
 
 #include "api_types.hpp"
-#include "helpers.h"
-#include "macros.h"
-#include "numeric_utils.h"
+#include "helpers.hpp"
+#include "macros.hpp"
+#include "numeric_utils.hpp"
 
 namespace poly_eval::detail {
 

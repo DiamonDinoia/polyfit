@@ -8,8 +8,8 @@
 #include <limits>
 
 #include "polyfit/polyfit.hpp"
-#include "polyfit/internal/macros.h"
-#include "polyfit/internal/utils.h"
+#include "polyfit/internal/macros.hpp"
+#include "polyfit/internal/utils.hpp"
 
 namespace m = poly_eval::detail::math;
 

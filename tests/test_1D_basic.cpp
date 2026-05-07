@@ -1,6 +1,6 @@
 // test_1D_basic.cpp — runtime/compile-time degree and eps-driven fitting tests
 
-#include "test_1D_helpers.h"
+#include "test_1D_helpers.hpp"
 
 static std::mt19937 gen(42);
 

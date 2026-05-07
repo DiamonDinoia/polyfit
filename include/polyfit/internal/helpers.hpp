@@ -10,7 +10,7 @@
 #include <xsimd/xsimd.hpp>
 
 #include "api_types.hpp"
-#include "simd_utils.h"
+#include "simd_utils.hpp"
 
 namespace polyfit::internal::helpers {
 

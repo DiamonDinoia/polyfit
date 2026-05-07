@@ -10,8 +10,8 @@
 #include <xsimd/xsimd.hpp>
 
 #include "api_types.hpp"
-#include "macros.h"
-#include "numeric_utils.h"
+#include "macros.hpp"
+#include "numeric_utils.hpp"
 
 namespace poly_eval {
 namespace detail {

@@ -8,10 +8,10 @@
 #include <stdexcept>
 #include <xsimd/xsimd.hpp>
 
-#include "helpers.h"
-#include "macros.h"
-#include "poly_eval.h"
-#include "utils.h"
+#include "helpers.hpp"
+#include "macros.hpp"
+#include "poly_eval.hpp"
+#include "utils.hpp"
 
 #include <poet/poet.hpp>
 

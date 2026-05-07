@@ -10,7 +10,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "macros.h"
+#include "macros.hpp"
 
 namespace poly_eval::detail {
 

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "macros.h"
-#include "simd_utils.h"
-#include "utils.h"
+#include "macros.hpp"
+#include "simd_utils.hpp"
+#include "utils.hpp"
 
 #include <poet/poet.hpp>
 
@@ -391,13 +391,18 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
         poet::static_for<K>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
             poet::static_for<W>([&](auto l) PF_ALWAYS_INLINE_LAMBDA {
-                constexpr std::size_t b = std::size_t(g) * W + std::size_t(l);
-                constexpr std::size_t out_idx =
-                    std::size_t(g) * (K * W) + std::size_t(j) * W + std::size_t(l);
+                // MSVC rejects the by-value lambda parameter as a core
+                // constant expression even though it's a `std::integral_constant`;
+                // read through the type to get a guaranteed constant.
+                constexpr std::size_t gi = decltype(g)::value;
+                constexpr std::size_t ji = decltype(j)::value;
+                constexpr std::size_t li = decltype(l)::value;
+                constexpr std::size_t b = gi * W + li;
+                constexpr std::size_t out_idx = gi * (K * W) + ji * W + li;
                 if constexpr (b >= B) {
                     c_out[out_idx] = CoeffType{0};
                 } else {
-                    constexpr std::size_t pad_idx = b * K + std::size_t(j);
+                    constexpr std::size_t pad_idx = b * K + ji;
                     if constexpr (pad_idx < lead_zeros) {
                         c_out[out_idx] = CoeffType{0};
                     } else {

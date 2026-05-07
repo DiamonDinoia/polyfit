@@ -1,4 +1,4 @@
-// test_1D_helpers.h — shared helpers for split test_1D_* translation units
+// test_1D_helpers.hpp — shared helpers for split test_1D_* translation units
 #pragma once
 
 #include <cmath>

@@ -10,7 +10,7 @@
 #  endif
 #endif
 
-#include "polyfit/internal/feature_macros.h"
+#include "polyfit/internal/feature_macros.hpp"
 #include "polyfit/polyfit.hpp"
 
 constexpr int kNumPoints = 1000;

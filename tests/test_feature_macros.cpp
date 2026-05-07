@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "polyfit/internal/macros.h"
-#include "polyfit/internal/numeric_utils.h"
+#include "polyfit/internal/macros.hpp"
+#include "polyfit/internal/numeric_utils.hpp"
 
 namespace {
 

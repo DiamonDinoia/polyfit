@@ -24,6 +24,6 @@
 
 #pragma once
 
-#include "internal/macros.h"
-#include "internal/poly_eval.h"
-#include "internal/macros_undef.h"
+#include "internal/macros.hpp"
+#include "internal/poly_eval.hpp"
+#include "internal/macros_undef.hpp"

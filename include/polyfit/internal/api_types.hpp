@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "tags.h"
+#include "tags.hpp"
 
 namespace poly_eval {
 

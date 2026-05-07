@@ -1,6 +1,6 @@
 // test_1D_truncation.cpp — truncation, adaptive fit, and coefficient-order tests
 
-#include "test_1D_helpers.h"
+#include "test_1D_helpers.hpp"
 
 static std::mt19937 gen(42);
 

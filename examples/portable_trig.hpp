@@ -9,8 +9,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "polyfit/internal/macros.h"
-#include "polyfit/internal/numeric_utils.h"
+#include "polyfit/internal/macros.hpp"
+#include "polyfit/internal/numeric_utils.hpp"
 #include <poet/poet.hpp>
 
 #if PF_HAS_CXX20
