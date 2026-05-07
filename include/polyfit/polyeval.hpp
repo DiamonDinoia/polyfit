@@ -331,7 +331,6 @@ template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEval
     template<bool SIMD = true> [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x) const noexcept;
     [[nodiscard]] static constexpr CanonicalInput mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept;
     [[nodiscard]] constexpr CanonicalInput mapFromDomain(const CanonicalInput &x) const noexcept;
-    [[nodiscard]] constexpr bool shouldFuseAxis(const DomainParams &dp, std::size_t axis, int nCoeffsPerAxis) const noexcept;
     constexpr void fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis);
     constexpr void computeScaling(const InputType &a, const InputType &b, DomainParams &dp) const noexcept;
 

@@ -702,73 +702,68 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Canonica
     // Across-points vectorization: only profitable when OUT_DIM == 1, where
     // the existing OUT-dim SIMD path degenerates to scalar FMAs. For wider
     // outputs the per-point evaluator already vectorises across OUT_DIM.
-    if constexpr (OUT_DIM != 1) {
+    using batch_t = xsimd::batch<Scalar>;
+    constexpr std::size_t B = batch_t::size;
+    if constexpr (OUT_DIM != 1 || B <= 1) {
         for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
         return;
     } else {
-        using batch_t = xsimd::batch<Scalar>;
-        constexpr std::size_t B = batch_t::size;
-        if constexpr (B <= 1) {
-            for (std::size_t i = 0; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
-            return;
-        } else {
-            constexpr std::size_t kAlign = batch_t::arch_type::alignment();
-            // Unroll factor across batches: independent Horner accumulator
-            // chains per outer iteration so the FMA-throughput-bound inner
-            // loop can run multiple chains in parallel and increase ILP.
-            // Higher Dim builds deeper nested accumulator state per chain,
-            // so unrolling spills registers; restrict unroll to low Dim.
-            constexpr std::size_t U = (DIM <= 2) ? 2 : 1;
-            const int nCoeffsRt = nCoeffsPerAxis();
+        constexpr std::size_t kAlign = batch_t::arch_type::alignment();
+        // Unroll factor across batches: independent Horner accumulator
+        // chains per outer iteration so the FMA-throughput-bound inner
+        // loop can run multiple chains in parallel and increase ILP.
+        // Higher Dim builds deeper nested accumulator state per chain,
+        // so unrolling spills registers; restrict unroll to low Dim.
+        constexpr std::size_t U = (DIM <= 2) ? 2 : 1;
+        const int nCoeffsRt = nCoeffsPerAxis();
 
-            auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
-                alignas(kAlign) Scalar buf[DIM][B];
-                for (std::size_t b = 0; b < B; ++b)
-                    for (std::size_t d = 0; d < DIM; ++d)
-                        buf[d][b] = pts[base + b][d];
+        auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
+            alignas(kAlign) Scalar buf[DIM][B];
+            for (std::size_t b = 0; b < B; ++b)
+                for (std::size_t d = 0; d < DIM; ++d)
+                    buf[d][b] = pts[base + b][d];
 
-                std::array<batch_t, DIM> x_v;
-                for (std::size_t d = 0; d < DIM; ++d) {
-                    batch_t v = batch_t::load_aligned(buf[d]);
-                    if constexpr (FUSION_MODE != FusionMode::Always) {
-                        if (!domain_.identityDomain) {
-                            v = polyfit::internal::helpers::mapFromDomainScalar<batch_t, Scalar>(
-                                v, domain_.invSpan[d], domain_.sumEndpoints[d]);
-                        }
+            std::array<batch_t, DIM> x_v;
+            for (std::size_t d = 0; d < DIM; ++d) {
+                batch_t v = batch_t::load_aligned(buf[d]);
+                if constexpr (FUSION_MODE != FusionMode::Always) {
+                    if (!domain_.identityDomain) {
+                        v = polyfit::internal::helpers::mapFromDomainScalar<batch_t, Scalar>(
+                            v, domain_.invSpan[d], domain_.sumEndpoints[d]);
                     }
-                    x_v[d] = v;
                 }
-                return x_v;
-            };
-
-            auto storeBatch = [&](std::size_t base, batch_t res) PF_ALWAYS_INLINE_LAMBDA {
-                alignas(kAlign) Scalar outbuf[B];
-                res.store_aligned(outbuf);
-                for (std::size_t b = 0; b < B; ++b) out[base + b][0] = outbuf[b];
-            };
-
-            std::size_t i = 0;
-            for (; i + U * B <= count; i += U * B) {
-                std::array<std::array<batch_t, DIM>, U> x_vU;
-                for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
-
-                std::array<batch_t, U> resU;
-                for (std::size_t u = 0; u < U; ++u) {
-                    resU[u] = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
-                        x_vU[u], coeffsMd, nCoeffsRt);
-                }
-
-                for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
+                x_v[d] = v;
             }
-            for (; i + B <= count; i += B) {
-                auto x_v = loadPointsAt(i);
-                batch_t res = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
-                    x_v, coeffsMd, nCoeffsRt);
-                storeBatch(i, res);
+            return x_v;
+        };
+
+        auto storeBatch = [&](std::size_t base, batch_t res) PF_ALWAYS_INLINE_LAMBDA {
+            alignas(kAlign) Scalar outbuf[B];
+            res.store_aligned(outbuf);
+            for (std::size_t b = 0; b < B; ++b) out[base + b][0] = outbuf[b];
+        };
+
+        std::size_t i = 0;
+        for (; i + U * B <= count; i += U * B) {
+            std::array<std::array<batch_t, DIM>, U> x_vU;
+            for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
+
+            std::array<batch_t, U> resU;
+            for (std::size_t u = 0; u < U; ++u) {
+                resU[u] = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                    x_vU[u], coeffsMd, nCoeffsRt);
             }
-            // Tail: scalar fallback for the leftover < B points.
-            for (; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+
+            for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
         }
+        for (; i + B <= count; i += B) {
+            auto x_v = loadPointsAt(i);
+            batch_t res = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                x_v, coeffsMd, nCoeffsRt);
+            storeBatch(i, res);
+        }
+        // Tail: scalar fallback for the leftover < B points.
+        for (; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
     }
 }
 
@@ -975,21 +970,6 @@ FuncEvalND<Func, NCOEFFS, FUSION_MODE>::mapFromDomain(const CanonicalInput &x) c
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-[[nodiscard]] constexpr bool FuncEvalND<Func, NCOEFFS, FUSION_MODE>::shouldFuseAxis(
-    const DomainParams &dp, std::size_t axis, int nCoeffsPerAxis) const noexcept {
-    if constexpr (FUSION_MODE == FusionMode::Always) {
-        return true;
-    } else {
-        const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan[axis]);
-        const auto beta = -static_cast<Scalar>(dp.sumEndpoints[axis]) * static_cast<Scalar>(dp.invSpan[axis]);
-        const auto condBase = detail::math::abs(alpha) + detail::math::abs(beta) + Scalar(1);
-        constexpr auto maxLog = Scalar(std::numeric_limits<Scalar>::digits10 - 3);
-        return nCoeffsPerAxis > 1 &&
-               Scalar(nCoeffsPerAxis - 1) * detail::math::log10(condBase) < maxLog;
-    }
-}
-
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis) {
     const auto nCoeffs = static_cast<std::size_t>(nCoeffsPerAxis);
     auto fiber = makeBuffer<Scalar, NCOEFFS>(nCoeffs);
@@ -1007,7 +987,6 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fuseNDDomain(DomainParams
             dp.sumEndpoints[axis] = Scalar(0);
             continue;
         }
-        if (!shouldFuseAxis(dp, axis, nCoeffsPerAxis)) continue;
 
         auto innerExtents = extents;
         innerExtents[axis] = 1;
