@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include <polyfit/polyeval.hpp>
+#include <polyfit/polyfit.hpp>
 
 namespace {
 constexpr std::size_t kNumRandomTests = 4000;

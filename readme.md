@@ -43,7 +43,22 @@ FetchContent_MakeAvailable(polyfit)
 target_link_libraries(my_target PRIVATE polyfit::polyfit)
 ```
 
+## Public headers
+
+The library exposes two independent public headers — pick whichever matches
+what you need; you do **not** have to include both.
+
+- `#include <polyfit/polyeval.hpp>` — **evaluation only**. Free function
+  templates (`poly_eval::horner`, `hybrid`, `horner_many`, `horner_transposed`,
+  `hybrid_transposed*`) operating on coefficients you already have. No fitting
+  machinery is pulled in.
+- `#include <polyfit/polyfit.hpp>` — **fitting + evaluation**. Adds the
+  `FuncEval` / `FuncEvalMany` / `FuncEvalND` classes plus the `fit()` and
+  `pack()` factories. Re-exports everything in `polyeval.hpp`.
+
 ## Quick Start
+
+Fitting a callable (uses `polyfit.hpp`):
 
 ```cpp
 #include <cmath>
@@ -60,6 +75,20 @@ Compile-time coefficient count:
 ```cpp
 constexpr auto approx = poly_eval::fit<8>([](double x) { return x * x + 1.0; }, -1.0, 1.0);
 static_assert(approx(0.5) > 1.0);
+```
+
+Evaluating a polynomial whose coefficients you already have (uses
+`polyeval.hpp` only):
+
+```cpp
+#include <array>
+#include <polyfit/polyeval.hpp>
+
+int main() {
+    // p(x) = 2*x^3 - 3*x^2 + 4*x - 5, Horner order (highest degree first).
+    constexpr std::array<double, 4> c{2.0, -3.0, 4.0, -5.0};
+    return poly_eval::horner<c.size()>(0.5, c.data()) < 0.0 ? 0 : 1;
+}
 ```
 
 Compile-time fit with a compile-time error target:

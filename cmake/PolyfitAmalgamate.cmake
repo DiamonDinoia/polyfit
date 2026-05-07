@@ -6,7 +6,7 @@ if (NOT Python3_EXECUTABLE)
 endif ()
 
 set(_AMALG_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate.py")
-set(_AMALG_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/polyfit/polyeval.hpp")
+set(_AMALG_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/polyfit/polyfit.hpp")
 set(_AMALG_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/polyfit/internal/polyfit_amalgamated.hpp")
 
 # Glob the source headers so the target re-runs when any of them change.
@@ -20,7 +20,7 @@ add_custom_command(
     OUTPUT "${_AMALG_OUTPUT}"
     COMMAND "${Python3_EXECUTABLE}" "${_AMALG_SCRIPT}"
         --root "${CMAKE_CURRENT_SOURCE_DIR}"
-        --input "include/polyfit/polyeval.hpp"
+        --input "include/polyfit/polyfit.hpp"
         --output "include/polyfit/internal/polyfit_amalgamated.hpp"
     DEPENDS "${_AMALG_SCRIPT}" ${_AMALG_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

@@ -2,8 +2,16 @@
 
 ## Headers
 
-- `#include <polyfit/polyfit.hpp>`: umbrella header
-- `#include <polyfit/polyeval.hpp>`: public API header
+There are two independent public headers; include whichever matches your need.
+
+- `#include <polyfit/polyeval.hpp>` — **evaluation only**. Pure Horner / mixed
+  Estrin–Horner evaluators (`poly_eval::horner`, `hybrid`, `horner_many`,
+  `horner_transposed`, `hybrid_transposed*`) operating on coefficients you
+  already have. No fitting machinery is pulled in.
+- `#include <polyfit/polyfit.hpp>` — **fitting + evaluation**. Adds the
+  `FuncEval` / `FuncEvalMany` / `FuncEvalND` classes, the free `fit()`
+  overloads, and `pack()`. Re-exports everything from `polyeval.hpp`, so this
+  single include is enough whenever you also need to fit.
 
 ## Main Entry Points
 

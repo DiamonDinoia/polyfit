@@ -92,12 +92,21 @@ find_package (after install)
 Public headers
 --------------
 
-The supported public entry points are:
+The library exposes two independent public headers; include whichever matches
+what you need:
 
-* ``include/polyfit/polyfit.hpp``: umbrella include for the full public API
-* ``include/polyfit/polyeval.hpp``: direct include for the polynomial-evaluation API
+* ``include/polyfit/polyeval.hpp`` — **evaluation only**. Free function
+  templates that evaluate polynomials whose coefficients you already have
+  (computed offline, by another library, or by polyfit). Includes no fitting
+  machinery.
+* ``include/polyfit/polyfit.hpp`` — **fitting + evaluation**. Adds the
+  ``FuncEval`` / ``FuncEvalMany`` / ``FuncEvalND`` evaluator classes, the free
+  ``fit()`` overloads, and ``pack()``. Re-exports everything in
+  ``polyeval.hpp``, so including this is sufficient when you need both.
 
-Internal headers remain under ``include/polyfit/internal`` and are not intended for direct use.
+Either header may be included on its own; you do not need to include them
+together. Internal headers under ``include/polyfit/internal`` are not intended
+for direct use.
 
 Generated amalgamation
 ----------------------
