@@ -388,29 +388,31 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
     constexpr std::size_t lead_zeros = K - kFirst;
 
-    poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
-        poet::static_for<K>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
-            poet::static_for<W>([&](auto l) PF_ALWAYS_INLINE_LAMBDA {
-                // MSVC rejects the by-value lambda parameter as a core
-                // constant expression even though it's a `std::integral_constant`;
-                // read through the type to get a guaranteed constant.
-                constexpr std::size_t gi = decltype(g)::value;
-                constexpr std::size_t ji = decltype(j)::value;
-                constexpr std::size_t li = decltype(l)::value;
-                constexpr std::size_t b = gi * W + li;
-                constexpr std::size_t out_idx = gi * (K * W) + ji * W + li;
-                if constexpr (b >= B) {
-                    c_out[out_idx] = CoeffType{0};
-                } else {
-                    constexpr std::size_t pad_idx = b * K + ji;
-                    if constexpr (pad_idx < lead_zeros) {
-                        c_out[out_idx] = CoeffType{0};
-                    } else {
-                        c_out[out_idx] = c_in[pad_idx - lead_zeros];
-                    }
-                }
-            });
-        });
+    // Flat enumeration over (g, j, l). MSVC rejected the prior triple-nested
+    // `poet::static_for` form: `std::size_t(g)` was not accepted as a core
+    // constant expression on the by-value lambda parameter, and even after
+    // reading through `decltype(g)::value` the three-deep instantiation tree
+    // tripped C1202 (recursive type/function dependency context too complex).
+    // A single linear `static_for` over the flattened index trivially gives
+    // both true `constexpr`-extracted indices and a flat instantiation tree.
+    constexpr std::size_t kTotal = G * K * W;
+    poet::static_for<kTotal>([&](auto idx) PF_ALWAYS_INLINE_LAMBDA {
+        constexpr std::size_t i = decltype(idx)::value;
+        constexpr std::size_t gi = i / (K * W);
+        constexpr std::size_t ji = (i / W) % K;
+        constexpr std::size_t li = i % W;
+        constexpr std::size_t b = gi * W + li;
+        constexpr std::size_t out_idx = gi * (K * W) + ji * W + li;
+        if constexpr (b >= B) {
+            c_out[out_idx] = CoeffType{0};
+        } else {
+            constexpr std::size_t pad_idx = b * K + ji;
+            if constexpr (pad_idx < lead_zeros) {
+                c_out[out_idx] = CoeffType{0};
+            } else {
+                c_out[out_idx] = c_in[pad_idx - lead_zeros];
+            }
+        }
     });
 }
 
