@@ -40,7 +40,7 @@ int main() {
     bench.title("poly_eval Horner Suite").unit("eval").epochs(50).warmup(10).minEpochTime(20ms).minEpochIterations(100);
 
     constexpr size_t P = 4096;
-    std::vector<size_t> nCoeffs1D = {8, 16, 24, 32};
+    std::vector<size_t> nCoeffs1D = {8, 12, 16, 20, 24, 32};
 
     // Track SIMD results for summary table
     struct SimdRecord {
@@ -66,6 +66,75 @@ int main() {
                          ankerl::nanobench::doNotOptimizeAway(poly_eval::horner(x, coeffs.data(), nCoeffs));
                      })
                 .clearContext();
+        }
+
+        // --- Mixed Estrin/Horner single-point (hybrid, runtime dispatch) ---
+        {
+            std::vector<double> coeffs(nCoeffs);
+            for (auto &c : coeffs) c = dist(rng);
+            double x = dist(rng);
+
+            bench.context("FMAs", std::to_string(nCoeffs))
+                .batch(1)
+                .run("Dim=1, nCoeffs=" + std::to_string(nCoeffs) + ", SIMD=No, hybrid-runtime",
+                     [&] {
+                         ankerl::nanobench::doNotOptimizeAway(poly_eval::hybrid(x, coeffs.data(), nCoeffs));
+                     })
+                .clearContext();
+        }
+
+        // --- Mixed Estrin/Horner single-point (hybrid, compile-time degree) ---
+        {
+            std::vector<double> coeffs(nCoeffs);
+            for (auto &c : coeffs) c = dist(rng);
+            double x = dist(rng);
+
+            auto run_ct = [&](auto N_ic) {
+                constexpr std::size_t N = decltype(N_ic)::value;
+                bench.context("FMAs", std::to_string(N))
+                    .batch(1)
+                    .run("Dim=1, nCoeffs=" + std::to_string(N) + ", SIMD=No, hybrid-ct",
+                         [&] {
+                             ankerl::nanobench::doNotOptimizeAway(
+                                 poly_eval::hybrid<N>(x, coeffs.data()));
+                         })
+                    .clearContext();
+            };
+            if (nCoeffs == 8)       run_ct(std::integral_constant<std::size_t, 8>{});
+            else if (nCoeffs == 12) run_ct(std::integral_constant<std::size_t, 12>{});
+            else if (nCoeffs == 16) run_ct(std::integral_constant<std::size_t, 16>{});
+            else if (nCoeffs == 20) run_ct(std::integral_constant<std::size_t, 20>{});
+            else if (nCoeffs == 24) run_ct(std::integral_constant<std::size_t, 24>{});
+            else if (nCoeffs == 32) run_ct(std::integral_constant<std::size_t, 32>{});
+        }
+
+        // --- hybrid_transposed (SIMD over precomputed transposed buffer) ---
+        {
+            std::vector<double> coeffs(nCoeffs);
+            for (auto &c : coeffs) c = dist(rng);
+            double x = dist(rng);
+
+            auto run_ht = [&](auto N_ic) {
+                constexpr std::size_t N = decltype(N_ic)::value;
+                using Batch = xsimd::batch<double>;
+                constexpr std::size_t Sz = poly_eval::hybrid_transposed_size<N, Batch>();
+                alignas(Batch::arch_type::alignment()) double c_trans[Sz];
+                poly_eval::hybrid_transpose_coeffs<N, Batch>(coeffs.data(), c_trans);
+                bench.context("FMAs", std::to_string(N))
+                    .batch(1)
+                    .run("Dim=1, nCoeffs=" + std::to_string(N) + ", SIMD=Yes, hybrid-transposed",
+                         [&] {
+                             ankerl::nanobench::doNotOptimizeAway(
+                                 poly_eval::hybrid_transposed<N, Batch>(x, c_trans));
+                         })
+                    .clearContext();
+            };
+            if (nCoeffs == 8)       run_ht(std::integral_constant<std::size_t, 8>{});
+            else if (nCoeffs == 12) run_ht(std::integral_constant<std::size_t, 12>{});
+            else if (nCoeffs == 16) run_ht(std::integral_constant<std::size_t, 16>{});
+            else if (nCoeffs == 20) run_ht(std::integral_constant<std::size_t, 20>{});
+            else if (nCoeffs == 24) run_ht(std::integral_constant<std::size_t, 24>{});
+            else if (nCoeffs == 32) run_ht(std::integral_constant<std::size_t, 32>{});
         }
 
         // --- SIMD Horner aligned ---

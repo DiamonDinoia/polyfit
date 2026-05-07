@@ -15,6 +15,31 @@ namespace poly_eval {
 template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
 PF_ALWAYS_INLINE constexpr CoeffType horner(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
 
+// Single-point evaluator using a mixed Estrin/Horner scheme.  Compile-time
+// degree gets a B independent FMA-chain core combined by an Estrin tree;
+// runtime degree dispatches to the per-degree compile-time instantiations
+// for N in [1, 32], falling back to serial Horner above that.
+template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr CoeffType hybrid(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
+
+// SIMD variant of `hybrid` using a precomputed transposed coefficient buffer.
+// `Batch` is the xsimd batch type (e.g. `xsimd::batch<double>` for the native
+// width, or `xsimd::make_sized_batch_t<double, 4>` for an explicit AVX2 width).
+// Coefficient and width are derived from `Batch::value_type` / `Batch::size`.
+// The transposed buffer must be built via `hybrid_transpose_coeffs<NCOEFFS, Batch>`
+// (size returned by `hybrid_transposed_size<NCOEFFS, Batch>`) and aligned to
+// `Batch::arch_type::alignment()`.
+template<std::size_t NCOEFFS, typename Batch, typename InputType>
+PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
+    InputType xin, const typename Batch::value_type *c_trans) noexcept;
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept;
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
+    const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept;
+
 // Evaluate one polynomial across many points, optionally with SIMD and a point mapping step.
 template<std::size_t NMONOMIALS = 0, bool PTS_ALIGNED = false, bool OUT_ALIGNED = false, int UNROLL = 0,
          typename InputType, typename OutputType, typename MapFunc>
@@ -203,6 +228,245 @@ PF_ALWAYS_INLINE constexpr EvalType horner_impl(const InputType x, const CoeffTy
     }
 }
 
+//------------------------------------------------------------------------------
+// Mixed Estrin/Horner single-point evaluator
+//------------------------------------------------------------------------------
+//
+// Splits the NCOEFFS coefficients into B blocks of size K (K compile-time).
+// Each block is evaluated with a small independent Horner chain (length K),
+// producing B partial results r[0..B-1].  The block results are combined with
+// an Estrin tree using precomputed powers of x^K, dropping the critical path
+// from ~NCOEFFS dependent FMAs to ~K + ceil(log2(B)).  The first block is
+// the short one (size_first = NCOEFFS - (B-1)*K) so the geometric squaring
+// of the combine power stays clean for any NCOEFFS.
+
+PF_CXX20_CONSTEVAL std::size_t hybrid_block_size(std::size_t n) noexcept {
+    if (n <= 4) return n; // single block — falls back to plain Horner
+    constexpr std::size_t kMinK = 2;
+    constexpr std::size_t kMaxK = 8;
+    const std::size_t target_b = poet::vector_register_count() / 2;
+    const std::size_t target = target_b < 2 ? 2 : target_b;
+    std::size_t k = (n + target - 1) / target;
+    if (k < kMinK) k = kMinK;
+    if (k > kMaxK) k = kMaxK;
+    return k;
+}
+
+PF_CXX20_CONSTEVAL std::size_t hybrid_levels(std::size_t b) noexcept {
+    std::size_t lvl = 0;
+    while (b > 1) { b = (b + 1) / 2; ++lvl; }
+    return lvl;
+}
+
+PF_CXX20_CONSTEVAL std::size_t hybrid_size_at(std::size_t b, std::size_t level) noexcept {
+    for (std::size_t i = 0; i < level; ++i) b = (b + 1) / 2;
+    return b;
+}
+
+template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const CoeffType *c_ptr) noexcept {
+    static_assert(NCOEFFS != 0, "hybrid_impl_ct requires compile-time NCOEFFS");
+    if constexpr (NCOEFFS <= 4) {
+        return horner_impl<NCOEFFS, EvalType>(x, c_ptr, NCOEFFS);
+    } else {
+        constexpr std::size_t K = hybrid_block_size(NCOEFFS);
+        constexpr std::size_t B = (NCOEFFS + K - 1) / K;
+        constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
+
+        EvalType r[B];
+
+        // First block: kFirst coefficients (1..K, possibly less than K).
+        {
+            EvalType acc = static_cast<EvalType>(c_ptr[0]);
+            poet::static_for<1, kFirst>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[std::size_t(j)]));
+            });
+            r[0] = acc;
+        }
+        // Remaining blocks: K coefficients each.
+        poet::static_for<1, B>([&](auto b) PF_ALWAYS_INLINE_LAMBDA {
+            constexpr std::size_t base = kFirst + (std::size_t(b) - 1) * K;
+            EvalType acc = static_cast<EvalType>(c_ptr[base]);
+            poet::static_for<1, K>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[base + std::size_t(j)]));
+            });
+            r[std::size_t(b)] = acc;
+        });
+
+        // power = x^K, computed with K-1 multiplications, kept as InputType
+        // so the combine FMA matches Horner's (EvalType, InputType, EvalType)
+        // signature for both real and complex coefficients.
+        InputType power = x;
+        poet::static_for<1, K>([&](auto) PF_ALWAYS_INLINE_LAMBDA { power = power * x; });
+
+        // Estrin combine: pair from the right; r[0] is carried when cur is odd.
+        // After each level the running power squares to give x^(2^l * K).
+        constexpr std::size_t kLevels = hybrid_levels(B);
+        poet::static_for<kLevels>([&](auto level) PF_ALWAYS_INLINE_LAMBDA {
+            constexpr std::size_t cur = hybrid_size_at(B, std::size_t(level));
+            constexpr std::size_t new_size = (cur + 1) / 2;
+            constexpr bool is_odd = (cur & 1u) != 0u;
+            if constexpr (!is_odd) {
+                poet::static_for<new_size>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                    r[std::size_t(j)] =
+                        detail::fma(r[2 * std::size_t(j)], power, r[2 * std::size_t(j) + 1]);
+                });
+            } else {
+                // r[0] stays as-is (highest-power carry).
+                poet::static_for<1, new_size>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                    r[std::size_t(j)] =
+                        detail::fma(r[2 * std::size_t(j) - 1], power, r[2 * std::size_t(j)]);
+                });
+            }
+            if constexpr (std::size_t(level) + 1 < kLevels) power = power * power;
+        });
+        return r[0];
+    }
+}
+
+template<typename EvalType, typename CoeffType, typename InputType>
+struct hybrid_dispatch_functor {
+    InputType x;
+    const CoeffType *c_ptr;
+    template<int N> EvalType operator()() const noexcept {
+        return hybrid_impl_ct<static_cast<std::size_t>(N), EvalType>(x, c_ptr);
+    }
+};
+
+template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffType *c_ptr,
+                                                const std::size_t c_size) noexcept {
+    if constexpr (NCOEFFS != 0) {
+        return hybrid_impl_ct<NCOEFFS, EvalType>(x, c_ptr);
+    } else {
+        PF_IF_CONSTEVAL {
+            return horner_impl<0, EvalType>(x, c_ptr, c_size);
+        } else {
+            if (c_size >= 1 && c_size <= 32) {
+                return poet::dispatch(
+                    hybrid_dispatch_functor<EvalType, CoeffType, InputType>{x, c_ptr},
+                    poet::DispatchParam<poet::make_range<1, 32>>{static_cast<int>(c_size)});
+            }
+            return horner_impl<0, EvalType>(x, c_ptr, c_size);
+        }
+    }
+}
+
+//------------------------------------------------------------------------------
+// hybrid_transposed: SIMD variant over a precomputed, transposed coeff buffer.
+//------------------------------------------------------------------------------
+// Layout invariant (G = ceil(B/W) batches of W lanes each, K steps):
+//
+//   c_trans[g * (K * W) + j * W + l] = padded[(g * W + l) * K + j]
+//
+// where `padded` is the standard-order coefficient array prepended with
+// (K - kFirst) zeros so block 0 has size K, plus zero-blocks at the high end
+// to round B up to a multiple of W (those lanes evaluate to 0 and are
+// discarded after the SIMD block phase).  The block phase issues one aligned
+// `vmovapd` + one `vfma*pd` per SIMD step — no FP01 µops on loads, so the
+// FMA-port budget is shared only with the FMAs themselves.
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept {
+    static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4 (small N is just hybrid)");
+    constexpr std::size_t W = Batch::size;
+    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t B = (NCOEFFS + K - 1) / K;
+    constexpr std::size_t G = (B + W - 1) / W;
+    return G * W * K;
+}
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
+    const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept {
+    using CoeffType = typename Batch::value_type;
+    static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4");
+    constexpr std::size_t W = Batch::size;
+    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t B = (NCOEFFS + K - 1) / K;
+    constexpr std::size_t G = (B + W - 1) / W;
+    constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
+    constexpr std::size_t lead_zeros = K - kFirst;
+
+    poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
+        poet::static_for<K>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+            poet::static_for<W>([&](auto l) PF_ALWAYS_INLINE_LAMBDA {
+                constexpr std::size_t b = std::size_t(g) * W + std::size_t(l);
+                constexpr std::size_t out_idx =
+                    std::size_t(g) * (K * W) + std::size_t(j) * W + std::size_t(l);
+                if constexpr (b >= B) {
+                    c_out[out_idx] = CoeffType{0};
+                } else {
+                    constexpr std::size_t pad_idx = b * K + std::size_t(j);
+                    if constexpr (pad_idx < lead_zeros) {
+                        c_out[out_idx] = CoeffType{0};
+                    } else {
+                        c_out[out_idx] = c_in[pad_idx - lead_zeros];
+                    }
+                }
+            });
+        });
+    });
+}
+
+template<std::size_t NCOEFFS, typename Batch, typename InputType>
+PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
+    const InputType x, const typename Batch::value_type *c_trans) noexcept {
+    using CoeffType = typename Batch::value_type;
+    static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4");
+    constexpr std::size_t W = Batch::size;
+    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t B = (NCOEFFS + K - 1) / K;
+    constexpr std::size_t G = (B + W - 1) / W;
+    constexpr std::size_t kBpadded = G * W;
+
+    const Batch x_v(static_cast<CoeffType>(x));
+
+    // SIMD block phase: G batches × K steps, each step is 1 aligned load + 1 FMA-PD.
+    Batch acc[G];
+    poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
+        acc[std::size_t(g)] = Batch::load_aligned(c_trans + std::size_t(g) * (K * W));
+    });
+    poet::static_for<1, K>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+        poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
+            acc[std::size_t(g)] = detail::fma(
+                acc[std::size_t(g)], x_v,
+                Batch::load_aligned(c_trans + std::size_t(g) * (K * W) + std::size_t(j) * W));
+        });
+    });
+
+    // Spill block accumulators to scalar storage, then run the scalar Estrin
+    // combine over the first B entries.  The padded high-end zeros are
+    // discarded — we never iterate beyond B in the combine.
+    alignas(Batch::arch_type::alignment()) CoeffType r[kBpadded];
+    poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
+        acc[std::size_t(g)].store_aligned(r + std::size_t(g) * W);
+    });
+
+    InputType power = x;
+    poet::static_for<1, K>([&](auto) PF_ALWAYS_INLINE_LAMBDA { power = power * x; });
+
+    constexpr std::size_t kLevels = detail::hybrid_levels(B);
+    poet::static_for<kLevels>([&](auto level) PF_ALWAYS_INLINE_LAMBDA {
+        constexpr std::size_t cur = detail::hybrid_size_at(B, std::size_t(level));
+        constexpr std::size_t new_size = (cur + 1) / 2;
+        constexpr bool is_odd = (cur & 1u) != 0u;
+        if constexpr (!is_odd) {
+            poet::static_for<new_size>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                r[std::size_t(j)] =
+                    detail::fma(r[2 * std::size_t(j)], power, r[2 * std::size_t(j) + 1]);
+            });
+        } else {
+            poet::static_for<1, new_size>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
+                r[std::size_t(j)] =
+                    detail::fma(r[2 * std::size_t(j) - 1], power, r[2 * std::size_t(j)]);
+            });
+        }
+        if constexpr (std::size_t(level) + 1 < kLevels) power = power * power;
+    });
+    return r[0];
+}
+
 } // namespace poly_eval::detail
 
 namespace poly_eval {
@@ -210,6 +474,28 @@ namespace poly_eval {
 template<std::size_t NCOEFFS, typename CoeffType, typename InputType>
 PF_ALWAYS_INLINE constexpr CoeffType horner(const InputType x, const CoeffType *c_ptr, const std::size_t c_size) noexcept {
     return detail::horner_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
+}
+
+template<std::size_t NCOEFFS, typename CoeffType, typename InputType>
+PF_ALWAYS_INLINE constexpr CoeffType hybrid(const InputType x, const CoeffType *c_ptr, const std::size_t c_size) noexcept {
+    return detail::hybrid_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
+}
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept {
+    return detail::hybrid_transposed_size<NCOEFFS, Batch>();
+}
+
+template<std::size_t NCOEFFS, typename Batch>
+PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
+    const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept {
+    detail::hybrid_transpose_coeffs<NCOEFFS, Batch>(c_in, c_out);
+}
+
+template<std::size_t NCOEFFS, typename Batch, typename InputType>
+PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
+    const InputType x, const typename Batch::value_type *c_trans) noexcept {
+    return detail::hybrid_transposed<NCOEFFS, Batch, InputType>(x, c_trans);
 }
 
 template<std::size_t NCOEFFS, typename OutputType, typename InputType>

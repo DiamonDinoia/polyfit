@@ -120,7 +120,7 @@ template<bool>
 constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION>::OutputType PF_ALWAYS_INLINE
 FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(const InputType pt) const noexcept {
     const auto xi = mapFromDomain(pt);
-    return horner<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
+    return hybrid<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
@@ -131,7 +131,7 @@ constexpr auto PF_ALWAYS_INLINE FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator
                    remove_cvref_t<V>> {
     using EvalType = remove_cvref_t<V>;
     const auto xi = mapFromDomain(EvalType(pt));
-    return detail::horner_impl<NCOEFFS, EvalType>(xi, coeffsBuf.data(), coeffsBuf.size());
+    return detail::hybrid_impl<NCOEFFS, EvalType>(xi, coeffsBuf.data(), coeffsBuf.size());
 }
 
 PF_FAST_EVAL_BEGIN

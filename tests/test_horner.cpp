@@ -186,6 +186,47 @@ TEST(HornerCustomValue, ScalarHorner_UsesOperatorFallback) {
     EXPECT_DOUBLE_EQ(actual.value, expected.value);
 }
 
+// Hybrid (mixed Estrin/Horner) — runtime degree dispatches in [1,32], falls
+// back to serial Horner above 32.  Verify numerical equivalence with the
+// compile-time path across the dispatch boundary.
+TYPED_TEST(HornerTyped, Hybrid_RuntimeDispatch_MatchesCompileTime) {
+    using T = TypeParam;
+    for (size_t N : {size_t(1), size_t(7), size_t(16), size_t(32), size_t(33)}) {
+        std::vector<T> c = random_vector<T>(N);
+        T x = uni<T>();
+        T rt = poly_eval::hybrid(x, c.data(), c.size());
+        T ex = naive_horner_scalar(x, c.data(), c.size());
+        EXPECT_NEAR(rt, ex, eps<T> * static_cast<T>(N));
+    }
+}
+TYPED_TEST(HornerTyped, Hybrid_CompileTime_MatchesNaive) {
+    using T = TypeParam;
+    poet::static_for<1, 33>([&](auto D) {
+        std::vector<T> c = random_vector<T>(D);
+        T x = uni<T>();
+        T ct = poly_eval::hybrid<D>(x, c.data());
+        T ex = naive_horner_scalar(x, c.data(), D);
+        EXPECT_NEAR(ct, ex, eps<T> * static_cast<T>(D));
+    });
+}
+
+// Hybrid transposed (SIMD over a precomputed transposed coefficient buffer)
+TYPED_TEST(HornerTyped, HybridTransposed_MatchesNaive) {
+    using T = TypeParam;
+    using Batch = xsimd::batch<T>;
+    poet::static_for<5, 33>([&](auto D) {
+        constexpr size_t N = D;
+        std::vector<T> c = random_vector<T>(N);
+        constexpr size_t Sz = poly_eval::hybrid_transposed_size<N, Batch>();
+        alignas(Batch::arch_type::alignment()) T c_trans[Sz];
+        poly_eval::hybrid_transpose_coeffs<N, Batch>(c.data(), c_trans);
+        T x = uni<T>();
+        T got = poly_eval::hybrid_transposed<N, Batch>(x, c_trans);
+        T ex = naive_horner_scalar(x, c.data(), N);
+        EXPECT_NEAR(got, ex, eps<T> * static_cast<T>(N));
+    });
+}
+
 // SIMD Horner runtime
 TYPED_TEST(HornerTyped, SIMDHorner_Runtime) {
     using T = TypeParam;
