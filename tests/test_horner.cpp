@@ -201,20 +201,25 @@ TYPED_TEST(HornerTyped, Hybrid_RuntimeDispatch_MatchesCompileTime) {
 }
 TYPED_TEST(HornerTyped, Hybrid_CompileTime_MatchesNaive) {
     using T = TypeParam;
-    poet::static_for<1, 33>([&](auto D) {
+    auto check = [&](auto D) {
         std::vector<T> c = random_vector<T>(D);
         T x = uni<T>();
         T ct = poly_eval::hybrid<D>(x, c.data());
         T ex = naive_horner_scalar(x, c.data(), D);
         EXPECT_NEAR(ct, ex, eps<T> * static_cast<T>(D));
-    });
+    };
+    // Split into two passes: each `static_for` instantiates `hybrid<D>` (which
+    // itself contains nested `static_for` machinery) for every D in its range,
+    // and the combined depth tripped MSVC's C1202 instantiation-context limit.
+    poet::static_for<1, 17>(check);
+    poet::static_for<17, 33>(check);
 }
 
 // Hybrid transposed (SIMD over a precomputed transposed coefficient buffer)
 TYPED_TEST(HornerTyped, HybridTransposed_MatchesNaive) {
     using T = TypeParam;
     using Batch = xsimd::batch<T>;
-    poet::static_for<5, 33>([&](auto D) {
+    auto check = [&](auto D) {
         constexpr size_t N = D;
         std::vector<T> c = random_vector<T>(N);
         constexpr size_t Sz = poly_eval::hybrid_transposed_size<N, Batch>();
@@ -224,7 +229,10 @@ TYPED_TEST(HornerTyped, HybridTransposed_MatchesNaive) {
         T got = poly_eval::hybrid_transposed<N, Batch>(x, c_trans);
         T ex = naive_horner_scalar(x, c.data(), N);
         EXPECT_NEAR(got, ex, eps<T> * static_cast<T>(N));
-    });
+    };
+    // See note above: split to keep MSVC under its C1202 instantiation budget.
+    poet::static_for<5, 19>(check);
+    poet::static_for<19, 33>(check);
 }
 
 // SIMD Horner runtime
