@@ -149,7 +149,7 @@ if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(benchMany bench_many.cpp)
 endif ()
 
-add_polyfit_test_matrix(test_ND test_ND_accuracy.cpp test_ND_api.cpp)
+add_polyfit_test_matrix(test_ND test_ND_accuracy.cpp test_ND_api.cpp test_ND_fusion.cpp)
 if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
 endif ()

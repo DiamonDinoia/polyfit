@@ -10,6 +10,16 @@
 #define PF_ALWAYS_INLINE inline
 #endif
 
+// Lambda call-operator force-inline. Lambda call operators are implicitly
+// `inline`, so this just adds the always_inline attribute.
+#if defined(__GNUC__) || defined(__clang__)
+#define PF_ALWAYS_INLINE_LAMBDA __attribute__((always_inline))
+#elif defined(_MSC_VER)
+#define PF_ALWAYS_INLINE_LAMBDA [[msvc::forceinline]]
+#else
+#define PF_ALWAYS_INLINE_LAMBDA
+#endif
+
 #ifndef PF_FLATTEN
 #if defined(__GNUC__) || defined(__clang__)
 #define PF_FLATTEN __attribute__((flatten))
