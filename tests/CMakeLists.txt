@@ -130,6 +130,7 @@ function(add_polyfit_benchmark_matrix NAME)
 endfunction()
 
 add_polyfit_test_matrix(test_horner test_horner.cpp)
+add_polyfit_test_matrix(test_hybrid test_hybrid.cpp)
 if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(bench_horner bench_horner.cpp)
     add_polyfit_benchmark_matrix(bench_unroll_sweep bench_unroll_sweep.cpp)
