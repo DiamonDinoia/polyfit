@@ -96,6 +96,23 @@ PF_FAST_EVAL_BEGIN
 template<typename... EvalTypes>
 void FuncEvalMany<EvalTypes...>::operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
                                             std::size_t numPoints) const noexcept {
+    // Column-tiled SIMD-across-points path only pays off once numPoints
+    // amortises blockSize = simdSize * unrollFactor setup and the COUNT-wide
+    // re-load of column coefficients. Below the crossover, looping the
+    // SIMD-across-polynomials single-point path (horner_transposed via
+    // evalInputs) wins.
+    constexpr std::size_t simdSize = xsimd::batch<OutputType>::size;
+    constexpr std::size_t unrollFactor = detail::optimalManyEvalUf<OutputType>();
+    constexpr std::size_t kSmallPointThreshold = simdSize * unrollFactor;
+
+    if (numPoints < kSmallPointThreshold) PF_UNLIKELY {
+        for (std::size_t i = 0; i < numPoints; ++i) {
+            const auto results = (*this)(x[i]);
+            for (std::size_t j = 0; j < COUNT; ++j) out[i * COUNT + j] = results[j];
+        }
+        return;
+    }
+
     poet::static_for<COUNT>([&](auto column) { evalColumn(std::size_t(column), x, out, numPoints); });
 }
 PF_FAST_EVAL_END
