@@ -89,10 +89,11 @@ auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator=(FuncEvalND &&other) noexc
 
 PF_FAST_EVAL_BEGIN
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD>
+template<bool SIMD, class ModeTag>
 constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(
-    const InputType &x) const {
-    return evalPoint<SIMD>(x);
+    const InputType &x, ModeTag) const {
+    static_assert(detail::isEvalModeTag_v<ModeTag>, "ModeTag must be EvalAuto/EvalHorner");
+    return evalPoint<SIMD, InputType, ModeTag>(x);
 }
 PF_FAST_EVAL_END
 
@@ -111,19 +112,28 @@ constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType FuncEvalND
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD, class Point>
+template<bool SIMD, class Point, class ModeTag>
 constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType
 FuncEvalND<Func, NCOEFFS, FUSION_MODE>::evalPoint(const Point &x) const {
-    return fromCanonicalOutput(evalCanonical<SIMD>(toCanonicalInput(x)));
+    return fromCanonicalOutput(evalCanonical<SIMD>(toCanonicalInput(x), ModeTag{}));
 }
 
 PF_FAST_EVAL_BEGIN
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD>
+template<bool SIMD, class ModeTag>
 constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalOutput
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::evalCanonical(const CanonicalInput &x) const noexcept {
+FuncEvalND<Func, NCOEFFS, FUSION_MODE>::evalCanonical(const CanonicalInput &x, ModeTag) const noexcept {
+    static_assert(detail::isEvalModeTag_v<ModeTag>, "ModeTag must be EvalAuto/EvalHorner");
     const int nCoeffsRt = (NCOEFFS ? static_cast<int>(NCOEFFS) : static_cast<int>(coeffsMd.extent(0)));
-    return poly_eval::horner<NCOEFFS, SIMD, CanonicalOutput>(mapFromDomain(x), coeffsMd, nCoeffsRt);
+    const auto xm = mapFromDomain(x);
+    if constexpr (ModeTag::value == EvalMode::Horner) {
+        return poly_eval::horner<NCOEFFS, SIMD, CanonicalOutput>(xm, coeffsMd, nCoeffsRt);
+    } else {
+        // Auto → hybrid per axis. hybrid_nd internally falls back to horner
+        // for runtime NCOEFFS or NCOEFFS ≤ 4 where Estrin has no
+        // critical-path budget to spend.
+        return poly_eval::hybrid_nd<NCOEFFS, CanonicalOutput>(xm, coeffsMd, nCoeffsRt);
+    }
 }
 PF_FAST_EVAL_END
 

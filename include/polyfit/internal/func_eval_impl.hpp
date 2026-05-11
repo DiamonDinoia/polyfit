@@ -52,11 +52,16 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION>::initialize(detai
 // ---------- ND runtime init: same one-shot fusion gating as compile-time ----
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>
-template<bool>
+template<bool, class ModeTag>
 constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION>::OutputType PF_ALWAYS_INLINE
-FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(const InputType pt) const noexcept {
+FuncEval<Func, NCOEFFS, ITERS, FUSION>::operator()(const InputType pt, ModeTag) const noexcept {
+    static_assert(detail::isEvalModeTag_v<ModeTag>, "Second argument must be EvalAuto/EvalHorner");
     const auto xi = mapFromDomain(pt);
-    return hybrid<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
+    if constexpr (ModeTag::value == EvalMode::Horner) {
+        return horner<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
+    } else {
+        return hybrid<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
+    }
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION>

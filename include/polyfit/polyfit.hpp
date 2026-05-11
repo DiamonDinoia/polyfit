@@ -78,7 +78,11 @@ class FuncEval {
     FuncEval(FuncEval &&) noexcept = default;
     FuncEval &operator=(FuncEval &&) noexcept = default;
 
-    template<bool = false> constexpr OutputType operator()(InputType pt) const noexcept;
+    /// Single-point evaluation. Optional `ModeTag` (`EvalAuto` or
+    /// `EvalHorner`) overrides the per-call eval scheme. Default is
+    /// `EvalAuto` (hybrid).
+    template<bool = false, class ModeTag = EvalAuto>
+    constexpr OutputType operator()(InputType pt, ModeTag = {}) const noexcept;
 
     template<bool = false, class V>
     constexpr auto operator()(V pt) const noexcept
@@ -282,7 +286,8 @@ template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEval
 
     constexpr FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b);
 
-    template<bool SIMD = true> PF_FLATTEN constexpr OutputType operator()(const InputType &x) const;
+    template<bool SIMD = true, class ModeTag = EvalAuto>
+    PF_FLATTEN constexpr OutputType operator()(const InputType &x, ModeTag = {}) const;
     template<bool SIMD = true, class Point,
              class = enable_if_t<!std::is_same_v<remove_cvref_t<Point>, InputType> &&
                                   detail::isCompatibleNdPoint_v<Point, DIM, InputScalar>>>
@@ -344,12 +349,14 @@ template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEval
     constexpr void buildCoeffs(int nCoeffsPerAxis, Func f, const DomainParams &dp);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);
     constexpr void reverseCoefficientOrder(int nCoeffsPerAxis);
-    template<bool SIMD, class Point> [[nodiscard]] constexpr OutputType evalPoint(const Point &x) const;
+    template<bool SIMD, class Point, class ModeTag = EvalAuto>
+    [[nodiscard]] constexpr OutputType evalPoint(const Point &x) const;
     template<class Point> [[nodiscard]] static constexpr CanonicalInput toCanonicalInput(const Point &x) noexcept;
     [[nodiscard]] static constexpr InputType fromCanonicalInput(const CanonicalInput &x) noexcept;
     [[nodiscard]] static constexpr CanonicalOutput toCanonicalOutput(const OutputType &x) noexcept;
     [[nodiscard]] static constexpr OutputType fromCanonicalOutput(const CanonicalOutput &x) noexcept;
-    template<bool SIMD = true> [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x) const noexcept;
+    template<bool SIMD = true, class ModeTag = EvalAuto>
+    [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x, ModeTag = {}) const noexcept;
     [[nodiscard]] static constexpr CanonicalInput mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept;
     [[nodiscard]] constexpr CanonicalInput mapFromDomain(const CanonicalInput &x) const noexcept;
     constexpr void fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis);

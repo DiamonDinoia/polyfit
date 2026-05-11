@@ -324,6 +324,48 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
     }
 }
 
+// Hybrid (Estrin-blocked Horner) variant of horner_nd_impl. At every axis
+// we gather the N inner-axis results into a small stack array and combine
+// them with the same Estrin tree as the 1D `hybrid_impl_ct`. This drops
+// the per-axis critical path from N dependent FMAs to ~K + log2(B), at the
+// cost of N×Dim stack OutT slots — fine for the compile-time NCOEFFS path
+// the ND evaluator uses. Runtime NCOEFFS falls back to plain horner.
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, const Mdspan &coeffs,
+                                               std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
+    constexpr std::size_t axis = Dim - Level;
+    constexpr std::size_t OUT = std::tuple_size_v<OutT>;
+
+    if constexpr (NCOEFFS == 0 || NCOEFFS <= 4) {
+        return horner_nd_impl<Level, Dim, NCOEFFS, OutT>(ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
+    } else {
+        std::array<OutT, NCOEFFS> blocks{};
+        poet::static_for<NCOEFFS>([&](auto k) PF_ALWAYS_INLINE_LAMBDA {
+            idx[axis] = std::size_t(k);
+            if constexpr (Level > 1) {
+                blocks[std::size_t(k)] =
+                    hybrid_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
+            } else {
+                OutT inner{};
+                poet::static_for<OUT>([&](auto i) PF_ALWAYS_INLINE_LAMBDA {
+                    inner[i] = coeffAt<Dim>(coeffs, idx, i);
+                });
+                blocks[std::size_t(k)] = inner;
+            }
+        });
+
+        OutT res{};
+        using Scalar = typename OutT::value_type;
+        poet::static_for<OUT>([&](auto i) PF_ALWAYS_INLINE_LAMBDA {
+            std::array<Scalar, NCOEFFS> buf{};
+            poet::static_for<NCOEFFS>(
+                [&](auto k) PF_ALWAYS_INLINE_LAMBDA { buf[std::size_t(k)] = blocks[std::size_t(k)][i]; });
+            res[i] = hybrid_impl_ct<NCOEFFS, Scalar>(x[axis], buf.data());
+        });
+        return res;
+    }
+}
+
 template<typename EvalType, typename CoeffType, typename InputType>
 struct hybrid_dispatch_functor {
     InputType x;
@@ -719,6 +761,16 @@ PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int
     std::array<std::size_t, Dim> idx{};
     return detail::horner_nd_impl<Dim, Dim, NCOEFFS, OutT>(
         std::conditional_t<SIMD, detail::SimdEvalTag, detail::ScalarEvalTag>{}, x, coeffs, idx, nCoeffsRt);
+}
+
+// ND hybrid front-end: Estrin-blocked Horner per axis. Falls back to plain
+// horner when NCOEFFS is runtime (0) or ≤ 4 (too small for an Estrin tree).
+template<std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+PF_ALWAYS_INLINE constexpr OutT hybrid_nd(const InVec &x, const Mdspan &coeffs, int nCoeffsRt) {
+    constexpr std::size_t Dim = Mdspan::rank() - 1;
+    std::array<std::size_t, Dim> idx{};
+    return detail::hybrid_nd_impl<Dim, Dim, NCOEFFS, OutT>(
+        detail::ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
 }
 
 } // namespace poly_eval
