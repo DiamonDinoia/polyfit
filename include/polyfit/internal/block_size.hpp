@@ -26,9 +26,8 @@ namespace poly_eval::detail {
 //   K accumulators + ceil(log2(K)) Estrin powers + a few scratch slots fit
 //   below NREG-2.
 //
-//   These are *qualitative* models: the real costs are refined by the K-sweep
-//   measurement campaign downstream (baobzi). Comments on each branch note
-//   what the measured calibration is expected to fix.
+//   These are qualitative models; the actual K is validated empirically per
+//   target via the K-sweep benchmark.
 
 PF_CXX20_CONSTEVAL std::size_t ceil_log2(std::size_t n) noexcept {
     std::size_t l = 0;
@@ -80,8 +79,6 @@ PF_CXX20_CONSTEVAL std::size_t optimal_block_size() noexcept {
             // one long chain per lane (degenerate Horner, max ILP across lanes).
             // SIMD_W == 1: fall back to the Latency-optimal K — there are no
             // lanes to exploit, and a balanced split is best.
-            // TODO(baobzi K-sweep): validate that K = NCOEFFS-1 truly wins for
-            // small SIMD_W (e.g. 2 lanes on NEON-fp64) — may need clamp.
             if constexpr (SIMD_W >= 2) {
                 return kMax;
             } else {
@@ -110,10 +107,7 @@ PF_CXX20_CONSTEVAL std::size_t optimal_block_size() noexcept {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Self-tests: sanity checks on the heuristic for representative microarchs.
-// These will get tighter once the K-sweep measurement campaign lands.
-// ---------------------------------------------------------------------------
 // AVX-512 — SIMD_W = 8, NREG = 32
 static_assert(optimal_block_size<3, 8, 32, EvalPolicy::Latency>() == 3,
               "NCOEFFS<=4 returns NCOEFFS");

@@ -374,14 +374,24 @@ PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, co
     }
 }
 
-template<typename EvalType, typename CoeffType, typename InputType>
+template<typename EvalType, typename CoeffType, typename InputType, std::size_t K_OVERRIDE>
 struct hybrid_dispatch_functor {
     InputType x;
     const CoeffType *c_ptr;
     template<int N> EvalType operator()() const noexcept {
-        return hybrid_impl_ct<static_cast<std::size_t>(N), EvalType>(x, c_ptr);
+        return hybrid_impl_ct<static_cast<std::size_t>(N), EvalType, CoeffType, InputType, K_OVERRIDE>(x, c_ptr);
     }
 };
+
+// Routes to the best implementation:
+//   - CT NCOEFFS         → `hybrid_impl_ct<NCOEFFS>` (full Estrin, fully inlined).
+//   - RT NCOEFFS, eval   → `poet::dispatch` to per-N CT `hybrid_impl_ct` for
+//                          c_size in [1, kHybridRuntimeDispatchMax]; else
+//                          `horner_impl<0>`.
+//   - RT NCOEFFS, consteval → `horner_impl<0>` (dispatch table isn't usable in
+//                          constant evaluation; the runtime fast path doesn't
+//                          matter there).
+inline constexpr std::size_t kHybridRuntimeDispatchMax = 32;
 
 template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType,
          std::size_t K_OVERRIDE = 0>
@@ -393,10 +403,11 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffTy
         PF_IF_CONSTEVAL {
             return horner_impl<0, EvalType>(x, c_ptr, c_size);
         } else {
-            if (c_size >= 1 && c_size <= 32) {
+            if (c_size >= 1 && c_size <= kHybridRuntimeDispatchMax) {
                 return poet::dispatch(
-                    hybrid_dispatch_functor<EvalType, CoeffType, InputType>{x, c_ptr},
-                    poet::DispatchParam<poet::make_range<1, 32>>{static_cast<int>(c_size)});
+                    hybrid_dispatch_functor<EvalType, CoeffType, InputType, K_OVERRIDE>{x, c_ptr},
+                    poet::DispatchParam<poet::make_range<1, static_cast<int>(kHybridRuntimeDispatchMax)>>{
+                        static_cast<int>(c_size)});
             }
             return horner_impl<0, EvalType>(x, c_ptr, c_size);
         }
@@ -441,13 +452,8 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
     constexpr std::size_t lead_zeros = K - kFirst;
 
-    // Plain runtime loop — this is a one-shot setup helper called once per
-    // evaluator construction, so the inner `static_for` unrolling buys
-    // nothing here, and the prior triple-nested form blew MSVC's
-    // template-instantiation-context limit (C1202) when `test_horner.cpp`
-    // instantiates this for N = 5..32. The loop is `constexpr`-clean and the
-    // compiler still folds `b >= B` / `pad_idx < lead_zeros` decisions because
-    // every operand is a compile-time constant inside the body.
+    // Plain runtime loop: one-shot setup at evaluator construction.
+    // `static_for` form blew MSVC's C1202 instantiation budget for N = 5..32.
     for (std::size_t g = 0; g < G; ++g) {
         for (std::size_t j = 0; j < K; ++j) {
             for (std::size_t l = 0; l < W; ++l) {
