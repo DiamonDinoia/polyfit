@@ -14,7 +14,8 @@ template<std::size_t NCOEFFS, class Func, class... Tags>
     using Options = detail::FitOptions<Tags...>;
     static_assert(Options::VALID, "Unsupported or duplicate fit tag");
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
-    using Evaluator = FitEvaluator<Func, NCOEFFS, Options::ITERS, Options::FUSION_MODE>;
+    using Evaluator = FitEvaluator<Func, NCOEFFS, Options::ITERS, Options::FUSION_MODE, ScalarKernel::Hybrid,
+                                   Options::HYBRID_K>;
     return Evaluator(F, a, b);
 }
 
@@ -26,13 +27,16 @@ template<class Func, class Spec, class... Tags>
     if constexpr (isIntegralLike_v<Spec>) {
         const auto nCoeffs = detail::validatePositiveCoeffCount(static_cast<int>(spec));
         if constexpr (takesNdInput_v<Func>) {
-            return FuncEvalND<Func, 0, Options::FUSION_MODE>(F, nCoeffs, a, b);
+            return FuncEvalND<Func, 0, Options::FUSION_MODE, ScalarKernel::Hybrid, Options::HYBRID_K>(
+                F, nCoeffs, a, b);
         } else {
-            using Evaluator = FitEvaluator<Func, 0, Options::ITERS, Options::FUSION_MODE>;
+            using Evaluator = FitEvaluator<Func, 0, Options::ITERS, Options::FUSION_MODE, ScalarKernel::Hybrid,
+                                           Options::HYBRID_K>;
             return Evaluator(F, nCoeffs, a, b);
         }
     } else if constexpr (isFloatingPointLike_v<Spec>) {
-        using Evaluator = FitEvaluator<Func, 0, Options::ITERS, Options::FUSION_MODE>;
+        using Evaluator = FitEvaluator<Func, 0, Options::ITERS, Options::FUSION_MODE, ScalarKernel::Hybrid,
+                                       Options::HYBRID_K>;
         return detail::fitToTolerance<Evaluator>(F, spec, a, b, Options::EVAL_POINTS, Options::MAX_NCOEFFS);
     } else {
         static_assert(alwaysFalse_v<Spec>,

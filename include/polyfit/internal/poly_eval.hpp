@@ -1,7 +1,9 @@
 #pragma once
 
+#include "block_size.hpp"
 #include "macros.hpp"
 #include "simd_utils.hpp"
+#include "tags.hpp"
 #include "utils.hpp"
 
 #include <poet/poet.hpp>
@@ -19,7 +21,7 @@ PF_ALWAYS_INLINE constexpr CoeffType horner(InputType xin, const CoeffType *c_pt
 // degree gets a B independent FMA-chain core combined by an Estrin tree;
 // runtime degree dispatches to the per-degree compile-time instantiations
 // for N in [1, 32], falling back to serial Horner above that.
-template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
+template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr CoeffType hybrid(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
 
 // SIMD variant of `hybrid` using a precomputed transposed coefficient buffer.
@@ -29,14 +31,14 @@ PF_ALWAYS_INLINE constexpr CoeffType hybrid(InputType xin, const CoeffType *c_pt
 // The transposed buffer must be built via `hybrid_transpose_coeffs<NCOEFFS, Batch>`
 // (size returned by `hybrid_transposed_size<NCOEFFS, Batch>`) and aligned to
 // `Batch::arch_type::alignment()`.
-template<std::size_t NCOEFFS, typename Batch, typename InputType>
+template<std::size_t NCOEFFS, typename Batch, typename InputType, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
     InputType xin, const typename Batch::value_type *c_trans) noexcept;
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE = 0>
 PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept;
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept;
 
@@ -263,13 +265,15 @@ PF_CXX20_CONSTEVAL std::size_t hybrid_size_at(std::size_t b, std::size_t level) 
     return b;
 }
 
-template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType>
+template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType,
+         std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const CoeffType *c_ptr) noexcept {
     static_assert(NCOEFFS != 0, "hybrid_impl_ct requires compile-time NCOEFFS");
     if constexpr (NCOEFFS <= 4) {
         return horner_impl<NCOEFFS, EvalType>(x, c_ptr, NCOEFFS);
     } else {
-        constexpr std::size_t K = hybrid_block_size(NCOEFFS);
+        constexpr std::size_t K = (K_OVERRIDE != 0) ? K_OVERRIDE : hybrid_block_size(NCOEFFS);
+        static_assert(K >= 2 && K <= NCOEFFS, "Hybrid K must be in [2, NCOEFFS]");
         constexpr std::size_t B = (NCOEFFS + K - 1) / K;
         constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
 
@@ -330,7 +334,8 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
 // the per-axis critical path from N dependent FMAs to ~K + log2(B), at the
 // cost of N×Dim stack OutT slots — fine for the compile-time NCOEFFS path
 // the ND evaluator uses. Runtime NCOEFFS falls back to plain horner.
-template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan,
+         std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, const Mdspan &coeffs,
                                                std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
@@ -344,7 +349,8 @@ PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, co
             idx[axis] = std::size_t(k);
             if constexpr (Level > 1) {
                 blocks[std::size_t(k)] =
-                    hybrid_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
+                    hybrid_nd_impl<Level - 1, Dim, NCOEFFS, OutT, InVec, Mdspan, K_OVERRIDE>(
+                        ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
             } else {
                 OutT inner{};
                 poet::static_for<OUT>([&](auto i) PF_ALWAYS_INLINE_LAMBDA {
@@ -360,7 +366,9 @@ PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, co
             std::array<Scalar, NCOEFFS> buf{};
             poet::static_for<NCOEFFS>(
                 [&](auto k) PF_ALWAYS_INLINE_LAMBDA { buf[std::size_t(k)] = blocks[std::size_t(k)][i]; });
-            res[i] = hybrid_impl_ct<NCOEFFS, Scalar>(x[axis], buf.data());
+            res[i] = hybrid_impl_ct<NCOEFFS, Scalar, Scalar,
+                                    std::remove_cv_t<std::remove_reference_t<decltype(x[axis])>>, K_OVERRIDE>(
+                x[axis], buf.data());
         });
         return res;
     }
@@ -375,11 +383,12 @@ struct hybrid_dispatch_functor {
     }
 };
 
-template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType>
+template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType,
+         std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffType *c_ptr,
                                                 const std::size_t c_size) noexcept {
     if constexpr (NCOEFFS != 0) {
-        return hybrid_impl_ct<NCOEFFS, EvalType>(x, c_ptr);
+        return hybrid_impl_ct<NCOEFFS, EvalType, CoeffType, InputType, K_OVERRIDE>(x, c_ptr);
     } else {
         PF_IF_CONSTEVAL {
             return horner_impl<0, EvalType>(x, c_ptr, c_size);
@@ -408,23 +417,25 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffTy
 // `vmovapd` + one `vfma*pd` per SIMD step — no FP01 µops on loads, so the
 // FMA-port budget is shared only with the FMAs themselves.
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE = 0>
 PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept {
     static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4 (small N is just hybrid)");
     constexpr std::size_t W = Batch::size;
-    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t K = (K_OVERRIDE != 0) ? K_OVERRIDE : detail::hybrid_block_size(NCOEFFS);
+    static_assert(K >= 2 && K <= NCOEFFS, "Hybrid K must be in [2, NCOEFFS]");
     constexpr std::size_t B = (NCOEFFS + K - 1) / K;
     constexpr std::size_t G = (B + W - 1) / W;
     return G * W * K;
 }
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept {
     using CoeffType = typename Batch::value_type;
     static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4");
     constexpr std::size_t W = Batch::size;
-    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t K = (K_OVERRIDE != 0) ? K_OVERRIDE : detail::hybrid_block_size(NCOEFFS);
+    static_assert(K >= 2 && K <= NCOEFFS, "Hybrid K must be in [2, NCOEFFS]");
     constexpr std::size_t B = (NCOEFFS + K - 1) / K;
     constexpr std::size_t G = (B + W - 1) / W;
     constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
@@ -454,13 +465,14 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     }
 }
 
-template<std::size_t NCOEFFS, typename Batch, typename InputType>
+template<std::size_t NCOEFFS, typename Batch, typename InputType, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
     const InputType x, const typename Batch::value_type *c_trans) noexcept {
     using CoeffType = typename Batch::value_type;
     static_assert(NCOEFFS > 4, "hybrid_transposed targets N > 4");
     constexpr std::size_t W = Batch::size;
-    constexpr std::size_t K = detail::hybrid_block_size(NCOEFFS);
+    constexpr std::size_t K = (K_OVERRIDE != 0) ? K_OVERRIDE : detail::hybrid_block_size(NCOEFFS);
+    static_assert(K >= 2 && K <= NCOEFFS, "Hybrid K must be in [2, NCOEFFS]");
     constexpr std::size_t B = (NCOEFFS + K - 1) / K;
     constexpr std::size_t G = (B + W - 1) / W;
     constexpr std::size_t kBpadded = G * W;
@@ -521,26 +533,26 @@ PF_ALWAYS_INLINE constexpr CoeffType horner(const InputType x, const CoeffType *
     return detail::horner_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
 }
 
-template<std::size_t NCOEFFS, typename CoeffType, typename InputType>
+template<std::size_t NCOEFFS, typename CoeffType, typename InputType, std::size_t K_OVERRIDE>
 PF_ALWAYS_INLINE constexpr CoeffType hybrid(const InputType x, const CoeffType *c_ptr, const std::size_t c_size) noexcept {
-    return detail::hybrid_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
+    return detail::hybrid_impl<NCOEFFS, CoeffType, CoeffType, InputType, K_OVERRIDE>(x, c_ptr, c_size);
 }
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE>
 PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept {
-    return detail::hybrid_transposed_size<NCOEFFS, Batch>();
+    return detail::hybrid_transposed_size<NCOEFFS, Batch, K_OVERRIDE>();
 }
 
-template<std::size_t NCOEFFS, typename Batch>
+template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE>
 PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     const typename Batch::value_type *c_in, typename Batch::value_type *c_out) noexcept {
-    detail::hybrid_transpose_coeffs<NCOEFFS, Batch>(c_in, c_out);
+    detail::hybrid_transpose_coeffs<NCOEFFS, Batch, K_OVERRIDE>(c_in, c_out);
 }
 
-template<std::size_t NCOEFFS, typename Batch, typename InputType>
+template<std::size_t NCOEFFS, typename Batch, typename InputType, std::size_t K_OVERRIDE>
 PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
     const InputType x, const typename Batch::value_type *c_trans) noexcept {
-    return detail::hybrid_transposed<NCOEFFS, Batch, InputType>(x, c_trans);
+    return detail::hybrid_transposed<NCOEFFS, Batch, InputType, K_OVERRIDE>(x, c_trans);
 }
 
 template<std::size_t NCOEFFS, typename OutputType, typename InputType>
@@ -765,11 +777,11 @@ PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int
 
 // ND hybrid front-end: Estrin-blocked Horner per axis. Falls back to plain
 // horner when NCOEFFS is runtime (0) or ≤ 4 (too small for an Estrin tree).
-template<std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
+template<std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr OutT hybrid_nd(const InVec &x, const Mdspan &coeffs, int nCoeffsRt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
-    return detail::hybrid_nd_impl<Dim, Dim, NCOEFFS, OutT>(
+    return detail::hybrid_nd_impl<Dim, Dim, NCOEFFS, OutT, InVec, Mdspan, K_OVERRIDE>(
         detail::ScalarEvalTag{}, x, coeffs, idx, nCoeffsRt);
 }
 

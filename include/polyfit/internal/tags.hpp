@@ -27,9 +27,25 @@ enum class ScalarKernel : std::uint8_t {
     Horner,
 };
 
+/// Policy hint used by `optimal_block_size<>` to pick the Hybrid block size.
+///
+/// - `Latency`   : minimise the dependency chain through one evaluation —
+///                 right call when a single point is the bottleneck and the
+///                 caller cannot expose more ILP at a higher level.
+/// - `Throughput`: maximise per-call ILP when the caller already has wide
+///                 SIMD lanes (i.e. each lane is an independent point); the
+///                 chosen K degenerates to one long chain so the FMA pipes
+///                 stay full across lanes.
+/// - `Balanced`  : compromise between the two, clamped by register pressure.
+enum class EvalPolicy : std::uint8_t { Latency, Throughput, Balanced };
+
 template<std::size_t N> struct Iters : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct MaxCoeffs : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct EvalPts : std::integral_constant<std::size_t, N> {};
+/// Compile-time opt-in override for the Hybrid block size K. The default
+/// `HybridK<0>` keeps the heuristic in `hybrid_block_size()` — anything else
+/// pins K for every Hybrid kernel instantiation downstream.
+template<std::size_t N> struct HybridK : std::integral_constant<std::size_t, N> {};
 
 namespace detail {
 
@@ -41,6 +57,7 @@ template<class T> inline constexpr bool isTag_v = false;
 template<std::size_t N> inline constexpr bool isTag_v<Iters<N>> = true;
 template<std::size_t N> inline constexpr bool isTag_v<MaxCoeffs<N>> = true;
 template<std::size_t N> inline constexpr bool isTag_v<EvalPts<N>> = true;
+template<std::size_t N> inline constexpr bool isTag_v<HybridK<N>> = true;
 template<> inline constexpr bool isTag_v<FuseAuto> = true;
 template<> inline constexpr bool isTag_v<FuseAlways> = true;
 template<> inline constexpr bool isTag_v<FuseNever> = true;
@@ -96,11 +113,13 @@ inline constexpr std::size_t fusionTagCount =
 
 template<class... Tags> struct FitOptions {
     static constexpr bool UNIQUE = tagCount<Iters, Tags...> <= 1 && tagCount<MaxCoeffs, Tags...> <= 1
-        && tagCount<EvalPts, Tags...> <= 1 && fusionTagCount<Tags...> <= 1;
+        && tagCount<EvalPts, Tags...> <= 1 && tagCount<HybridK, Tags...> <= 1 && fusionTagCount<Tags...> <= 1;
     static constexpr bool VALID = allTags<Tags...> && UNIQUE;
     static constexpr std::size_t ITERS = tagValue<Iters, 1, Tags...>;
     static constexpr std::size_t MAX_NCOEFFS = tagValue<MaxCoeffs, 32, Tags...>;
     static constexpr std::size_t EVAL_POINTS = tagValue<EvalPts, 100, Tags...>;
+    /// 0 means "use the heuristic"; non-zero pins K through the Hybrid kernel.
+    static constexpr std::size_t HYBRID_K = tagValue<HybridK, 0, Tags...>;
     static constexpr FusionMode FUSION_MODE = fusionModeValue<Tags...>;
 };
 

@@ -6,8 +6,8 @@
 
 namespace poly_eval {
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::FuncEval(Func F, const int nCoeffs, const InputType a,
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::FuncEval(Func F, const int nCoeffs, const InputType a,
                                                                  const InputType b, const InputType *pts) {
     DomainParams dp;
     dp.invSpan = InputType(1) / (b - a);
@@ -16,8 +16,8 @@ PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::FuncEval(Func F, 
     initialize(detail::RuntimeCountTag{}, F, nCoeffs, a, b, pts, dp);
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::FuncEval(Func F, const InputType a, const InputType b,
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::FuncEval(Func F, const InputType a, const InputType b,
                                                                  const InputType *pts) {
     DomainParams dp;
     dp.invSpan = InputType(1) / (b - a);
@@ -26,9 +26,9 @@ PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::FuncEval(Func F, 
     initialize(detail::CompileTimeCountTag{}, F, a, b, pts, dp);
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 PF_CXX20_CONSTEXPR void
-FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initialize(detail::CompileTimeCountTag, Func F, const InputType a,
+FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::initialize(detail::CompileTimeCountTag, Func F, const InputType a,
                                                    const InputType b, const InputType *pts, DomainParams &dp) {
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
     detail::validateDomain(a, b);
@@ -36,8 +36,8 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initialize(detail::CompileTimeCountT
     if constexpr (kStoresDomain) domain_ = dp;
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initialize(detail::RuntimeCountTag, Func F,
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::initialize(detail::RuntimeCountTag, Func F,
                                                                          const int nCoeffs, const InputType a,
                                                                          const InputType b, const InputType *pts,
                                                                          DomainParams &dp) {
@@ -51,20 +51,21 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initialize(d
 
 // ---------- ND runtime init: same one-shot fusion gating as compile-time ----
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::OutputType PF_ALWAYS_INLINE
-FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::operator()(const InputType pt) const noexcept {
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::OutputType PF_ALWAYS_INLINE
+FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::operator()(const InputType pt) const noexcept {
     const auto xi = mapFromDomain(pt);
     if constexpr (SK == ScalarKernel::Horner) {
         return horner<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
     } else {
-        return hybrid<NCOEFFS>(xi, coeffsBuf.data(), coeffsBuf.size());
+        return detail::hybrid_impl<NCOEFFS, OutputType, OutputType, InputType, HK>(
+            xi, coeffsBuf.data(), coeffsBuf.size());
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 template<class V>
-constexpr auto PF_ALWAYS_INLINE FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::operator()(V pt) const noexcept
+constexpr auto PF_ALWAYS_INLINE FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::operator()(V pt) const noexcept
     -> enable_if_t<!std::is_same_v<remove_cvref_t<V>, InputType> &&
                        std::is_constructible_v<remove_cvref_t<V>, OutputType>,
                    remove_cvref_t<V>> {
@@ -73,14 +74,16 @@ constexpr auto PF_ALWAYS_INLINE FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::oper
     if constexpr (SK == ScalarKernel::Horner) {
         return detail::horner_impl<NCOEFFS, EvalType>(xi, coeffsBuf.data(), coeffsBuf.size());
     } else {
-        return detail::hybrid_impl<NCOEFFS, EvalType>(xi, coeffsBuf.data(), coeffsBuf.size());
+        return detail::hybrid_impl<NCOEFFS, EvalType, OutputType,
+                                   std::remove_cv_t<decltype(xi)>, HK>(
+            xi, coeffsBuf.data(), coeffsBuf.size());
     }
 }
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 template<int OuterUnrollFactor, bool ptsAligned, bool outAligned>
-PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::evalBatch(
+PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::evalBatch(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept {
     return horner<NCOEFFS, ptsAligned, outAligned, OuterUnrollFactor>(
         pts, out, numPoints, coeffsBuf.data(), coeffsBuf.size(),
@@ -89,9 +92,9 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::eval
 PF_FAST_EVAL_END
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 template<bool ptsAligned, bool outAligned>
-PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::operator()(
+PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::operator()(
     const InputType *PF_RESTRICT pts, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept {
 #ifdef PF_OUTER_UNROLL
     PF_STATIC_CONSTEXPR_LOCAL auto unrollFactor = PF_OUTER_UNROLL;
@@ -111,28 +114,28 @@ PF_ALWAYS_INLINE constexpr void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::oper
 }
 PF_FAST_EVAL_END
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR const typename FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::OutputBuffer &
-FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::coeffs() const noexcept {
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR const typename FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::OutputBuffer &
+FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::coeffs() const noexcept {
     return coeffsBuf;
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-constexpr std::size_t FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::nCoeffs() const noexcept {
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+constexpr std::size_t FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::nCoeffs() const noexcept {
     return coeffsBuf.size();
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 template<class T>
-[[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::mapToDomain(
+[[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::mapToDomain(
     const DomainParams &dp, const T value) noexcept {
     if (dp.identityMap) return value;
     return polyfit::internal::helpers::mapToDomainScalar(value, dp.invSpan, dp.sumEndpoints);
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 template<class T>
-[[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::mapFromDomain(
+[[nodiscard]] PF_ALWAYS_INLINE constexpr T FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::mapFromDomain(
     const T value) const noexcept {
     if constexpr (FUSION == FusionMode::Always) {
         return value;
@@ -142,8 +145,8 @@ template<class T>
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initializeCoeffs(Func F, const InputType *pts,
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::initializeCoeffs(Func F, const InputType *pts,
                                                                                 DomainParams &dp) {
     auto grid = makeBuffer<InputType, NCOEFFS>(coeffsBuf.size());
     auto samples = makeBuffer<OutputType, NCOEFFS>(coeffsBuf.size());
@@ -158,9 +161,9 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::initializeCo
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 PF_CXX20_CONSTEXPR void
-FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::buildNodeGrid(InputBuffer &grid, const InputType *pts) const {
+FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::buildNodeGrid(InputBuffer &grid, const InputType *pts) const {
     const auto coeffCount = coeffsBuf.size();
     for (std::size_t coeffIdx = 0; coeffIdx < coeffCount; ++coeffIdx) {
         grid[coeffIdx] = pts ? pts[coeffIdx]
@@ -169,8 +172,8 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::buildNodeGrid(InputBuffer &grid, con
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::sampleOnGrid(
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::sampleOnGrid(
     OutputBuffer &samples, const InputBuffer &grid, Func F, const DomainParams &dp) const {
     const auto coeffCount = coeffsBuf.size();
     for (std::size_t sampleIdx = 0; sampleIdx < coeffCount; ++sampleIdx) {
@@ -178,8 +181,8 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::sampleOnGrid
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::computeMonomialCoeffs(
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::computeMonomialCoeffs(
     const InputBuffer &grid, const OutputBuffer &samples) {
     auto newtonCoeffs = detail::bjorckPereyra<NCOEFFS, InputType, OutputType>(grid, samples);
     auto monomialCoeffs = detail::newtonToMonomial<NCOEFFS, InputType, OutputType>(newtonCoeffs, grid);
@@ -187,8 +190,8 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::computeMonom
     std::copy(monomialCoeffs.begin(), monomialCoeffs.end(), coeffsBuf.begin());
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::shouldFuseDomain(const DomainParams &dp) const noexcept {
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::shouldFuseDomain(const DomainParams &dp) const noexcept {
     if constexpr (FUSION == FusionMode::Always) {
         return true;
     } else {
@@ -202,8 +205,8 @@ PF_CXX20_CONSTEXPR bool FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::shouldFuseDo
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::fuseDomain(DomainParams &dp) {
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::fuseDomain(DomainParams &dp) {
     using Scalar = detail::value_type_or_t<InputType>;
     const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan);
     const auto beta = -static_cast<Scalar>(dp.sumEndpoints) * static_cast<Scalar>(dp.invSpan);
@@ -214,9 +217,9 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::fuseDomain(D
     dp.identityMap = true;
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 PF_CXX20_CONSTEXPR void
-FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::refine(const InputBuffer &chebNodes, const OutputBuffer &samples) {
+FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::refine(const InputBuffer &chebNodes, const OutputBuffer &samples) {
     const auto nCoeffs = coeffsBuf.size();
     std::reverse(coeffsBuf.begin(), coeffsBuf.end());
 
@@ -236,8 +239,8 @@ FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::refine(const InputBuffer &chebNodes,
     }
 }
 
-template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK>
-PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK>::truncate(
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::truncate(
     detail::value_type_or_t<OutputType> eps) noexcept {
     if constexpr (NCOEFFS == 0) {
         std::size_t skip = 0;

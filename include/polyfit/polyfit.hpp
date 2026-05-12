@@ -53,7 +53,7 @@ template<typename... EvalTypes> class FuncEvalMany;
  * constant term.
  */
 template<class Func, std::size_t NCOEFFS_CT, std::size_t ITERS_CT, FusionMode FUSION_MODE,
-         ScalarKernel SCALAR_KERNEL>
+         ScalarKernel SCALAR_KERNEL, std::size_t HYBRID_K>
 class FuncEval {
     using InputScalar = detail::value_type_or_t<fitInput_t<Func>>;
     using OutputScalar = detail::value_type_or_t<fitOutput_t<Func>>;
@@ -298,7 +298,7 @@ template<typename... EvalTypes> class FuncEvalMany {
  * @brief Multi-dimensional polynomial evaluator.
  */
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE,
-         ScalarKernel SCALAR_KERNEL>
+         ScalarKernel SCALAR_KERNEL, std::size_t HYBRID_K>
 class FuncEvalND {
   public:
     using InputType = poly_eval::remove_cvref_t<fitInput_t<Func>>;

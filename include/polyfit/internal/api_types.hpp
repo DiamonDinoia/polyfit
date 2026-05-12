@@ -13,9 +13,10 @@
 namespace poly_eval {
 
 template<class Func, std::size_t, std::size_t, FusionMode = FusionMode::Auto,
-         ScalarKernel = ScalarKernel::Hybrid>
+         ScalarKernel = ScalarKernel::Hybrid, std::size_t HYBRID_K = 0>
 class FuncEval;
-template<class Func, std::size_t, FusionMode = FusionMode::Auto, ScalarKernel = ScalarKernel::Hybrid>
+template<class Func, std::size_t, FusionMode = FusionMode::Auto, ScalarKernel = ScalarKernel::Hybrid,
+         std::size_t HYBRID_K = 0>
 class FuncEvalND;
 template<typename T> using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 template<bool Condition, class T = int> using enable_if_t = std::enable_if_t<Condition, T>;
@@ -184,8 +185,9 @@ inline constexpr bool takesNdInput_v =
     detail::isFixedIndexable_v<fitInput_t<Func>> && detail::isFixedIndexable_v<fitOutput_t<Func>>;
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS = 1, FusionMode FUSION = FusionMode::Auto,
-         ScalarKernel SCALAR_KERNEL = ScalarKernel::Hybrid>
-using FitEvaluator = std::conditional_t<takesNdInput_v<Func>, FuncEvalND<Func, NCOEFFS, FUSION, SCALAR_KERNEL>,
-                                        FuncEval<Func, NCOEFFS, ITERS, FUSION, SCALAR_KERNEL>>;
+         ScalarKernel SCALAR_KERNEL = ScalarKernel::Hybrid, std::size_t HYBRID_K = 0>
+using FitEvaluator =
+    std::conditional_t<takesNdInput_v<Func>, FuncEvalND<Func, NCOEFFS, FUSION, SCALAR_KERNEL, HYBRID_K>,
+                       FuncEval<Func, NCOEFFS, ITERS, FUSION, SCALAR_KERNEL, HYBRID_K>>;
 
 } // namespace poly_eval
