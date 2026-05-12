@@ -6,23 +6,23 @@
 
 namespace poly_eval {
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr FuncEvalND<Func, NCOEFFS, FUSION_MODE>::FuncEvalND(Func f, const InputType &a, const InputType &b)
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::FuncEvalND(Func f, const InputType &a, const InputType &b)
     : coeffsFlat(), coeffsMd{coeffsFlat.data(), Extents{}} {
     static_assert(takesNdInput_v<Func>, "FuncEvalND requires fixed-size indexable ND input and output types");
     initialize(detail::CompileTimeCountTag{}, f, a, b);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr FuncEvalND<Func, NCOEFFS, FUSION_MODE>::FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b)
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b)
     : coeffsFlat(storageRequired(detail::validatePositiveCoeffCount(nCoeffsPerAxis))),
       coeffsMd{coeffsFlat.data(), makeExtents(nCoeffsPerAxis)} {
     static_assert(takesNdInput_v<Func>, "FuncEvalND requires fixed-size indexable ND input and output types");
     initialize(detail::RuntimeCountTag{}, f, nCoeffsPerAxis, a, b);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::CompileTimeCountTag, Func f, const InputType &a,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::initialize(detail::CompileTimeCountTag, Func f, const InputType &a,
                                                                   const InputType &b) {
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");
     detail::validateDomain(a, b);
@@ -38,8 +38,8 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::Compil
     if constexpr (kStoresDomain) domain_ = dp;
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::RuntimeCountTag, Func f, int nCoeffsPerAxis,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::initialize(detail::RuntimeCountTag, Func f, int nCoeffsPerAxis,
                                                                   const InputType &a, const InputType &b) {
     static_assert(NCOEFFS == 0, "Runtime coefficient count is only valid for runtime-sized evaluators");
     detail::validateDomain(a, b);
@@ -52,18 +52,18 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::initialize(detail::Runtim
     if constexpr (kStoresDomain) domain_ = dp;
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr std::size_t FuncEvalND<Func, NCOEFFS, FUSION_MODE>::nCoeffsPerAxis() const noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr std::size_t FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::nCoeffsPerAxis() const noexcept {
     return static_cast<std::size_t>(coeffsMd.extent(0));
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::FuncEvalND(const FuncEvalND &other)
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::FuncEvalND(const FuncEvalND &other)
     : domain_(other.domain_), coeffsFlat(other.coeffsFlat),
       coeffsMd{coeffsFlat.data(), other.coeffsMd.extents()} {}
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator=(const FuncEvalND &other) -> FuncEvalND & {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+auto FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator=(const FuncEvalND &other) -> FuncEvalND & {
     if (this != &other) {
         domain_ = other.domain_;
         coeffsFlat = other.coeffsFlat;
@@ -72,13 +72,13 @@ auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator=(const FuncEvalND &other) 
     return *this;
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::FuncEvalND(FuncEvalND &&other) noexcept
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::FuncEvalND(FuncEvalND &&other) noexcept
     : domain_(std::move(other.domain_)),
       coeffsFlat(std::move(other.coeffsFlat)), coeffsMd{coeffsFlat.data(), other.coeffsMd.extents()} {}
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator=(FuncEvalND &&other) noexcept -> FuncEvalND & {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+auto FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator=(FuncEvalND &&other) noexcept -> FuncEvalND & {
     if (this != &other) {
         domain_ = std::move(other.domain_);
         coeffsFlat = std::move(other.coeffsFlat);
@@ -88,57 +88,55 @@ auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator=(FuncEvalND &&other) noexc
 }
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD, class ModeTag>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(
-    const InputType &x, ModeTag) const {
-    static_assert(detail::isEvalModeTag_v<ModeTag>, "ModeTag must be EvalAuto/EvalHorner");
-    return evalPoint<SIMD, InputType, ModeTag>(x);
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+template<bool SIMD>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(
+    const InputType &x) const {
+    return evalPoint<SIMD, InputType>(x);
 }
 PF_FAST_EVAL_END
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<bool SIMD, class Point, class>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Point &x) const {
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(const Point &x) const {
     return evalPoint<SIMD>(x);
 }
 PF_FAST_EVAL_END
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<class... Coords, class>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(Coords... coords) const {
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::OutputType FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(Coords... coords) const {
     return fromCanonicalOutput(evalCanonical(CanonicalInput{static_cast<InputScalar>(coords)...}));
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD, class Point, class ModeTag>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::evalPoint(const Point &x) const {
-    return fromCanonicalOutput(evalCanonical<SIMD>(toCanonicalInput(x), ModeTag{}));
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+template<bool SIMD, class Point>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::OutputType
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::evalPoint(const Point &x) const {
+    return fromCanonicalOutput(evalCanonical<SIMD>(toCanonicalInput(x)));
 }
 
 PF_FAST_EVAL_BEGIN
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-template<bool SIMD, class ModeTag>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalOutput
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::evalCanonical(const CanonicalInput &x, ModeTag) const noexcept {
-    static_assert(detail::isEvalModeTag_v<ModeTag>, "ModeTag must be EvalAuto/EvalHorner");
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+template<bool SIMD>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::CanonicalOutput
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::evalCanonical(const CanonicalInput &x) const noexcept {
     const int nCoeffsRt = (NCOEFFS ? static_cast<int>(NCOEFFS) : static_cast<int>(coeffsMd.extent(0)));
     const auto xm = mapFromDomain(x);
-    if constexpr (ModeTag::value == EvalMode::Horner) {
+    if constexpr (SK == ScalarKernel::Horner) {
         return poly_eval::horner<NCOEFFS, SIMD, CanonicalOutput>(xm, coeffsMd, nCoeffsRt);
     } else {
-        // Auto → hybrid per axis. hybrid_nd internally falls back to horner
-        // for runtime NCOEFFS or NCOEFFS ≤ 4 where Estrin has no
-        // critical-path budget to spend.
+        // Hybrid per axis. hybrid_nd internally falls back to horner for
+        // runtime NCOEFFS or NCOEFFS ≤ 4 where Estrin has no critical-path
+        // budget to spend.
         return poly_eval::hybrid_nd<NCOEFFS, CanonicalOutput>(xm, coeffsMd, nCoeffsRt);
     }
 }
 PF_FAST_EVAL_END
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
                                                      std::size_t count) const noexcept {
     // Across-points vectorization: only profitable when OUT_DIM == 1, where
     // the existing OUT-dim SIMD path degenerates to scalar FMAs. For wider
@@ -209,8 +207,8 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Canonica
 }
 
 #if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(std::span<const CanonicalInput> pts,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(std::span<const CanonicalInput> pts,
                                                      std::span<CanonicalOutput> out) const {
     if (pts.size() != out.size()) {
         throw std::invalid_argument("Input and output spans must have equal length");
@@ -219,9 +217,9 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(std::span<cons
 }
 #endif
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<class Points, class Outputs, class>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Points &pts, Outputs &out) const {
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::operator()(const Points &pts, Outputs &out) const {
     if (pts.size() != out.size()) {
         throw std::invalid_argument("Input and output containers must have equal length");
     }
@@ -234,36 +232,36 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::operator()(const Points &
     }
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<typename IdxArray, std::size_t... I>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE>::coeffImpl(
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::coeffImpl(
     const IdxArray &idx, std::size_t k, std::index_sequence<I...>) noexcept {
     return coeffsMd[std::array<std::size_t, DIM + 1>{static_cast<std::size_t>(idx[I])..., k}];
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<class IdxArray>
-[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE>::coeff(
+[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::coeff(
     const IdxArray &idx, std::size_t k) noexcept {
     return coeffImpl<IdxArray>(idx, k, std::make_index_sequence<DIM>{});
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<typename IdxArray, std::size_t... I>
-constexpr const typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE>::coeffImpl(
+constexpr const typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::coeffImpl(
     const IdxArray &idx, std::size_t k, std::index_sequence<I...>) const noexcept {
     return coeffsMd[std::array<std::size_t, DIM + 1>{static_cast<std::size_t>(idx[I])..., k}];
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<class IdxArray>
-[[nodiscard]] constexpr const typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE>::coeff(
+[[nodiscard]] constexpr const typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::Scalar &FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::coeff(
     const IdxArray &idx, std::size_t k) const noexcept {
     return coeffImpl<IdxArray>(idx, k, std::make_index_sequence<DIM>{});
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::makeExtents(int nCoeffsPerAxis) noexcept -> Extents {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+auto FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::makeExtents(int nCoeffsPerAxis) noexcept -> Extents {
     if constexpr (IS_STATIC) {
         return detail::makeStaticExtents<NCOEFFS, DIM, OUT_DIM>(std::make_index_sequence<DIM>{});
     } else {
@@ -271,20 +269,20 @@ auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::makeExtents(int nCoeffsPerAxis) noe
     }
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<std::size_t... Is>
-auto FuncEvalND<Func, NCOEFFS, FUSION_MODE>::makeExtents(int nCoeffsPerAxis, std::index_sequence<Is...>) noexcept -> Extents {
+auto FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::makeExtents(int nCoeffsPerAxis, std::index_sequence<Is...>) noexcept -> Extents {
     return Extents{(Is < DIM ? static_cast<std::size_t>(nCoeffsPerAxis) : static_cast<std::size_t>(OUT_DIM))...};
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr std::size_t FuncEvalND<Func, NCOEFFS, FUSION_MODE>::storageRequired(const int nCoeffsPerAxis) noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr std::size_t FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::storageRequired(const int nCoeffsPerAxis) noexcept {
     auto ext = makeExtents(nCoeffsPerAxis);
     auto mapping = typename Mdspan::mapping_type{ext};
     return mapping.required_span_size();
 }
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::buildCoeffs(int nCoeffsPerAxis, Func f,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::buildCoeffs(int nCoeffsPerAxis, Func f,
                                                                     const DomainParams &dp) {
     const auto nCoeffs = static_cast<std::size_t>(nCoeffsPerAxis);
     auto nodes = makeBuffer<Scalar, NCOEFFS>(nCoeffs);
@@ -307,8 +305,8 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::buildCoeffs(int nCoeffsPe
     reverseCoefficientOrder(nCoeffsPerAxis);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::convertAxesToMonomialBasis(int nCoeffsPerAxis,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::convertAxesToMonomialBasis(int nCoeffsPerAxis,
                                                                      const Buffer<Scalar, NCOEFFS> &nodes) {
     const auto nCoeffs = static_cast<std::size_t>(nCoeffsPerAxis);
     auto rhs = makeBuffer<Scalar, NCOEFFS>(nCoeffs);
@@ -340,8 +338,8 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::convertAxesToMonomialBasi
     }
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::reverseCoefficientOrder(int nCoeffsPerAxis) {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::reverseCoefficientOrder(int nCoeffsPerAxis) {
     std::array<int, DIM> extents{};
     extents.fill(nCoeffsPerAxis);
     std::array<int, DIM> baseIndex{};
@@ -367,41 +365,41 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::reverseCoefficientOrder(i
     }
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<class Point>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalInput FuncEvalND<Func, NCOEFFS, FUSION_MODE>::toCanonicalInput(
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::CanonicalInput FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::toCanonicalInput(
     const Point &x) noexcept {
     return detail::fixedContainerCast<CanonicalInput>(x);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::InputType
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fromCanonicalInput(const CanonicalInput &x) noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::InputType
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::fromCanonicalInput(const CanonicalInput &x) noexcept {
     return detail::fixedContainerCast<InputType>(x);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalOutput
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::toCanonicalOutput(const OutputType &x) noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::CanonicalOutput
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::toCanonicalOutput(const OutputType &x) noexcept {
     return detail::fixedContainerCast<CanonicalOutput>(x);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::OutputType
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fromCanonicalOutput(const CanonicalOutput &x) noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::OutputType
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::fromCanonicalOutput(const CanonicalOutput &x) noexcept {
     return detail::fixedContainerCast<OutputType>(x);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalInput
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::CanonicalInput
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept {
     if (dp.identityDomain) return x;
     return polyfit::internal::helpers::mapToDomainArray<Scalar, DIM>(x, dp.invSpan, dp.sumEndpoints);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE>::CanonicalInput
-FuncEvalND<Func, NCOEFFS, FUSION_MODE>::mapFromDomain(const CanonicalInput &x) const noexcept {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+[[nodiscard]] constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::CanonicalInput
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::mapFromDomain(const CanonicalInput &x) const noexcept {
     if constexpr (FUSION_MODE == FusionMode::Always) {
         return x;
     } else {
@@ -410,8 +408,8 @@ FuncEvalND<Func, NCOEFFS, FUSION_MODE>::mapFromDomain(const CanonicalInput &x) c
     }
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis) {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis) {
     const auto nCoeffs = static_cast<std::size_t>(nCoeffsPerAxis);
     auto fiber = makeBuffer<Scalar, NCOEFFS>(nCoeffs);
     std::array<int, DIM> extents{};
@@ -454,17 +452,17 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::fuseNDDomain(DomainParams
     dp.identityDomain = polyfit::internal::helpers::isIdMap(dp.invSpan, dp.sumEndpoints);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::computeScaling(const InputType &a, const InputType &b,
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::computeScaling(const InputType &a, const InputType &b,
                                                                       DomainParams &dp) const noexcept {
     polyfit::internal::helpers::computeScalingArray<Scalar, DIM>(toCanonicalInput(a), toCanonicalInput(b), dp.invSpan,
                                                                  dp.sumEndpoints);
     dp.identityDomain = polyfit::internal::helpers::isIdMap(dp.invSpan, dp.sumEndpoints);
 }
 
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK>
 template<std::size_t Rank, class F>
-constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE>::forEachIndex(const std::array<int, Rank> &ext, F &&body) {
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK>::forEachIndex(const std::array<int, Rank> &ext, F &&body) {
     std::array<int, Rank> idx{};
     while (true) {
         body(idx);

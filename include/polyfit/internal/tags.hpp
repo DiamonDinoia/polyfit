@@ -12,16 +12,20 @@ using FuseAuto = std::integral_constant<FusionMode, FusionMode::Auto>;
 using FuseAlways = std::integral_constant<FusionMode, FusionMode::Always>;
 using FuseNever = std::integral_constant<FusionMode, FusionMode::Never>;
 
-/// Per-call evaluation mode for `FuncEval::operator()(x, ...)` and
-/// `FuncEvalND::operator()(point, ...)`.
+/// Single-point scalar evaluation kernel, selected at the `FuncEval` /
+/// `FuncEvalND` type level.
 ///
-/// - `Auto`   (default): hybrid (Estrin-blocked Horner) — in 1D and per axis
-///                       in ND.
-/// - `Horner`          : pure Horner chain.
-enum class EvalMode : std::uint8_t { Auto, Horner };
-
-using EvalAuto = std::integral_constant<EvalMode, EvalMode::Auto>;
-using EvalHorner = std::integral_constant<EvalMode, EvalMode::Horner>;
+/// - `Hybrid` (default): mixed Estrin/Horner — best when the evaluator's
+///                       single-point `operator()` is the ILP-limited hot path
+///                       (it provides its own parallelism).
+/// - `Horner`          : classical Horner chain — lowest latency / smallest
+///                       code; preferable when the caller already has ILP
+///                       (e.g. an outer unrolled loop over independent
+///                       evaluators).
+enum class ScalarKernel : std::uint8_t {
+    Hybrid,
+    Horner,
+};
 
 template<std::size_t N> struct Iters : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct MaxCoeffs : std::integral_constant<std::size_t, N> {};
@@ -51,10 +55,6 @@ template<class T> inline constexpr FusionMode fusionModeFor = FusionMode::Auto;
 template<> inline constexpr FusionMode fusionModeFor<FuseAuto> = FusionMode::Auto;
 template<> inline constexpr FusionMode fusionModeFor<FuseAlways> = FusionMode::Always;
 template<> inline constexpr FusionMode fusionModeFor<FuseNever> = FusionMode::Never;
-
-template<class T> inline constexpr bool isEvalModeTag_v = false;
-template<> inline constexpr bool isEvalModeTag_v<EvalAuto> = true;
-template<> inline constexpr bool isEvalModeTag_v<EvalHorner> = true;
 
 template<template<std::size_t> class Tag, class T> inline constexpr bool isCountTag_v = false;
 template<template<std::size_t> class Tag, std::size_t N> inline constexpr bool isCountTag_v<Tag, Tag<N>> = true;

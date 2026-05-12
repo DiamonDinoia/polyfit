@@ -52,7 +52,8 @@ template<typename... EvalTypes> class FuncEvalMany;
  * The evaluator stores coefficients in Horner order, from highest-order term to
  * constant term.
  */
-template<class Func, std::size_t NCOEFFS_CT, std::size_t ITERS_CT, FusionMode FUSION_MODE>
+template<class Func, std::size_t NCOEFFS_CT, std::size_t ITERS_CT, FusionMode FUSION_MODE,
+         ScalarKernel SCALAR_KERNEL>
 class FuncEval {
     using InputScalar = detail::value_type_or_t<fitInput_t<Func>>;
     using OutputScalar = detail::value_type_or_t<fitOutput_t<Func>>;
@@ -78,13 +79,11 @@ class FuncEval {
     FuncEval(FuncEval &&) noexcept = default;
     FuncEval &operator=(FuncEval &&) noexcept = default;
 
-    /// Single-point evaluation. Optional `ModeTag` (`EvalAuto` or
-    /// `EvalHorner`) overrides the per-call eval scheme. Default is
-    /// `EvalAuto` (hybrid).
-    template<bool = false, class ModeTag = EvalAuto>
-    constexpr OutputType operator()(InputType pt, ModeTag = {}) const noexcept;
+    /// Single-point evaluation. The kernel (hybrid or classical Horner) is
+    /// fixed by the `SCALAR_KERNEL` template parameter.
+    constexpr OutputType operator()(InputType pt) const noexcept;
 
-    template<bool = false, class V>
+    template<class V>
     constexpr auto operator()(V pt) const noexcept
         -> enable_if_t<!std::is_same_v<remove_cvref_t<V>, InputType> &&
                            std::is_constructible_v<remove_cvref_t<V>, OutputType>,
@@ -298,7 +297,9 @@ template<typename... EvalTypes> class FuncEvalMany {
 /**
  * @brief Multi-dimensional polynomial evaluator.
  */
-template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEvalND {
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE,
+         ScalarKernel SCALAR_KERNEL>
+class FuncEvalND {
   public:
     using InputType = poly_eval::remove_cvref_t<fitInput_t<Func>>;
     using OutputType = poly_eval::remove_cvref_t<fitOutput_t<Func>>;
@@ -324,8 +325,8 @@ template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEval
 
     constexpr FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b);
 
-    template<bool SIMD = true, class ModeTag = EvalAuto>
-    PF_FLATTEN constexpr OutputType operator()(const InputType &x, ModeTag = {}) const;
+    template<bool SIMD = true>
+    PF_FLATTEN constexpr OutputType operator()(const InputType &x) const;
     template<bool SIMD = true, class Point,
              class = enable_if_t<!std::is_same_v<remove_cvref_t<Point>, InputType> &&
                                   detail::isCompatibleNdPoint_v<Point, DIM, InputScalar>>>
@@ -387,14 +388,14 @@ template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE> class FuncEval
     constexpr void buildCoeffs(int nCoeffsPerAxis, Func f, const DomainParams &dp);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);
     constexpr void reverseCoefficientOrder(int nCoeffsPerAxis);
-    template<bool SIMD, class Point, class ModeTag = EvalAuto>
+    template<bool SIMD, class Point>
     [[nodiscard]] constexpr OutputType evalPoint(const Point &x) const;
     template<class Point> [[nodiscard]] static constexpr CanonicalInput toCanonicalInput(const Point &x) noexcept;
     [[nodiscard]] static constexpr InputType fromCanonicalInput(const CanonicalInput &x) noexcept;
     [[nodiscard]] static constexpr CanonicalOutput toCanonicalOutput(const OutputType &x) noexcept;
     [[nodiscard]] static constexpr OutputType fromCanonicalOutput(const CanonicalOutput &x) noexcept;
-    template<bool SIMD = true, class ModeTag = EvalAuto>
-    [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x, ModeTag = {}) const noexcept;
+    template<bool SIMD = true>
+    [[nodiscard]] constexpr CanonicalOutput evalCanonical(const CanonicalInput &x) const noexcept;
     [[nodiscard]] static constexpr CanonicalInput mapToDomain(const CanonicalInput &x, const DomainParams &dp) noexcept;
     [[nodiscard]] constexpr CanonicalInput mapFromDomain(const CanonicalInput &x) const noexcept;
     constexpr void fuseNDDomain(DomainParams &dp, int nCoeffsPerAxis);
