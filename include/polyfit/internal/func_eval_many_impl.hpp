@@ -117,6 +117,14 @@ void FuncEvalMany<EvalTypes...>::operator()(const InputType *PF_RESTRICT x, Outp
 }
 PF_FAST_EVAL_END
 
+PF_FAST_EVAL_BEGIN
+template<typename... EvalTypes>
+void FuncEvalMany<EvalTypes...>::evaluateChunk(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
+                                               std::size_t chunkSize) const noexcept {
+    (*this)(x, out, chunkSize);
+}
+PF_FAST_EVAL_END
+
 template<typename... EvalTypes>
 template<typename... Ts>
 auto FuncEvalMany<EvalTypes...>::operator()(InputType first, Ts... rest) const noexcept -> std::array<OutputType, COUNT> {

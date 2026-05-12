@@ -203,6 +203,44 @@ template<typename... EvalTypes> class FuncEvalMany {
     std::array<OutputType, COUNT> operator()(const std::array<InputType, COUNT> &xs) const noexcept;
     void operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept;
 
+    /**
+     * @brief Recommended chunk granularity (in points) for evaluateChunk.
+     *
+     * Equals SIMD_WIDTH * optimalManyEvalUf<OutputType>() — the column-tiled
+     * batch path's block size, below which the multi-accumulator unroll
+     * cannot run a full tile.
+     */
+    static constexpr std::size_t kChunkBlockSize = SIMD_WIDTH * detail::optimalManyEvalUf<OutputType>();
+
+    /**
+     * @brief Chunked batch entry point for callers that drive their own
+     *        per-chunk post-processing (e.g. permuted scatter into a
+     *        destination buffer).
+     *
+     * Writes COUNT * chunkSize contiguous outputs into @p out, laid out
+     * as out[i*COUNT + j] = polynomial j evaluated at x[i]. Behaviour is
+     * identical to operator()(x, out, chunkSize); the separate name
+     * documents the intended usage pattern:
+     *
+     * @code
+     *   std::array<OutputType, kChunkBlockSize * COUNT> scratch;
+     *   for (std::size_t off = 0; off < n; off += kChunkBlockSize) {
+     *       const auto m = std::min(kChunkBlockSize, n - off);
+     *       group.evaluateChunk(x + off, scratch.data(), m);
+     *       for (std::size_t k = 0; k < m; ++k)
+     *           std::copy_n(scratch.begin() + k * COUNT, COUNT,
+     *                       dst + perm[off + k] * COUNT);
+     *   }
+     * @endcode
+     *
+     * The hot inner kernel is identical to the contiguous batch path,
+     * so per-chunk calls keep the multi-accumulator SIMD unroll. Any
+     * chunkSize is accepted; chunks of kChunkBlockSize or its multiples
+     * are optimal.
+     */
+    void evaluateChunk(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
+                       std::size_t chunkSize) const noexcept;
+
     template<typename... Ts> std::array<OutputType, COUNT> operator()(InputType first, Ts... rest) const noexcept;
     template<typename... Ts> std::array<OutputType, COUNT> operator()(const std::tuple<Ts...> &tup) const noexcept;
 
