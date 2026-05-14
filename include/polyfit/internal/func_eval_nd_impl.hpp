@@ -155,7 +155,7 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const 
         // Higher Dim builds deeper nested accumulator state per chain,
         // so unrolling spills registers; restrict unroll to low Dim.
         constexpr std::size_t U = (DIM <= 2) ? 2 : 1;
-        const int nCoeffsRt = nCoeffsPerAxis();
+        const int nCoeffsRt = static_cast<int>(nCoeffsPerAxis());
 
         auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
             alignas(kAlign) Scalar buf[DIM][B];
@@ -204,6 +204,85 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const 
         }
         // Tail: scalar fallback for the leftover < B points.
         for (; i < count; ++i) out[i] = evalCanonical<>(pts[i]);
+    }
+}
+
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
+                                                     const std::uint32_t *perm, std::size_t count) const noexcept {
+    // Scatter-write twin of the contiguous batch overload above. The only
+    // difference is the final store target: out[perm[k]] instead of out[k].
+    using batch_t = xsimd::batch<Scalar>;
+    constexpr std::size_t B = batch_t::size;
+    if constexpr (OUT_DIM != 1 || B <= 1) {
+        for (std::size_t i = 0; i < count; ++i) out[perm[i]] = evalCanonical<>(pts[i]);
+        return;
+    } else {
+        constexpr std::size_t kAlign = batch_t::arch_type::alignment();
+        constexpr std::size_t U = (DIM <= 2) ? 2 : 1;
+        const int nCoeffsRt = static_cast<int>(nCoeffsPerAxis());
+
+        auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
+            alignas(kAlign) Scalar buf[DIM][B];
+            for (std::size_t b = 0; b < B; ++b)
+                for (std::size_t d = 0; d < DIM; ++d)
+                    buf[d][b] = pts[base + b][d];
+
+            std::array<batch_t, DIM> x_v;
+            for (std::size_t d = 0; d < DIM; ++d) {
+                batch_t v = batch_t::load_aligned(buf[d]);
+                if constexpr (FUSION_MODE != FusionMode::Always) {
+                    if (!domain_.identityDomain) {
+                        v = polyfit::internal::helpers::mapFromDomainScalar<batch_t, Scalar>(
+                            v, domain_.invSpan[d], domain_.sumEndpoints[d]);
+                    }
+                }
+                x_v[d] = v;
+            }
+            return x_v;
+        };
+
+        auto storeBatch = [&](std::size_t base, batch_t res) PF_ALWAYS_INLINE_LAMBDA {
+            alignas(kAlign) Scalar outbuf[B];
+            res.store_aligned(outbuf);
+            for (std::size_t b = 0; b < B; ++b) out[perm[base + b]][0] = outbuf[b];
+        };
+
+        std::size_t i = 0;
+        for (; i + U * B <= count; i += U * B) {
+            std::array<std::array<batch_t, DIM>, U> x_vU;
+            for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
+
+            std::array<batch_t, U> resU;
+            for (std::size_t u = 0; u < U; ++u) {
+                resU[u] = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                    x_vU[u], coeffsMd, nCoeffsRt);
+            }
+
+            for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
+        }
+        for (; i + B <= count; i += B) {
+            auto x_v = loadPointsAt(i);
+            batch_t res = detail::horner_nd_acrossPts<DIM, NCOEFFS, batch_t>(
+                x_v, coeffsMd, nCoeffsRt);
+            storeBatch(i, res);
+        }
+        // Tail: scalar fallback for the leftover < B points.
+        for (; i < count; ++i) out[perm[i]] = evalCanonical<>(pts[i]);
+    }
+}
+
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
+constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const CanonicalInput *pts,
+                                                     std::array<Scalar *, OUT_DIM> soa_out,
+                                                     std::size_t count) const noexcept {
+    // SoA-output twin: writes each component to its own stride-1 array. Point
+    // at a time — no SIMD across points (the across-points path requires AoS
+    // shuffles that aren't worth doing here; an SoA-aware vector path is a
+    // separate optimisation).
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto result = evalCanonical<>(pts[i]);
+        for (std::size_t d = 0; d < OUT_DIM; ++d) soa_out[d][i] = result[d];
     }
 }
 

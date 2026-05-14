@@ -23,6 +23,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <type_traits>
 #if defined(__has_include)
 #  if __has_include(<span>)
@@ -334,6 +335,24 @@ class FuncEvalND {
     template<class... Coords, class = enable_if_t<acceptsCoords_v<Coords...>>>
     PF_FLATTEN constexpr OutputType operator()(Coords... coords) const;
     constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, std::size_t count) const noexcept;
+    /**
+     * @brief Scatter-write batch overload — stores result at @p out[@p perm[k]] instead of @p out[k].
+     *
+     * Identical kernel to the contiguous batch overload above; only the final
+     * store target differs. Enables downstream consumers (e.g. permute-back
+     * tiles) to land results in a permuted destination without an intermediate
+     * AoS buffer.
+     */
+    constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, const std::uint32_t *perm,
+                              std::size_t count) const noexcept;
+    /**
+     * @brief SoA-output batch overload — writes each output component to a
+     * separate stride-1 array instead of AoS.
+     *
+     * For each point k, writes @p soa_out[d][k] = result[d] for d in [0, OUT_DIM).
+     */
+    constexpr void operator()(const CanonicalInput *pts, std::array<Scalar *, OUT_DIM> soa_out,
+                              std::size_t count) const noexcept;
 #if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)
     PF_FLATTEN constexpr void operator()(std::span<const CanonicalInput> pts, std::span<CanonicalOutput> out) const;
 #endif
