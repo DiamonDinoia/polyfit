@@ -193,6 +193,50 @@ horner_nd_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs, int
     return horner_axis_acrossPts<0, Dim, NCOEFFS, Batch>(x_v, coeffs, idx, nCoeffsRt);
 }
 
+// Multi-output across-points Horner. Same Axis-recursive structure as
+// horner_axis_acrossPts but the accumulator is a per-output-component
+// array of batches instead of a single batch. Used by the SoA-output
+// batch path where each component d is written to its own stride-1
+// buffer, so OUT_DIM independent FMA chains run in lockstep and the
+// store is a plain `store_aligned` per component (no AoS shuffle).
+template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM,
+         typename Batch, typename Mdspan>
+PF_ALWAYS_INLINE PF_FLATTEN std::array<Batch, OUT_DIM>
+horner_axis_acrossPts_multi(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
+                            std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
+    static_assert(Axis < Dim, "Axis must be < Dim");
+    std::array<Batch, OUT_DIM> acc{};
+    poet::static_for<OUT_DIM>([&](auto d) { acc[d] = Batch(0); });
+    forEachCoeff<NCOEFFS>(nCoeffsRt, [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA {
+        idx[Axis] = k;
+        std::array<Batch, OUT_DIM> inner{};
+        if constexpr (Axis + 1 == Dim) {
+            // Leaf: broadcast each output component's coefficient to a Batch.
+            poet::static_for<OUT_DIM>([&](auto d) {
+                inner[d] = Batch(coeffAt<Dim>(coeffs, idx, d));
+            });
+        } else {
+            inner = horner_axis_acrossPts_multi<Axis + 1, Dim, NCOEFFS, OUT_DIM, Batch>(
+                x_v, coeffs, idx, nCoeffsRt);
+        }
+        poet::static_for<OUT_DIM>([&](auto d) {
+            acc[d] = xsimd::fma(acc[d], x_v[Axis], inner[d]);
+        });
+    });
+    return acc;
+}
+
+template<std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM,
+         typename Batch, typename Mdspan>
+PF_ALWAYS_INLINE PF_FLATTEN std::array<Batch, OUT_DIM>
+horner_nd_acrossPts_multi(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs, int nCoeffsRt) {
+    static_assert(Dim >= 1, "horner_nd_acrossPts_multi requires Dim >= 1");
+    static_assert(OUT_DIM >= 1, "horner_nd_acrossPts_multi requires OUT_DIM >= 1");
+    std::array<std::size_t, Dim> idx{};
+    return horner_axis_acrossPts_multi<0, Dim, NCOEFFS, OUT_DIM, Batch>(
+        x_v, coeffs, idx, nCoeffsRt);
+}
+
 } // namespace detail
 
 template<std::size_t NCOEFFS = 0, typename OutputType, typename InputType>
