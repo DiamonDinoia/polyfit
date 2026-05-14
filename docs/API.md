@@ -262,7 +262,9 @@ Useful members:
 
 - `operator()(x)` evaluates one point
 - `operator()(x0, x1, ..., xN)` evaluates from separate coordinates
-- `operator()(pts, out, count)` evaluates a batch of canonical ND points
+- `operator()(pts, out, count)` evaluates a batch of canonical ND points (AoS output: interleaved `Scalar[OUT_DIM]`)
+- `operator()(pts, out, perm, count)` evaluates a batch with scatter-write — result for `pts[k]` lands at `out[perm[k]]`; use when downstream wants permuted-AoS landings without an intermediate buffer
+- `operator()(pts, soa_out, count)` writes outputs in SoA (one stride-1 buffer per output dim, `soa_out[d][k]`); use when downstream consumes outputs per-component, avoids the AoS shuffle on store
 - `operator()(span_pts, span_out)` evaluates a batch through `std::span` when available
 - `operator()(points, out)` evaluates batches stored in `data()`-backed outer containers
 - `nCoeffsPerAxis()` returns the active coefficient count used on each axis

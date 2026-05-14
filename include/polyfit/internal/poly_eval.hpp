@@ -153,9 +153,8 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &
 // independent points in lockstep, where B = Batch::size. Each batch lane
 // carries one point's intermediate accumulator; FMAs become packed instead
 // of scalar. Coefficients are scalar — broadcast to a batch on each step.
-//
-// Specialised to OUT_DIM = 1 (the common scalar-output case). Multi-output
-// fits keep using the existing OUT-dim SIMD path.
+// The accumulator is a per-output-component array of batches, so OUT_DIM
+// independent FMA chains run in lockstep.
 //
 // Implementation: the per-axis Horner is written as a generic
 // `Axis`-recursive helper using `poet::static_for` (via `forEachCoeff`)
@@ -163,42 +162,6 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &
 // is forced to inline every recursive instance — without it, deep
 // instantiations get outlined and the inner-axis FMAs degrade to real
 // `call` instructions instead of a single packed FMA stream.
-template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS,
-         typename Batch, typename Mdspan>
-PF_ALWAYS_INLINE PF_FLATTEN Batch
-horner_axis_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
-                      std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
-    static_assert(Axis < Dim, "Axis must be < Dim");
-    Batch acc(0);
-    forEachCoeff<NCOEFFS>(nCoeffsRt, [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA {
-        idx[Axis] = k;
-        Batch inner;
-        if constexpr (Axis + 1 == Dim) {
-            // OUT_DIM = 1: leaf coefficient is scalar, broadcast to all lanes.
-            inner = Batch(coeffAt<Dim>(coeffs, idx, 0));
-        } else {
-            inner = horner_axis_acrossPts<Axis + 1, Dim, NCOEFFS, Batch>(
-                x_v, coeffs, idx, nCoeffsRt);
-        }
-        acc = xsimd::fma(acc, x_v[Axis], inner);
-    });
-    return acc;
-}
-
-template<std::size_t Dim, std::size_t NCOEFFS, typename Batch, typename Mdspan>
-PF_ALWAYS_INLINE PF_FLATTEN Batch
-horner_nd_acrossPts(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs, int nCoeffsRt) {
-    static_assert(Dim >= 1, "horner_nd_acrossPts requires Dim >= 1");
-    std::array<std::size_t, Dim> idx{};
-    return horner_axis_acrossPts<0, Dim, NCOEFFS, Batch>(x_v, coeffs, idx, nCoeffsRt);
-}
-
-// Multi-output across-points Horner. Same Axis-recursive structure as
-// horner_axis_acrossPts but the accumulator is a per-output-component
-// array of batches instead of a single batch. Used by the SoA-output
-// batch path where each component d is written to its own stride-1
-// buffer, so OUT_DIM independent FMA chains run in lockstep and the
-// store is a plain `store_aligned` per component (no AoS shuffle).
 template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM,
          typename Batch, typename Mdspan>
 PF_ALWAYS_INLINE PF_FLATTEN std::array<Batch, OUT_DIM>

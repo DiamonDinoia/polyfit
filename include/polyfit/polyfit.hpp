@@ -334,26 +334,55 @@ class FuncEvalND {
     PF_FLATTEN constexpr OutputType operator()(const Point &x) const;
     template<class... Coords, class = enable_if_t<acceptsCoords_v<Coords...>>>
     PF_FLATTEN constexpr OutputType operator()(Coords... coords) const;
+    /**
+     * @brief Contiguous AoS batch overload.
+     *
+     * @param pts   pointer to @p count CanonicalInput values (AoS: an
+     *              interleaved buffer of `Scalar[DIM]` points).
+     * @param out   pointer to @p count CanonicalOutput values (AoS: an
+     *              interleaved buffer of `Scalar[OUT_DIM]` results).
+     * @param count number of points.
+     *
+     * Pick this when results land in a contiguous AoS destination. Supported
+     * for any `OUT_DIM >= 1`; the SIMD-across-points kernel collapses to a
+     * single Batch chain when `OUT_DIM == 1`.
+     */
     constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, std::size_t count) const noexcept;
     /**
-     * @brief Scatter-write batch overload — stores result at @p out[@p perm[k]] instead of @p out[k].
+     * @brief Scatter-write AoS batch overload — stores result at @p out[@p perm[k]] instead of @p out[k].
      *
-     * Identical kernel to the contiguous batch overload above; only the final
-     * store target differs. Enables downstream consumers (e.g. permute-back
-     * tiles) to land results in a permuted destination without an intermediate
-     * AoS buffer.
+     * @param pts   pointer to @p count CanonicalInput values (AoS layout).
+     * @param out   pointer to AoS @p CanonicalOutput slots; result for input
+     *              @p pts[k] is written to @p out[perm[k]].
+     * @param perm  pointer to @p count destination indices.
+     * @param count number of points.
+     *
+     * Pick this when downstream wants permuted-AoS landings (e.g. permute-back
+     * tiles) without an intermediate buffer. Supported for any `OUT_DIM >= 1`.
      */
     constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, const std::uint32_t *perm,
                               std::size_t count) const noexcept;
     /**
-     * @brief SoA-output batch overload — writes each output component to a
-     * separate stride-1 array instead of AoS.
+     * @brief SoA-output batch overload — one stride-1 buffer per output component.
      *
-     * For each point k, writes @p soa_out[d][k] = result[d] for d in [0, OUT_DIM).
+     * @param pts     pointer to @p count CanonicalInput values (AoS layout).
+     * @param soa_out array of OUT_DIM pointers; element @p d of point @p k is
+     *                written to @p soa_out[d][k].
+     * @param count   number of points.
+     *
+     * Pick this when downstream consumes outputs per-component (one
+     * stride-1 array per output dim) — avoids the AoS shuffle on store.
+     * Supported for any `OUT_DIM >= 1`.
      */
     constexpr void operator()(const CanonicalInput *pts, std::array<Scalar *, OUT_DIM> soa_out,
                               std::size_t count) const noexcept;
 #if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)
+    /**
+     * @brief Span wrapper around the contiguous AoS batch overload.
+     *
+     * Equivalent to `operator()(pts.data(), out.data(), pts.size())` with a
+     * size-equality check. Available when `std::span` is supported.
+     */
     PF_FLATTEN constexpr void operator()(std::span<const CanonicalInput> pts, std::span<CanonicalOutput> out) const;
 #endif
     template<class Points, class Outputs, class = enable_if_t<acceptsBatchContainers_v<Points, Outputs>>>
@@ -403,6 +432,15 @@ class FuncEvalND {
     static Extents makeExtents(int nCoeffsPerAxis) noexcept;
     template<std::size_t... Is> static Extents makeExtents(int nCoeffsPerAxis, std::index_sequence<Is...>) noexcept;
     static constexpr std::size_t storageRequired(int nCoeffsPerAxis) noexcept;
+
+    // Across-points SIMD tile driver shared by the AoS, scatter-AoS, and
+    // SoA batch overloads. StoreBatch receives (base, std::array<Batch,OUT_DIM>);
+    // StoreScalar receives (i, CanonicalOutput). PF_FLATTEN forces inlining so
+    // the store callback fuses into the tile loop and codegen does not outline.
+    template<class StoreBatch, class StoreScalar>
+    PF_FLATTEN constexpr void dispatchAcrossPts(const CanonicalInput *pts, std::size_t count,
+                                                StoreBatch storeBatch,
+                                                StoreScalar storeScalar) const noexcept;
 
     constexpr void buildCoeffs(int nCoeffsPerAxis, Func f, const DomainParams &dp);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);

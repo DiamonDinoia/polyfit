@@ -167,6 +167,9 @@ ND evaluators also accept any fixed-size container type with `size()` and
   supported
 - `approx(points, out)` accepts `data()`-backed outer containers whose element
   types are fixed-size ND containers
+- scatter-write (`approx(pts, out, perm, count)`) and SoA-output
+  (`approx(pts, soa_out, count)` with one stride-1 buffer per output dim)
+  variants are available for batch evaluation
 
 For fixed-count ND fits, the template-bounds form supports constexpr
 construction in C++20 when the callable is `constexpr`:
