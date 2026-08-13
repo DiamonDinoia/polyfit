@@ -54,7 +54,7 @@ include(${CPM_DOWNLOAD_LOCATION})
 CPMAddPackage(
         NAME xsimd
         GITHUB_REPOSITORY xtensor-stack/xsimd
-        GIT_TAG 14.0.0
+        GIT_TAG 14.3.0
         OPTIONS
         "XSIMD_BUILD_TESTS OFF"
         "XSIMD_BUILD_BENCHMARKS OFF"
@@ -85,7 +85,7 @@ endif ()
 CPMAddPackage(
         NAME poet
         GITHUB_REPOSITORY DiamonDinoia/poet
-        GIT_TAG dfb54db
+        GIT_TAG dfb3e800a1e52c68333170cf1126335eef818535
         OPTIONS
         "POET_BUILD_TESTS OFF"
         "BUILD_TESTING OFF"

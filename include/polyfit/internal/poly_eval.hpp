@@ -413,7 +413,7 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffTy
             if (c_size >= 1 && c_size <= kHybridRuntimeDispatchMax) {
                 return poet::dispatch(
                     hybrid_dispatch_functor<EvalType, CoeffType, InputType, K_OVERRIDE>{x, c_ptr},
-                    poet::DispatchParam<poet::make_range<1, static_cast<int>(kHybridRuntimeDispatchMax)>>{
+                    poet::dispatch_param<poet::inclusive_range<1, static_cast<int>(kHybridRuntimeDispatchMax)>>{
                         static_cast<int>(c_size)});
             }
             return horner_impl<0, EvalType>(x, c_ptr, c_size);
