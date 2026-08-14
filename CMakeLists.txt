@@ -51,24 +51,36 @@ include(${CPM_DOWNLOAD_LOCATION})
 # -----------------------------------------
 # Dependencies (as subprojects so they can install with us)
 # -----------------------------------------
-CPMAddPackage(
-        NAME xsimd
-        GITHUB_REPOSITORY xtensor-stack/xsimd
-        GIT_TAG 14.3.0
-        OPTIONS
-        "XSIMD_BUILD_TESTS OFF"
-        "XSIMD_BUILD_BENCHMARKS OFF"
-)
+# Skip the fetch when a parent project already supplies the target. Safe only
+# because the whole stack pins xsimd 14.3.0 and poet v0.0.1; a divergent pin
+# would be silently discarded here.
+if (NOT TARGET xsimd)
+    CPMAddPackage(
+            NAME xsimd
+            GITHUB_REPOSITORY xtensor-stack/xsimd
+            GIT_TAG 14.3.0
+            OPTIONS
+            "XSIMD_BUILD_TESTS OFF"
+            "XSIMD_BUILD_BENCHMARKS OFF"
+    )
+endif ()
 
 # Only download kokkos/mdspan when the compiler lacks native std::mdspan.
+# Probe at the library's own C++17, not the configure-time default: the tests
+# compile these headers at several standards and the lowest one decides.
 include(CheckCXXSourceCompiles)
-check_cxx_source_compiles("
-    #include <version>
-    #if !defined(__cpp_lib_mdspan) || __cpp_lib_mdspan < 202207L
-    #error no native mdspan
-    #endif
-    int main() {}
+set(CMAKE_REQUIRED_QUIET ON)
+block()
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    check_cxx_source_compiles("
+        #include <version>
+        #if !defined(__cpp_lib_mdspan) || __cpp_lib_mdspan < 202207L
+        #error no native mdspan
+        #endif
+        int main() {}
 " POLYFIT_HAS_NATIVE_MDSPAN)
+endblock()
 
 if (NOT POLYFIT_HAS_NATIVE_MDSPAN)
     CPMAddPackage(
@@ -82,14 +94,16 @@ if (NOT POLYFIT_HAS_NATIVE_MDSPAN)
     )
 endif ()
 
-CPMAddPackage(
-        NAME poet
-        GITHUB_REPOSITORY DiamonDinoia/poet
-        GIT_TAG dfb3e800a1e52c68333170cf1126335eef818535
-        OPTIONS
-        "POET_BUILD_TESTS OFF"
-        "BUILD_TESTING OFF"
-)
+if (NOT TARGET poet AND NOT TARGET poet::poet)
+    CPMAddPackage(
+            NAME poet
+            GITHUB_REPOSITORY DiamonDinoia/poet
+            GIT_TAG v0.0.1
+            OPTIONS
+            "POET_BUILD_TESTS OFF"
+            "BUILD_TESTING OFF"
+    )
+endif ()
 
 # When using the kokkos CPM package: create std::mdspan alias if needed.
 # When using native mdspan: create a no-op std::mdspan target so link lines stay uniform.
