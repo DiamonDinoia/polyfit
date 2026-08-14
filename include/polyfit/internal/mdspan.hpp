@@ -1,8 +1,8 @@
 #pragma once
 
-// Single definition site for `stdex`. <version> first, so the alias never
-// depends on include order. The threshold matches POLYFIT_HAS_NATIVE_MDSPAN
-// in CMakeLists.txt; both decide the kokkos/mdspan package identically.
+// Single definition site for `stdex`. CMake sets POLYFIT_USE_STD_MDSPAN so every
+// TU in a build agrees; the __cpp_lib_mdspan probe below is the fallback for use
+// without CMake.
 
 #if defined(__has_include)
 #  if __has_include(<version>)
@@ -10,7 +10,15 @@
 #  endif
 #endif
 
-#if defined(__cpp_lib_mdspan) && __cpp_lib_mdspan >= 202207L
+#if !defined(POLYFIT_USE_STD_MDSPAN)
+#  if defined(__cpp_lib_mdspan) && __cpp_lib_mdspan >= 202207L
+#    define POLYFIT_USE_STD_MDSPAN 1
+#  else
+#    define POLYFIT_USE_STD_MDSPAN 0
+#  endif
+#endif
+
+#if POLYFIT_USE_STD_MDSPAN
 #include <mdspan>
 namespace stdex = std;
 #else

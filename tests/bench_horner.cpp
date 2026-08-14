@@ -19,7 +19,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <experimental/mdspan>
 #include <random>
 #include <string>
 #include <vector>
@@ -226,7 +225,7 @@ int main() {
         constexpr size_t Dim = 2;
         std::vector<double> coeffs(nCoeffs * nCoeffs * Dim);
         for (auto &c : coeffs) c = dist(rng);
-        std::experimental::mdspan<const double, std::experimental::dextents<size_t, 3>> C(
+        stdex::mdspan<const double, stdex::dextents<size_t, 3>> C(
             coeffs.data(), nCoeffs, nCoeffs, Dim);
         std::array<double, Dim> x{dist(rng), dist(rng)};
 
@@ -246,7 +245,7 @@ int main() {
         constexpr size_t Dim = 3;
         std::vector<double> coeffs(nCoeffs * nCoeffs * nCoeffs * Dim);
         for (auto &c : coeffs) c = dist(rng);
-        std::experimental::mdspan<const double, std::experimental::dextents<size_t, 4>> C(
+        stdex::mdspan<const double, stdex::dextents<size_t, 4>> C(
             coeffs.data(), nCoeffs, nCoeffs, nCoeffs, Dim);
         std::array<double, Dim> x{dist(rng), dist(rng), dist(rng)};
 
@@ -267,7 +266,7 @@ int main() {
         auto total = static_cast<size_t>(std::pow(nCoeffs, 4) * Dim);
         std::vector<double> coeffs(total);
         for (auto &c : coeffs) c = dist(rng);
-        std::experimental::mdspan<const double, std::experimental::dextents<size_t, 5>> C(
+        stdex::mdspan<const double, stdex::dextents<size_t, 5>> C(
             coeffs.data(), nCoeffs, nCoeffs, nCoeffs, nCoeffs, Dim);
         std::array<double, Dim> x{dist(rng), dist(rng), dist(rng), dist(rng)};
 

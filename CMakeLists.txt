@@ -51,6 +51,7 @@ include(${CPM_DOWNLOAD_LOCATION})
 # -----------------------------------------
 # Dependencies (as subprojects so they can install with us)
 # -----------------------------------------
+
 # Skip the fetch when a parent project already supplies the target. Safe only
 # because the whole stack pins xsimd 14.3.0 and poet v0.0.1; a divergent pin
 # would be silently discarded here.
@@ -66,12 +67,22 @@ if (NOT TARGET xsimd)
 endif ()
 
 # Only download kokkos/mdspan when the compiler lacks native std::mdspan.
-# Probe at the library's own C++17, not the configure-time default: the tests
-# compile these headers at several standards and the lowest one decides.
+# Probe at the lowest standard any TU in this build uses: native mdspan must be
+# available there, or every TU needs the kokkos package.
+set(_polyfit_min_std 17)
+if (DEFINED CMAKE_CXX_STANDARD)
+    set(_polyfit_min_std ${CMAKE_CXX_STANDARD})
+endif ()
+foreach (_std IN LISTS POLYFIT_TEST_STANDARDS)
+    if (_std LESS _polyfit_min_std)
+        set(_polyfit_min_std ${_std})
+    endif ()
+endforeach ()
+
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_QUIET ON)
 block()
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD ${_polyfit_min_std})
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     check_cxx_source_compiles("
         #include <version>
@@ -81,6 +92,7 @@ block()
         int main() {}
 " POLYFIT_HAS_NATIVE_MDSPAN)
 endblock()
+message(STATUS "Polyfit mdspan: probe at C++${_polyfit_min_std}, native=${POLYFIT_HAS_NATIVE_MDSPAN}")
 
 if (NOT POLYFIT_HAS_NATIVE_MDSPAN)
     CPMAddPackage(
@@ -130,6 +142,13 @@ set_target_properties(polyfit PROPERTIES
 target_include_directories(polyfit INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+)
+
+# Carries the configure-time mdspan decision to every TU, so a TU compiled at a
+# higher standard cannot bind `stdex` to a different namespace than the one the
+# fetched package provides.
+target_compile_definitions(polyfit INTERFACE
+        POLYFIT_USE_STD_MDSPAN=$<BOOL:${POLYFIT_HAS_NATIVE_MDSPAN}>
 )
 
 # IMPORTANT:
