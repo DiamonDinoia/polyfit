@@ -10,13 +10,7 @@
 #include <utility>
 #include <vector>
 
-#if __cpp_lib_mdspan >= 202310L
-#include <mdspan>
-namespace stdex = std;
-#else
-#include <experimental/mdspan>
-namespace stdex = std::experimental;
-#endif
+#include "mdspan.hpp"
 
 #include "api_types.hpp"
 #include "helpers.hpp"

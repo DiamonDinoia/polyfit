@@ -31,13 +31,7 @@
 #  endif
 #endif
 
-#if __cpp_lib_mdspan >= 202310L
-#include <mdspan>
-namespace stdex = std;
-#else
-#include <experimental/mdspan>
-namespace stdex = std::experimental;
-#endif
+#include "internal/mdspan.hpp"
 
 #include "internal/api_types.hpp"
 #include "internal/macros.hpp"
