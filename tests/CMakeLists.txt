@@ -16,7 +16,7 @@ include(PolyfitStaticAnalysis)
 CPMAddPackage(
         NAME googletest
         GITHUB_REPOSITORY google/googletest
-        VERSION 1.17.0
+        VERSION 1.18.0
         OPTIONS
         "INSTALL_GTEST OFF"
         "gtest_force_shared_crt ON"
@@ -27,7 +27,7 @@ CPMAddPackage(
 CPMAddPackage(
         nanobench
         GITHUB_REPOSITORY martinus/nanobench
-        GIT_TAG v4.3.11
+        GIT_TAG v4.6.0
 )
 
 option(POLYFIT_ENABLE_BENCH_FAST_MATH "Enable fast-math for benchmark targets" OFF)

@@ -23,10 +23,10 @@ jobs:
         toolchain: [gcc-14, gcc-15, llvm-20, llvm-21]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup C++ toolchain
-        uses: aminya/setup-cpp@v1
+        uses: aminya/setup-cpp@v1.8.1
         with:
           compiler: ${{ matrix.toolchain }}
           cmake: true
@@ -84,7 +84,7 @@ jobs:
           done
 
       - name: Upload results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-results-${{ matrix.toolchain }}
           path: results/${{ matrix.toolchain }}/
@@ -96,10 +96,10 @@ jobs:
     needs: benchmark
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download all benchmark results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: bench-results-*
           path: all-results/
@@ -116,7 +116,7 @@ jobs:
           python3 scripts/analyze_bench.py all-results/ benchmark-results/
 
       - name: Upload benchmark results artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmark-results/

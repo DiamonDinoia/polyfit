@@ -28,8 +28,8 @@ include(PolyfitAmalgamate)
 # -----------------------------------------
 # CPM (CMake Package Manager) bootstrap
 # -----------------------------------------
-set(CPM_DOWNLOAD_VERSION 0.42.1)
-set(CPM_HASH_SUM "f3a6dcc6a04ce9e7f51a127307fa4f699fb2bade357a8eb4c5b45df76e1dc6a5")
+set(CPM_DOWNLOAD_VERSION 0.43.1)
+set(CPM_HASH_SUM "1c40fc102ce9625d7de7eb14f541cab30cc3138dca627f0b0ec40293ce6c2934")
 
 if (CPM_SOURCE_CACHE)
     set(CPM_DOWNLOAD_LOCATION "${CPM_SOURCE_CACHE}/cpm/CPM_${CPM_DOWNLOAD_VERSION}.cmake")

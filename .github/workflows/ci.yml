@@ -42,10 +42,10 @@ jobs:
           - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup C++ toolchain
-        uses: aminya/setup-cpp@v1
+        uses: aminya/setup-cpp@v1.8.1
         with:
           compiler: ${{ matrix.toolchain }}
           cmake: true
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.os }}-${{ matrix.toolchain }}-logs
           path: |
@@ -125,10 +125,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup C++ toolchain
-        uses: aminya/setup-cpp@v1
+        uses: aminya/setup-cpp@v1.8.1
         with:
           compiler: gcc
           cmake: true
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload Valgrind logs
         if: failure() && steps.march_support.outputs.supported == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: valgrind-${{ matrix.march }}-logs
           path: |
@@ -202,7 +202,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install tooling
         run: |
@@ -236,7 +236,7 @@ jobs:
 
       - name: Upload analysis logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: analysis-logs
           path: |
@@ -251,10 +251,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup C++ toolchain
-        uses: aminya/setup-cpp@v1
+        uses: aminya/setup-cpp@v1.8.1
         with:
           compiler: gcc-13
           cmake: true
@@ -280,7 +280,7 @@ jobs:
         run: cmake --build build/coverage --target coverage
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: |
