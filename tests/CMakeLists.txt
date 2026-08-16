@@ -73,6 +73,10 @@ function(polyfit_configure_benchmark_target target std)
     polyfit_apply_bench_profile(${target})
 endfunction()
 
+# Ninja-only: a one-slot pool for translation units too large to compile
+# alongside each other. Other generators ignore JOB_POOL_COMPILE.
+set_property(GLOBAL PROPERTY JOB_POOLS polyfit_heavy=1)
+
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
 # -----------------------------------------------------------------------------
@@ -149,6 +153,11 @@ if (POLYFIT_BUILD_BENCHMARKS)
 endif ()
 
 add_polyfit_test_matrix(test_ND test_ND_accuracy.cpp test_ND_api.cpp test_ND_fusion.cpp)
+# test_ND_accuracy.cpp peaks at 7.1 GiB under clang, 24x the next heaviest TU.
+# One standard at a time keeps the whole matrix inside a 16 GiB runner.
+foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
+    set_property(TARGET test_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_heavy)
+endforeach ()
 if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
 endif ()
