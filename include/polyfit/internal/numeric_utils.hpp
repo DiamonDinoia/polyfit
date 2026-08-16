@@ -106,7 +106,7 @@ constexpr double sqrt(double x) noexcept {
 
 } // namespace math
 
-constexpr double cos(const double x) noexcept {
+PF_ALWAYS_INLINE constexpr double cos(const double x) noexcept {
     PF_STATIC_CONSTEXPR_LOCAL double PIO2_HI = 1.57079632679489655800e+00;
     PF_STATIC_CONSTEXPR_LOCAL double PIO2_LO = 6.12323399573676603587e-17;
     PF_STATIC_CONSTEXPR_LOCAL double INV_PIO2 = 6.36619772367581382433e-01;

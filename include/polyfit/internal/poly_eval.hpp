@@ -88,6 +88,11 @@ PF_ALWAYS_INLINE constexpr void forEachCoeff(int nCoeffsRt, Step &&step) {
 }
 
 struct ScalarEvalTag {};
+
+/// `Arch` is a phantom parameter. It puts the compile-time ISA into the mangled
+/// name of every SIMD `horner_nd_impl` instantiation, so a consumer that compiles
+/// one TU at several `-march` levels gets distinct symbols instead of one COMDAT.
+template<class Arch>
 struct SimdEvalTag {};
 
 template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
@@ -115,8 +120,9 @@ PF_ALWAYS_INLINE constexpr OutT horner_nd_impl(ScalarEvalTag, const InVec &x, co
     return res;
 }
 
-template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan>
-PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &coeffs,
+template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename Arch, typename InVec,
+         typename Mdspan>
+PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag<Arch>, const InVec &x, const Mdspan &coeffs,
                                      std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     constexpr std::size_t axis = Dim - Level;
     constexpr std::size_t OUT = std::tuple_size_v<OutT>;
@@ -130,7 +136,7 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag, const InVec &x, const Mdspan &
         idx[axis] = k;
         alignas(batch::arch_type::alignment()) OutT inner{};
         if constexpr (Level > 1) {
-            inner = horner_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(SimdEvalTag{}, x, coeffs, idx, nCoeffsRt);
+            inner = horner_nd_impl<Level - 1, Dim, NCOEFFS, OutT>(SimdEvalTag<Arch>{}, x, coeffs, idx, nCoeffsRt);
         } else {
             poet::static_for<OUT>([&](auto i) { inner[i] = coeffAt<Dim>(coeffs, idx, i); });
         }
@@ -785,7 +791,8 @@ PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int
     constexpr std::size_t Dim = Mdspan::rank() - 1;
     std::array<std::size_t, Dim> idx{};
     return detail::horner_nd_impl<Dim, Dim, NCOEFFS, OutT>(
-        std::conditional_t<SIMD, detail::SimdEvalTag, detail::ScalarEvalTag>{}, x, coeffs, idx, nCoeffsRt);
+        std::conditional_t<SIMD, detail::SimdEvalTag<xsimd::best_arch>, detail::ScalarEvalTag>{}, x, coeffs, idx,
+        nCoeffsRt);
 }
 
 // ND hybrid front-end: Estrin-blocked Horner per axis. Falls back to plain
