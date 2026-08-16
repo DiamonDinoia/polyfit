@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The heaviest TU (test_ND_accuracy.cpp at C++26) peaks at 3.1 GiB. Ninja
+# defaults to nproc+2 = 6 jobs, so 18 GiB against a 16 GiB runner.
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 3
+
 jobs:
   build:
     name: ${{ matrix.os }} (${{ matrix.toolchain }} ${{ matrix.build_type }})
@@ -21,7 +26,7 @@ jobs:
         include:
           # Ubuntu Debug
           # gcc/gcc-14 sanitizer builds are memory-intensive; limit to C++17
-          # to avoid OOM on the 7 GB GitHub Actions runner
+          # to avoid OOM on the 16 GiB GitHub Actions runner
           - {os: ubuntu-24.04, toolchain: gcc,     build_type: Debug, test_standards: "17"}
           - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Debug}
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Debug, test_standards: "17"}
@@ -178,7 +183,7 @@ jobs:
 
       - name: Build
         if: steps.march_support.outputs.supported == 'true'
-        run: cmake --build build/valgrind-${{ matrix.march }} -j
+        run: cmake --build build/valgrind-${{ matrix.march }}
 
       - name: Memcheck (CTest)
         if: steps.march_support.outputs.supported == 'true'
