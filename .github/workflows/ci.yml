@@ -10,8 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The heaviest TU (test_ND_accuracy.cpp at C++26) peaks at 3.1 GiB. Ninja
-# defaults to nproc+2 = 6 jobs, so 18 GiB against a 16 GiB runner.
+# The heaviest test TUs (one ND monomial instantiation each) peak at several
+# GiB; two 4096-coefficient outliers carry their own test_ND_xl target with a
+# one-slot Ninja pool. 3 parallel jobs plus the pools keep the 16 GiB runner
+# safe.
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 3
 

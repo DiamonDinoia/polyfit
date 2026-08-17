@@ -34,6 +34,14 @@ function(polyfit_enable_sanitizers target)
   endif()
   list(REMOVE_DUPLICATES _sanitize_flags)
 
+  # AddressSanitizer + UndefinedBehaviorSanitizer + full debug info interact
+  # pathologically on heavily inlined template TUs (peak cc1 memory grows
+  # ~25x). Line tables (-g1, appended last so it overrides the build-type -g)
+  # keep file:line precision in sanitizer reports.
+  if(POLYFIT_ENABLE_ASAN AND POLYFIT_ENABLE_UBSAN)
+    list(APPEND _sanitize_flags -g1)
+  endif()
+
   set(_gnu_or_clang $<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>)
   set(_lang_is_cxx $<COMPILE_LANGUAGE:CXX>)
 

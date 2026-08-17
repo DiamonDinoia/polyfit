@@ -65,6 +65,9 @@ function(polyfit_configure_benchmark_target target std)
     set_property(TARGET ${target} PROPERTY CXX_EXTENSIONS OFF)
     target_compile_options(${target} PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang>:-O3>
+            # Debug-config -g inflates the -O3 ND instantiation TUs 3x in
+            # memory; line tables are all a profiler needs. Last option wins.
+            $<$<CXX_COMPILER_ID:GNU,Clang>:-g1>
             $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_FAST_MATH}>,$<CXX_COMPILER_ID:GNU,Clang>>:-ffast-math>
             $<$<AND:$<BOOL:${POLYFIT_ENABLE_BENCH_NATIVE_TUNING}>,$<CXX_COMPILER_ID:GNU,Clang>>:-march=native>
@@ -73,9 +76,12 @@ function(polyfit_configure_benchmark_target target std)
     polyfit_apply_bench_profile(${target})
 endfunction()
 
-# Ninja-only: a one-slot pool for translation units too large to compile
-# alongside each other. Other generators ignore JOB_POOL_COMPILE.
-set_property(GLOBAL PROPERTY JOB_POOLS polyfit_heavy=1)
+# Ninja-only pools bounding the peak memory of parallel template-heavy TUs.
+# polyfit_xl: the two 4096-coefficient monomial TUs (12.3/7.8 GiB each at -O0,
+# ~1.5 GiB at -O3) never compile concurrently. polyfit_heavy: the remaining
+# mid-weight TUs (several GiB each) run four at a time. Other generators
+# ignore JOB_POOL_COMPILE.
+set_property(GLOBAL PROPERTY JOB_POOLS polyfit_xl=1 polyfit_heavy=4)
 
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
@@ -132,13 +138,22 @@ function(add_polyfit_benchmark_matrix NAME)
 endfunction()
 
 add_polyfit_test_matrix(test_horner test_horner.cpp)
-add_polyfit_test_matrix(test_hybrid test_hybrid.cpp)
+add_polyfit_test_matrix(test_hybrid
+        test_hybrid_runtime_dispatch.cpp
+        test_hybrid_compile_time.cpp
+        test_hybrid_transposed.cpp
+)
 if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(bench_horner bench_horner.cpp)
     add_polyfit_benchmark_matrix(bench_unroll_sweep bench_unroll_sweep.cpp)
 endif ()
 
-add_polyfit_test_matrix(test1D_basic      test_1D_basic.cpp)
+add_polyfit_test_matrix(test1D_basic
+        test_1D_basic_runtime.cpp
+        test_1D_basic_compile_time.cpp
+        test_1D_basic_complex.cpp
+        test_1D_basic_constexpr.cpp
+)
 add_polyfit_test_matrix(test1D_truncation test_1D_truncation.cpp)
 add_polyfit_test_matrix(test1D_accuracy   test_1D_accuracy.cpp)
 add_polyfit_test_matrix(test1D_fusion     test_1D_fusion.cpp)
@@ -152,14 +167,60 @@ if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(benchMany bench_many.cpp)
 endif ()
 
-add_polyfit_test_matrix(test_ND test_ND_accuracy.cpp test_ND_api.cpp test_ND_fusion.cpp)
-# test_ND_accuracy.cpp peaks at 7.1 GiB under clang, 24x the next heaviest TU.
-# One standard at a time keeps the whole matrix inside a 16 GiB runner.
+# ND monomial-fitting TESTs are one instantiation per TU
+# (test_ND_accuracy_in*_out*_deg*.cpp): a single TU carrying them all peaked
+# at 7.1 GiB under clang and ~20 GiB / ~15 min per standard under GCC. The
+# pool caps how many heavies compile at once so the matrix stays inside a
+# 16 GiB runner.
+set(POLYFIT_ND_MONOMIAL_TESTS
+        test_ND_accuracy_in2_out2_deg16.cpp
+        test_ND_accuracy_in2_out3_deg16.cpp
+        test_ND_accuracy_in3_out3_deg8.cpp
+        test_ND_accuracy_in3_out4_deg8.cpp
+        test_ND_accuracy_in4_out4_deg4.cpp
+)
+add_polyfit_test_matrix(test_ND
+        test_ND_accuracy.cpp
+        test_ND_api.cpp
+        test_ND_fusion_matches_auto.cpp
+        test_ND_fusion_no_domain_params.cpp
+        test_ND_fusion_wide_domain.cpp
+        test_ND_fusion_vector_valued.cpp
+        test_ND_fusion_never.cpp
+        ${POLYFIT_ND_MONOMIAL_TESTS}
+)
+# The 4096-coefficient instantiations get their own target so the one-slot
+# polyfit_xl pool never compiles two of them at once.
+add_polyfit_test_matrix(test_ND_monomial_xl
+        test_ND_accuracy_in3_out2_deg16.cpp
+        test_ND_accuracy_in4_out3_deg8.cpp
+)
+foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
+    set_property(TARGET test_ND_monomial_xl_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_xl)
+endforeach ()
+# Monomial TUs with 512+ tensor coefficients are untenable under sanitizers
+# (~15 MiB per tensor coefficient); POLYFIT_TESTS_REDUCE_ND swaps their TEST
+# bodies to GTEST_SKIP. The 256-coefficient TUs keep sanitizer coverage of the
+# ND machinery; full degrees run in the non-sanitizer jobs. MSVC applies no
+# sanitizer here (PolyfitSanitizers.cmake warns and returns), so it never sets
+# the definition and keeps full coverage.
+if (NOT MSVC AND (POLYFIT_ENABLE_ASAN OR POLYFIT_ENABLE_UBSAN))
+    set_source_files_properties(
+            test_ND_accuracy_in3_out2_deg16.cpp
+            test_ND_accuracy_in3_out3_deg8.cpp
+            test_ND_accuracy_in3_out4_deg8.cpp
+            test_ND_accuracy_in4_out3_deg8.cpp
+            PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
+    )
+endif ()
 foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
     set_property(TARGET test_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_heavy)
 endforeach ()
 if (POLYFIT_BUILD_BENCHMARKS)
-    add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp)
+    add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp bench_ND_build.cpp bench_ND_eval.cpp bench_ND_misc.cpp)
+    foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
+        set_property(TARGET bench_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_heavy)
+    endforeach ()
 endif ()
 
 add_polyfit_test_matrix(test_general test_general.cpp)
