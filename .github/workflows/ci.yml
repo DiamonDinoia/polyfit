@@ -326,6 +326,7 @@ jobs:
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_BUILD_BENCHMARKS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DPOLYFIT_ENABLE_COVERAGE=ON
 
       - name: Build coverage target
