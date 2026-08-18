@@ -67,13 +67,11 @@ jobs:
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26", skip_xl: true}
-          # Windows — C++26 disabled on MSVC. Release rows are tests-only:
-          # cl at /O2 is several times slower than the Linux toolchains, and
-          # benches/examples re-pay their cost in every per-standard job.
+          # Windows — C++26 disabled on MSVC. MSVC Release is dropped: cl at
+          # /O2 needs several times the per-TU time of the Linux toolchains
+          # and no per-standard/tests-only split fits the 90-minute job cap;
+          # Debug keeps the full Windows compile+test coverage.
           - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true, test_standards: "17;20;23"}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "17", skip_xl: true, tests_only: true}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "20", skip_xl: true, tests_only: true}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "23", skip_xl: true, tests_only: true}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
