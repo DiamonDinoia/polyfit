@@ -85,6 +85,14 @@ jobs:
           cache-tools: true
           vcvarsall: ${{ runner.os == 'Windows' }}
 
+      # Linux only; keyed per toolchain/build/standard, rolling via the
+      # action's timestamped saves. Cold keys pay only install+save overhead.
+      - name: ccache
+        if: ${{ runner.os == 'Linux' }}
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ci-${{ matrix.toolchain }}-${{ matrix.build_type }}-cxx${{ matrix.test_standards }}
+
       - name: Configure
         if: ${{ !matrix.multi_config }}
         shell: bash
@@ -101,6 +109,10 @@ jobs:
           if [ "${{ matrix.skip_xl }}" = "true" ]; then
             SKIP_XL_ARG="-DPOLYFIT_TESTS_SKIP_XL=ON"
           fi
+          LAUNCHER_ARG=""
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            LAUNCHER_ARG="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          fi
           cmake -S . -B build/${{ matrix.build_type }} \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -110,7 +122,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS} \
-            ${TEST_STANDARDS_ARG} ${SKIP_XL_ARG}
+            ${TEST_STANDARDS_ARG} ${SKIP_XL_ARG} ${LAUNCHER_ARG}
 
       - name: Build
         if: ${{ !matrix.multi_config }}
@@ -185,6 +197,11 @@ jobs:
           ninja: true
           cache-tools: true
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: valgrind-${{ matrix.march }}
+
       - name: Install Valgrind
         run: |
           sudo apt-get update
@@ -221,6 +238,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMEMORYCHECK_COMMAND:FILEPATH="${valgrind_bin}" \
             -DMEMORYCHECK_COMMAND_OPTIONS:STRING="--leak-check=full --show-leak-kinds=definite,possible --errors-for-leak-kinds=definite --error-exitcode=1 --track-origins=yes --undef-value-errors=yes" \
             -DMEMORYCHECK_TYPE:STRING=Valgrind
@@ -250,6 +268,7 @@ jobs:
   analysis:
     name: Static Analysis
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -259,17 +278,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang clang-tidy cppcheck ninja-build cmake
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: analysis
+
       - name: Configure analysis
         env:
           CC: clang
           CXX: clang++
         run: |
+          # C++17 only + skip_xl: the per-standard Release clang builds (and
+          # the XL opt-out) are already covered by the llvm matrix jobs; the
+          # full 4-standard sweep with serialized xl TUs was the CI tail.
           cmake -S . -B build/analyze \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPOLYFIT_BUILD_TESTS=ON \
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_BUILD_BENCHMARKS=OFF \
+            -DPOLYFIT_TEST_STANDARDS=17 \
+            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
@@ -312,6 +342,11 @@ jobs:
           ninja: true
           cache-tools: true
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: coverage
+
       - name: Install coverage tools
         run: |
           sudo apt-get update
@@ -322,6 +357,7 @@ jobs:
           cmake -S . -B build/coverage \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPOLYFIT_BUILD_TESTS=ON \
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_BUILD_BENCHMARKS=OFF \
@@ -330,6 +366,10 @@ jobs:
             -DPOLYFIT_ENABLE_COVERAGE=ON
 
       - name: Build coverage target
+        env:
+          # The coverage target embeds a bare ctest call; -O0 test binaries
+          # are small, three at a time stays well under 16 GiB.
+          CTEST_PARALLEL_LEVEL: 3
         run: cmake --build build/coverage --target coverage
 
       - name: Upload coverage artifacts

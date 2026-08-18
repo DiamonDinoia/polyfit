@@ -17,6 +17,7 @@ jobs:
   benchmark:
     name: Benchmark (${{ matrix.toolchain }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -33,12 +34,18 @@ jobs:
           ninja: true
           cache-tools: true
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: bench-${{ matrix.toolchain }}
+
       - name: Configure
         shell: bash
         run: |
           cmake -S . -B build/bench \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-mavx2 -mfma" \
             -DPOLYFIT_BUILD_TESTS=ON \
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
