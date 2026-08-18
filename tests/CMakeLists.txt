@@ -227,12 +227,15 @@ if (NOT MSVC AND (POLYFIT_ENABLE_ASAN OR POLYFIT_ENABLE_UBSAN))
     )
 endif ()
 
-# The two 4096-coefficient TUs also exceed a 90-minute CI build under clang
-# and MSVC at -O2/-O3 (gcc does them in seconds); jobs can opt out.
+# The 4096-coefficient instantiations (the two XL test TUs and the matching
+# bench rows) also exceed a 90-minute CI build under clang and MSVC at
+# -O2/-O3 (gcc does them in seconds); jobs can opt out.
 if (POLYFIT_TESTS_SKIP_XL)
     set_source_files_properties(
             test_ND_accuracy_in3_out2_deg16.cpp
             test_ND_accuracy_in4_out3_deg8.cpp
+            bench_ND_build.cpp
+            bench_ND_eval.cpp
             PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
     )
 endif ()
