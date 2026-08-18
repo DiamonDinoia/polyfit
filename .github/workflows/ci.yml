@@ -49,30 +49,30 @@ jobs:
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "20"}
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "23"}
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "26"}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "17"}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "20"}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "23"}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "26"}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "17"}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "20"}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "23"}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "26"}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "17"}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "20"}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23"}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "17", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "20", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "23", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "26", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "17", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "20", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "23", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "26", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "17", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "20", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26", skip_xl: true}
           # macOS
           - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17", skip_xl: true}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20", skip_xl: true}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23", skip_xl: true}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26", skip_xl: true}
           # Windows
           - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "17"}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "20"}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "23"}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "26"}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "17", skip_xl: true}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "20", skip_xl: true}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "23", skip_xl: true}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "26", skip_xl: true}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -98,6 +98,10 @@ jobs:
           if [ -n "${{ matrix.test_standards }}" ]; then
             TEST_STANDARDS_ARG="-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
           fi
+          SKIP_XL_ARG=""
+          if [ "${{ matrix.skip_xl }}" = "true" ]; then
+            SKIP_XL_ARG="-DPOLYFIT_TESTS_SKIP_XL=ON"
+          fi
           cmake -S . -B build/${{ matrix.build_type }} \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -107,7 +111,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS} \
-            ${TEST_STANDARDS_ARG}
+            ${TEST_STANDARDS_ARG} ${SKIP_XL_ARG}
 
       - name: Build
         if: ${{ !matrix.multi_config }}
@@ -125,6 +129,10 @@ jobs:
           if ("${{ matrix.test_standards }}" -ne "") {
             $TEST_STANDARDS_ARG = "-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
           }
+          $SKIP_XL_ARG = ""
+          if ("${{ matrix.skip_xl }}" -eq "true") {
+            $SKIP_XL_ARG = "-DPOLYFIT_TESTS_SKIP_XL=ON"
+          }
           cmake -S . -B build `
             -A x64 `
             -DPOLYFIT_BUILD_TESTS=ON `
@@ -132,7 +140,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=ON `
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON `
             -DPOLYFIT_ENABLE_SANITIZERS=OFF `
-            $TEST_STANDARDS_ARG
+            $TEST_STANDARDS_ARG $SKIP_XL_ARG
 
       - name: Build (multi-config)
         if: matrix.multi_config

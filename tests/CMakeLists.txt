@@ -209,6 +209,8 @@ add_polyfit_test_matrix(test_ND_monomial_xl
 foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
     set_property(TARGET test_ND_monomial_xl_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_xl)
 endforeach ()
+option(POLYFIT_TESTS_SKIP_XL "GTEST_SKIP the two 4096-coefficient ND monomial TESTs" OFF)
+
 # Monomial TUs with 512+ tensor coefficients are untenable under sanitizers
 # (~15 MiB per tensor coefficient); POLYFIT_TESTS_REDUCE_ND swaps their TEST
 # bodies to GTEST_SKIP. The 256-coefficient TUs keep sanitizer coverage of the
@@ -220,6 +222,16 @@ if (NOT MSVC AND (POLYFIT_ENABLE_ASAN OR POLYFIT_ENABLE_UBSAN))
             test_ND_accuracy_in3_out2_deg16.cpp
             test_ND_accuracy_in3_out3_deg8.cpp
             test_ND_accuracy_in3_out4_deg8.cpp
+            test_ND_accuracy_in4_out3_deg8.cpp
+            PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
+    )
+endif ()
+
+# The two 4096-coefficient TUs also exceed a 90-minute CI build under clang
+# and MSVC at -O2/-O3 (gcc does them in seconds); jobs can opt out.
+if (POLYFIT_TESTS_SKIP_XL)
+    set_source_files_properties(
+            test_ND_accuracy_in3_out2_deg16.cpp
             test_ND_accuracy_in4_out3_deg8.cpp
             PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
     )
