@@ -19,9 +19,9 @@ env:
 
 jobs:
   build:
-    name: ${{ matrix.os }} (${{ matrix.toolchain }} ${{ matrix.build_type }})
+    name: ${{ matrix.os }} (${{ matrix.toolchain }} ${{ matrix.build_type }}${{ matrix.test_standards != '' && format(' cxx{0}', matrix.test_standards) || '' }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -35,19 +35,44 @@ jobs:
           - {os: ubuntu-24.04, toolchain: llvm,    build_type: Debug}
           - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Debug}
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Debug}
-          # Ubuntu Release
-          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release}
-          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release}
-          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release}
+          # Ubuntu Release — one standard per job: the full matrix at -O3
+          # exceeds the job timeout on the slower toolchains.
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: gcc,     build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: gcc-13,  build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26"}
           # macOS
           - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26"}
           # Windows
           - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "17"}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "20"}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "23"}
+          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "26"}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -96,13 +121,18 @@ jobs:
         if: matrix.multi_config
         shell: pwsh
         run: |
+          $TEST_STANDARDS_ARG = ""
+          if ("${{ matrix.test_standards }}" -ne "") {
+            $TEST_STANDARDS_ARG = "-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
+          }
           cmake -S . -B build `
             -A x64 `
             -DPOLYFIT_BUILD_TESTS=ON `
             -DPOLYFIT_BUILD_EXAMPLES=ON `
             -DPOLYFIT_STRICT_WARNINGS=ON `
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON `
-            -DPOLYFIT_ENABLE_SANITIZERS=OFF
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF `
+            $TEST_STANDARDS_ARG
 
       - name: Build (multi-config)
         if: matrix.multi_config
@@ -118,7 +148,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.os }}-${{ matrix.toolchain }}-logs
+          name: ${{ matrix.os }}-${{ matrix.toolchain }}-${{ matrix.build_type }}${{ matrix.test_standards != '' && format('-cxx{0}', matrix.test_standards) || '' }}-logs
           path: |
             build/**/Testing/**/*.log
             build/**/Testing/**/*.xml

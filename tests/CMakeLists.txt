@@ -88,13 +88,24 @@ set_property(GLOBAL PROPERTY JOB_POOLS polyfit_xl=1 polyfit_heavy=4)
 # -----------------------------------------------------------------------------
 # Standards to test/build: by default start at C++17 and add every later
 # standard the compiler supports. CI jobs may override this cache variable to
-# trim expensive configurations, for example Valgrind-only memory checks.
+# trim expensive configurations, for example Valgrind-only memory checks or
+# per-standard Release jobs on heterogeneous toolchains; requested standards
+# the compiler cannot enable are dropped.
 set(POLYFIT_TEST_STANDARDS "" CACHE STRING
         "Semicolon-separated C++ standards to build for tests and benchmarks; empty means auto-detect from C++17 upward")
+set(_polyfit_supported 17)
+foreach(_std IN ITEMS 20 23 26)
+    if (cxx_std_${_std} IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+        list(APPEND _polyfit_supported ${_std})
+    endif ()
+endforeach()
 if (POLYFIT_TEST_STANDARDS STREQUAL "")
-    set(POLYFIT_TEST_STANDARDS 17)
-    foreach(_std IN ITEMS 20 23 26)
-        if (cxx_std_${_std} IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+    set(POLYFIT_TEST_STANDARDS ${_polyfit_supported})
+else ()
+    set(_polyfit_requested ${POLYFIT_TEST_STANDARDS})
+    set(POLYFIT_TEST_STANDARDS "")
+    foreach(_std IN LISTS _polyfit_requested)
+        if (_std IN_LIST _polyfit_supported)
             list(APPEND POLYFIT_TEST_STANDARDS ${_std})
         endif ()
     endforeach()
