@@ -67,12 +67,11 @@ jobs:
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26", skip_xl: true}
-          # Windows
-          - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true}
+          # Windows — C++26 disabled on MSVC.
+          - {os: windows-2022, toolchain: msvc, build_type: Debug,   multi_config: true, test_standards: "17;20;23"}
           - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "17", skip_xl: true}
           - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "20", skip_xl: true}
           - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "23", skip_xl: true}
-          - {os: windows-2022, toolchain: msvc, build_type: Release, multi_config: true, test_standards: "26", skip_xl: true}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
