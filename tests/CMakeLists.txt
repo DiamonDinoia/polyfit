@@ -229,8 +229,11 @@ foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
 endforeach ()
 if (POLYFIT_BUILD_BENCHMARKS)
     add_polyfit_benchmark_matrix(bench_ND bench_ND.cpp bench_ND_build.cpp bench_ND_eval.cpp bench_ND_misc.cpp)
+    # bench_ND_eval carries the deg16-3D instantiations at -O3; clang's peaks
+    # on them OOM a 16 GiB runner when several compile at once (observed as
+    # benchmark CI jobs killed off by runner shutdowns). Serialise them.
     foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
-        set_property(TARGET bench_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_heavy)
+        set_property(TARGET bench_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_xl)
     endforeach ()
 endif ()
 
