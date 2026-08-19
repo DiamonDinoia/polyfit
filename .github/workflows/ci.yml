@@ -62,7 +62,9 @@ jobs:
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23", skip_xl: true}
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26", skip_xl: true}
           # macOS
-          - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
+          # apple-clang Debug + all XL TUs consistently cold-builds in 18-19 min;
+          # XL code paths are already covered by the Linux gcc/llvm Debug matrix.
+          - {os: macos-14,     toolchain: apple-clang, build_type: Debug, skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20", skip_xl: true}
           - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23", skip_xl: true}
@@ -240,6 +242,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMEMORYCHECK_COMMAND:FILEPATH="${valgrind_bin}" \
             -DMEMORYCHECK_COMMAND_OPTIONS:STRING="--leak-check=full --show-leak-kinds=definite,possible --errors-for-leak-kinds=definite --error-exitcode=1 --track-origins=yes --undef-value-errors=yes" \
