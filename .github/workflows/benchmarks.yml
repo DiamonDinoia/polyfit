@@ -51,7 +51,8 @@ jobs:
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
-            -DPOLYFIT_ENABLE_SANITIZERS=OFF
+            -DPOLYFIT_ENABLE_SANITIZERS=OFF \
+            -DPOLYFIT_XL_POOL_SIZE=2
 
       - name: Build benchmarks
         run: |

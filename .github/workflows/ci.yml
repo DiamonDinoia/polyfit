@@ -85,10 +85,12 @@ jobs:
           cache-tools: true
           vcvarsall: ${{ runner.os == 'Windows' }}
 
-      # Linux only; keyed per toolchain/build/standard, rolling via the
+      # Linux and macOS; keyed per toolchain/build/standard, rolling via the
       # action's timestamped saves. Cold keys pay only install+save overhead.
+      # Windows stays off: cl's /Zi PDB output defeats ccache without /Z7
+      # plumbing.
       - name: ccache
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ runner.os != 'Windows' }}
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ci-${{ matrix.toolchain }}-${{ matrix.build_type }}-cxx${{ matrix.test_standards }}
@@ -110,7 +112,7 @@ jobs:
             SKIP_XL_ARG="-DPOLYFIT_TESTS_SKIP_XL=ON"
           fi
           LAUNCHER_ARG=""
-          if [ "$RUNNER_OS" = "Linux" ]; then
+          if [ "$RUNNER_OS" != "Windows" ]; then
             LAUNCHER_ARG="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
           cmake -S . -B build/${{ matrix.build_type }} \
