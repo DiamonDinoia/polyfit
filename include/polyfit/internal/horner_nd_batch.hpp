@@ -131,16 +131,21 @@ PF_FLATTEN constexpr void horner_nd_batch_impl(const Mdspan &coeffs, const domai
         };
 
         std::size_t i = 0;
-        for (; i + U * B <= count; i += U * B) {
-            std::array<std::array<batch_t, DIM>, U> x_vU;
-            for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
+        // Emitted only when U > 1: at U == 1 this loop has the same trip
+        // condition as the single-tile loop below, so it would duplicate the
+        // whole unrolled Horner nest for a loop that never runs.
+        if constexpr (U > 1) {
+            for (; i + U * B <= count; i += U * B) {
+                std::array<std::array<batch_t, DIM>, U> x_vU;
+                for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
 
-            std::array<std::array<batch_t, OUT_DIM>, U> resU;
-            for (std::size_t u = 0; u < U; ++u) {
-                resU[u] = detail::horner_nd_acrossPts_multi<DIM, NCOEFFS, OUT_DIM, batch_t>(x_vU[u], coeffs,
-                                                                                            nCoeffsRt);
+                std::array<std::array<batch_t, OUT_DIM>, U> resU;
+                for (std::size_t u = 0; u < U; ++u) {
+                    resU[u] = detail::horner_nd_acrossPts_multi<DIM, NCOEFFS, OUT_DIM, batch_t>(x_vU[u], coeffs,
+                                                                                                nCoeffsRt);
+                }
+                for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
             }
-            for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
         }
         for (; i + B <= count; i += B) {
             auto x_v = loadPointsAt(i);
