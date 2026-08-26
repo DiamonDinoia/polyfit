@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 
 project(polyfit
-        VERSION 0.0.3
+        VERSION 0.0.4
         DESCRIPTION "A fast polynomial fitting evaluation library"
         LANGUAGES CXX
 )
