@@ -136,123 +136,48 @@ FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::evalCanonical(const CanonicalInp
 }
 PF_FAST_EVAL_END
 
-// Across-points SIMD tile driver. Each lane of `batch_t` carries one point's
-// intermediate Horner accumulator, so FMAs become packed. The multi-output
-// helper returns one Batch per output component; how those are written to
-// memory is the only thing the three public overloads differ on, so the AoS,
-// scatter-AoS, and SoA shells reduce to choosing a store callback. The
-// OUT_DIM=1 case specialises cleanly (one Batch per chain).
+// The AoS, scatter-AoS, and SoA batch overloads forward to the eval-only
+// free functions in horner_nd_batch.hpp over the stored coefficient view.
+// The scalar tail there re-selects the kernel from SK/HK, so behaviour
+// matches the member scalar path.
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
-template<class StoreBatch, class StoreScalar>
-PF_FLATTEN constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::dispatchAcrossPts(
-    const CanonicalInput *pts, std::size_t count,
-    StoreBatch storeBatch, StoreScalar storeScalar) const noexcept {
-    using batch_t = xsimd::batch<Scalar>;
-    constexpr std::size_t B = batch_t::size;
-    if constexpr (B <= 1) {
-        for (std::size_t i = 0; i < count; ++i) storeScalar(i, evalCanonical<>(pts[i]));
-        return;
-    } else {
-        constexpr std::size_t kAlign = batch_t::arch_type::alignment();
-        // Independent Horner accumulator chains per outer iteration give the
-        // FMA-throughput-bound inner loop more ILP. Higher Dim/OUT_DIM grows
-        // accumulator register footprint per chain, so unrolling spills —
-        // hand-tuned: hank103 DIM=1 OUT_DIM=4 prefers U=1 over U=2.
-        constexpr std::size_t U = (DIM <= 2 && OUT_DIM <= 2) ? 2 : 1;
-        const int nCoeffsRt = static_cast<int>(nCoeffsPerAxis());
+constexpr typename FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::ConstMdspan
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::coeffsMdspan() const noexcept {
+    return ConstMdspan{coeffsFlat.data(), coeffsMd.extents()};
+}
 
-        auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
-            alignas(kAlign) Scalar buf[DIM][B];
-            for (std::size_t b = 0; b < B; ++b)
-                for (std::size_t d = 0; d < DIM; ++d)
-                    buf[d][b] = pts[base + b][d];
-
-            std::array<batch_t, DIM> x_v;
-            for (std::size_t d = 0; d < DIM; ++d) {
-                batch_t v = batch_t::load_aligned(buf[d]);
-                if constexpr (FUSION_MODE != FusionMode::Always) {
-                    if (!domain_.identityDomain) {
-                        v = polyfit::internal::helpers::mapFromDomainScalar<batch_t, Scalar>(
-                            v, domain_.invSpan[d], domain_.sumEndpoints[d]);
-                    }
-                }
-                x_v[d] = v;
-            }
-            return x_v;
-        };
-
-        std::size_t i = 0;
-        for (; i + U * B <= count; i += U * B) {
-            std::array<std::array<batch_t, DIM>, U> x_vU;
-            for (std::size_t u = 0; u < U; ++u) x_vU[u] = loadPointsAt(i + u * B);
-
-            std::array<std::array<batch_t, OUT_DIM>, U> resU;
-            for (std::size_t u = 0; u < U; ++u) {
-                resU[u] = detail::horner_nd_acrossPts_multi<DIM, NCOEFFS, OUT_DIM, batch_t>(
-                    x_vU[u], coeffsMd, nCoeffsRt);
-            }
-            for (std::size_t u = 0; u < U; ++u) storeBatch(i + u * B, resU[u]);
-        }
-        for (; i + B <= count; i += B) {
-            auto x_v = loadPointsAt(i);
-            auto res = detail::horner_nd_acrossPts_multi<DIM, NCOEFFS, OUT_DIM, batch_t>(
-                x_v, coeffsMd, nCoeffsRt);
-            storeBatch(i, res);
-        }
-        // Tail: scalar fallback for the leftover < B points.
-        for (; i < count; ++i) storeScalar(i, evalCanonical<>(pts[i]));
+// Trailing return type: MSVC does not match an out-of-class definition whose
+// leading return type names a dependent non-type member (`::DIM`) as a
+// template argument (C2244).
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
+constexpr auto FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::domainView() const noexcept
+    -> domain_nd_view<InputScalar, DIM> {
+    domain_nd_view<InputScalar, DIM> dom{};
+    if constexpr (kStoresDomain) {
+        dom.inv_span = domain_.invSpan;
+        dom.sum_endpoints = domain_.sumEndpoints;
+        dom.identity = domain_.identityDomain;
     }
+    return dom;
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
                                                      std::size_t count) const noexcept {
-    using batch_t = xsimd::batch<Scalar>;
-    constexpr std::size_t B = batch_t::size;
-    dispatchAcrossPts(pts, count,
-        [&](std::size_t base, const std::array<batch_t, OUT_DIM> &res) PF_ALWAYS_INLINE_LAMBDA {
-            // SoA -> AoS shuffle on the output side: spill each per-component
-            // batch to aligned scratch, then re-interleave into the caller's
-            // AoS buffer. Scalar stores beat xsimd transpose helpers at low
-            // OUT_DIM (transpose adds cross-lane shuffles for a tiny re-pack).
-            alignas(batch_t::arch_type::alignment()) Scalar outbuf[OUT_DIM][B];
-            poet::static_for<OUT_DIM>([&](auto d) { res[d].store_aligned(outbuf[d]); });
-            for (std::size_t b = 0; b < B; ++b)
-                poet::static_for<OUT_DIM>([&](auto d) { out[base + b][d] = outbuf[d][b]; });
-        },
-        [&](std::size_t i, const CanonicalOutput &r) PF_ALWAYS_INLINE_LAMBDA { out[i] = r; });
+    horner_nd_batch<NCOEFFS, OUT_DIM, SK, HK>(coeffsMd, domainView(), pts, out, count);
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const CanonicalInput *pts, CanonicalOutput *out,
                                                      const std::uint32_t *perm, std::size_t count) const noexcept {
-    using batch_t = xsimd::batch<Scalar>;
-    constexpr std::size_t B = batch_t::size;
-    dispatchAcrossPts(pts, count,
-        [&](std::size_t base, const std::array<batch_t, OUT_DIM> &res) PF_ALWAYS_INLINE_LAMBDA {
-            alignas(batch_t::arch_type::alignment()) Scalar outbuf[OUT_DIM][B];
-            poet::static_for<OUT_DIM>([&](auto d) { res[d].store_aligned(outbuf[d]); });
-            for (std::size_t b = 0; b < B; ++b) {
-                const std::uint32_t dst = perm[base + b];
-                poet::static_for<OUT_DIM>([&](auto d) { out[dst][d] = outbuf[d][b]; });
-            }
-        },
-        [&](std::size_t i, const CanonicalOutput &r) PF_ALWAYS_INLINE_LAMBDA { out[perm[i]] = r; });
+    horner_nd_batch<NCOEFFS, OUT_DIM, SK, HK>(coeffsMd, domainView(), pts, out, perm, count);
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::operator()(const CanonicalInput *pts,
                                                      std::array<Scalar *, OUT_DIM> soa_out,
                                                      std::size_t count) const noexcept {
-    using batch_t = xsimd::batch<Scalar>;
-    dispatchAcrossPts(pts, count,
-        [&](std::size_t base, const std::array<batch_t, OUT_DIM> &res) PF_ALWAYS_INLINE_LAMBDA {
-            // Per-component stride-1 store — direct, no AoS shuffle.
-            poet::static_for<OUT_DIM>([&](auto d) { res[d].store_unaligned(soa_out[d] + base); });
-        },
-        [&](std::size_t i, const CanonicalOutput &r) PF_ALWAYS_INLINE_LAMBDA {
-            for (std::size_t d = 0; d < OUT_DIM; ++d) soa_out[d][i] = r[d];
-        });
+    horner_nd_batch_soa<NCOEFFS, OUT_DIM, SK, HK>(coeffsMd, domainView(), pts, soa_out, count);
 }
 
 #if defined(__cpp_lib_span) && (__cpp_lib_span >= 202002L)

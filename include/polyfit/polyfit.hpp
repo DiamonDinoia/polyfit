@@ -36,6 +36,7 @@
 #include "internal/api_types.hpp"
 #include "internal/macros.hpp"
 #include "internal/poly_eval.hpp"
+#include "internal/horner_nd_batch.hpp"
 
 namespace poly_eval {
 
@@ -98,17 +99,14 @@ class FuncEval {
     [[nodiscard]] PF_CXX20_CONSTEXPR const OutputBuffer &coeffs() const noexcept;
     [[nodiscard]] constexpr std::size_t nCoeffs() const noexcept;
 
-  private:
-#ifndef DOXYGEN_SHOULD_SKIP_THIS
-    struct DomainParams {
-        InputType invSpan{}, sumEndpoints{};
-        bool identityMap = false;
-    };
-    static constexpr bool kStoresDomain = (FUSION_MODE != FusionMode::Always);
-    struct EmptyDomain {};
-    PF_NO_UNIQUE_ADDRESS std::conditional_t<kStoresDomain, DomainParams, EmptyDomain> domain_;
-    OutputBuffer coeffsBuf;
-
+    /**
+     * @brief Domain-map parameters for external evaluation of `coeffs()`.
+     *
+     * The map to the canonical domain is
+     * `fma(2, x, -domainSumEndpoints()) * domainInvSpan()`;
+     * `domainIsIdentity()` reports whether the map can be skipped (identity
+     * domain, or the map fused into the coefficients).
+     */
     constexpr InputType domainInvSpan() const noexcept {
         if constexpr (kStoresDomain) return domain_.invSpan;
         else return InputType(0.5);
@@ -121,6 +119,17 @@ class FuncEval {
         if constexpr (kStoresDomain) return domain_.identityMap;
         else return true;
     }
+
+  private:
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+    struct DomainParams {
+        InputType invSpan{}, sumEndpoints{};
+        bool identityMap = false;
+    };
+    static constexpr bool kStoresDomain = (FUSION_MODE != FusionMode::Always);
+    struct EmptyDomain {};
+    PF_NO_UNIQUE_ADDRESS std::conditional_t<kStoresDomain, DomainParams, EmptyDomain> domain_;
+    OutputBuffer coeffsBuf;
 
     PF_CXX20_CONSTEXPR void initialize(detail::CompileTimeCountTag, Func F, InputType a, InputType b,
                                     const InputType *pts, DomainParams &dp);
@@ -391,6 +400,20 @@ class FuncEvalND {
     template<class IdxArray>
     [[nodiscard]] constexpr const Scalar &coeff(const IdxArray &idx, std::size_t k) const noexcept;
 
+    using ConstMdspan = stdex::mdspan<const Scalar, Extents, stdex::layout_right>;
+
+    /**
+     * @brief View of the coefficient buffer for external evaluation.
+     *
+     * Pass the view, together with `domainView()`, to
+     * `poly_eval::horner_nd_batch` / `horner_nd_batch_soa`. The view is
+     * invalidated by copy-assignment, move, and destruction of the evaluator.
+     */
+    [[nodiscard]] constexpr ConstMdspan coeffsMdspan() const noexcept;
+
+    /// Domain-map parameters paired with `coeffsMdspan()`.
+    [[nodiscard]] constexpr domain_nd_view<InputScalar, DIM> domainView() const noexcept;
+
     FuncEvalND(const FuncEvalND &other);
     FuncEvalND &operator=(const FuncEvalND &other);
     FuncEvalND(FuncEvalND &&other) noexcept;
@@ -426,15 +449,6 @@ class FuncEvalND {
     static Extents makeExtents(int nCoeffsPerAxis) noexcept;
     template<std::size_t... Is> static Extents makeExtents(int nCoeffsPerAxis, std::index_sequence<Is...>) noexcept;
     static constexpr std::size_t storageRequired(int nCoeffsPerAxis) noexcept;
-
-    // Across-points SIMD tile driver shared by the AoS, scatter-AoS, and
-    // SoA batch overloads. StoreBatch receives (base, std::array<Batch,OUT_DIM>);
-    // StoreScalar receives (i, CanonicalOutput). PF_FLATTEN forces inlining so
-    // the store callback fuses into the tile loop and codegen does not outline.
-    template<class StoreBatch, class StoreScalar>
-    PF_FLATTEN constexpr void dispatchAcrossPts(const CanonicalInput *pts, std::size_t count,
-                                                StoreBatch storeBatch,
-                                                StoreScalar storeScalar) const noexcept;
 
     constexpr void buildCoeffs(int nCoeffsPerAxis, Func f, const DomainParams &dp);
     constexpr void convertAxesToMonomialBasis(int nCoeffsPerAxis, const Buffer<Scalar, NCOEFFS> &nodes);

@@ -267,6 +267,7 @@ add_polyfit_test_matrix(test_portable_trig test_portable_trig.cpp)
 add_polyfit_test_matrix(test_scalar_kernel test_scalar_kernel.cpp)
 add_polyfit_test_matrix(test_block_size test_block_size.cpp)
 add_polyfit_test_matrix(test_scatter_and_soa test_scatter_and_soa.cpp)
+add_polyfit_test_matrix(test_eval_views test_eval_views.cpp)
 
 if (POLYFIT_BUILD_BENCHMARKS)
     foreach(STD IN LISTS POLYFIT_TEST_STANDARDS)

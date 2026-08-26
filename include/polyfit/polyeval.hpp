@@ -17,6 +17,9 @@
  *     `hybrid_transpose_coeffs` — SIMD transposed-coefficient variant
  *   - `horner_many`      — several 1D polynomials at one point
  *   - `horner_transposed` — several polynomials across many points
+ *   - `horner_nd_batch`,
+ *     `horner_nd_batch_soa` — across-points ND evaluation over external
+ *     coefficients (`make_coeffs_mdspan` + `domain_nd_view`)
  *
  * Include `polyfit/polyfit.hpp` instead if you also need the fitting API
  * (`FuncEval`, `FuncEvalMany`, `FuncEvalND`, `fit`, `pack`).
@@ -26,4 +29,5 @@
 
 #include "internal/macros.hpp"
 #include "internal/poly_eval.hpp"
+#include "internal/horner_nd_batch.hpp"
 #include "internal/macros_undef.hpp"
