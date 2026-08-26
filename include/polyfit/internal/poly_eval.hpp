@@ -78,12 +78,106 @@ PF_ALWAYS_INLINE constexpr auto coeffAt(const MdspanType &coeffs, const std::arr
     return coeffAtImpl<D, MdspanType>(coeffs, idx, std::make_index_sequence<D>{}, outputIndex);
 }
 
-template<std::size_t NCOEFFS, class Step>
+/// Vector registers one `Batch` occupies.
+///
+/// xsimd sizes a batch to one register on every supported target, but a caller
+/// may pin a batch wider than the build target provides -- an AVX-512 batch in
+/// an AVX2 build -- and then each accumulator costs several registers.
+template<typename Batch>
+constexpr auto registers_per_batch() noexcept -> std::size_t {
+    const std::size_t batch_bits = Batch::size * sizeof(typename Batch::value_type) * 8;
+    const std::size_t register_bits = poet::vector_width_bits();
+    return (batch_bits + register_bits - 1) / register_bits;
+}
+
+/// Horner accumulators the vector register file holds at once.
+///
+/// One accumulator is `registers_per_batch<Batch>()` registers wide. The nest
+/// also keeps the `Dim` broadcast point vectors and one set of OUT_DIM
+/// coefficient broadcasts live across the whole evaluation, so those come off
+/// the file first. Exceed what is left and the nest spills.
+template<std::size_t Dim, std::size_t OUT_DIM, typename Batch>
+constexpr auto affordable_chains() noexcept -> std::size_t {
+    const std::size_t per_chain = registers_per_batch<Batch>();
+    const std::size_t resident = (Dim + OUT_DIM) * per_chain;
+    const std::size_t total = poet::vector_register_count();
+    if constexpr (total <= resident + per_chain) { return 1; }
+    return (total - resident) / per_chain;
+}
+
+/// Independent Horner chains that keep the nest off its own critical path.
+///
+/// One chain stalls: the next FMA waits the full result latency with nothing to
+/// interleave. Two suffice here, because each Horner step also issues a
+/// coefficient broadcast and those loads fill the gap. Below the `ports *
+/// latency` occupancy bound of an isolated FMA chain, which this nest never
+/// reaches because the broadcasts share the same critical path.
+constexpr std::size_t kMinChains = 2;
+
+/// Unroll factor for coefficient axis `Axis` of the ND Horner nest: 0 emits the
+/// axis whole, 1 keeps it rolled.
+///
+/// The leaf axis is a serial chain of one FMA per coefficient per output
+/// component, so it exposes OUT_DIM chains and nothing more. Every axis outside
+/// the leaf evaluates one whole sub-nest per iteration, and consecutive
+/// sub-nests are independent, so emitting such an axis whole multiplies the
+/// chains below it by its coefficient count. The walk starts at the leaf and
+/// moves outward, emitting an axis whole only while the chains below it are
+/// still short of `kMinChains`. Once they are not, every remaining axis stays
+/// rolled: a further copy of the sub-nest adds no parallelism and costs
+/// instruction cache, and on this nest the axes outside the leaf hold all but
+/// a few dozen of the instructions.
+///
+/// There is deliberately nothing between whole and rolled. A block count that
+/// does not divide the axis leaves a remainder, and `poet::dynamic_for` runs
+/// remainders through an outlined tail: correct, but reached once per iteration
+/// of every enclosing axis, so the call dominates the loop it replaces.
+template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM, typename Batch>
+constexpr auto axis_unroll() noexcept -> std::size_t {
+    constexpr std::size_t affordable = affordable_chains<Dim, OUT_DIM, Batch>();
+
+    // The leaf holds the FMAs themselves, so roll it only when its accumulators
+    // do not fit the register file.
+    if constexpr (Axis + 1 == Dim) { return (OUT_DIM <= affordable) ? 0 : 1; }
+
+    // Runtime coefficient extents: there is no count to emit whole.
+    if constexpr (NCOEFFS == 0) { return 1; }
+
+    std::size_t chains = OUT_DIM; // the leaf's independent chains
+    for (std::size_t a = Dim - 1; a-- > Axis;) {
+        const bool whole = chains < kMinChains && chains * NCOEFFS <= affordable;
+        if (a == Axis) { return whole ? 0 : 1; }
+        chains *= whole ? NCOEFFS : 1;
+    }
+    return 1;
+}
+
+/// Walks the `NCOEFFS` (or `nCoeffsRt`) coefficients of one axis.
+///
+/// `Unroll == 0` emits the whole axis as straight-line code. Any other value
+/// emits blocks of `Unroll` iterations through `poet::dynamic_for`. `Unroll == 1`
+/// is a contract there: `dynamic_for` launders the trip count, so the axis stays
+/// rolled even when `NCOEFFS` makes it a compile-time constant.
+///
+/// A compile-time `NCOEFFS` splits as `Unroll * blocks + rem`. `dynamic_for`
+/// takes only the exact multiple, so its outlined remainder tail is provably
+/// unreachable and never emitted, and `static_for` emits the `rem` leftovers
+/// inline. A runtime count cannot be split, so it keeps the outlined tail.
+template<std::size_t NCOEFFS, std::size_t Unroll = 0, class Step>
 PF_ALWAYS_INLINE constexpr void forEachCoeff(int nCoeffsRt, Step &&step) {
-    if constexpr (NCOEFFS != 0) {
-        poet::static_for<NCOEFFS>([&](auto k) PF_ALWAYS_INLINE_LAMBDA { step(std::size_t(k)); });
+    const auto visit = [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA { step(k); };
+    if constexpr (Unroll == 0) {
+        if constexpr (NCOEFFS != 0) {
+            poet::static_for<NCOEFFS>([&](auto k) PF_ALWAYS_INLINE_LAMBDA { visit(std::size_t(k)); });
+        } else {
+            for (int k = 0; k < nCoeffsRt; ++k) visit(static_cast<std::size_t>(k));
+        }
+    } else if constexpr (NCOEFFS != 0) {
+        constexpr std::size_t kBlocked = (NCOEFFS / Unroll) * Unroll;
+        if constexpr (kBlocked != 0) { poet::dynamic_for<Unroll, 1>(std::size_t{0}, kBlocked, visit); }
+        poet::static_for<kBlocked, NCOEFFS>([&](auto k) PF_ALWAYS_INLINE_LAMBDA { visit(std::size_t(k)); });
     } else {
-        for (int k = 0; k < nCoeffsRt; ++k) step(static_cast<std::size_t>(k));
+        poet::dynamic_for<Unroll, 1>(std::size_t{0}, static_cast<std::size_t>(nCoeffsRt), visit);
     }
 }
 
@@ -174,9 +268,10 @@ PF_ALWAYS_INLINE PF_FLATTEN std::array<Batch, OUT_DIM>
 horner_axis_acrossPts_multi(const std::array<Batch, Dim> &x_v, const Mdspan &coeffs,
                             std::array<std::size_t, Dim> &idx, int nCoeffsRt) {
     static_assert(Axis < Dim, "Axis must be < Dim");
+    constexpr std::size_t kUnroll = axis_unroll<Axis, Dim, NCOEFFS, OUT_DIM, Batch>();
     std::array<Batch, OUT_DIM> acc{};
     poet::static_for<OUT_DIM>([&](auto d) { acc[d] = Batch(0); });
-    forEachCoeff<NCOEFFS>(nCoeffsRt, [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA {
+    forEachCoeff<NCOEFFS, kUnroll>(nCoeffsRt, [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA {
         idx[Axis] = k;
         std::array<Batch, OUT_DIM> inner{};
         if constexpr (Axis + 1 == Dim) {
