@@ -324,7 +324,8 @@ PF_ALWAYS_INLINE constexpr EvalType horner_impl(const InputType x, const CoeffTy
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
         EvalType acc = static_cast<EvalType>(c_ptr[0]);
-        poet::static_for<1, NCOEFFS>([&](auto i) { acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[i])); });
+        poet::static_for<1, NCOEFFS>(
+            [&](auto i) PF_ALWAYS_INLINE_LAMBDA { acc = detail::fma(acc, x, static_cast<EvalType>(c_ptr[i])); });
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
