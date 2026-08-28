@@ -14,17 +14,6 @@ template<typename T> constexpr T tol = std::numeric_limits<T>::epsilon() * T(64)
 
 double sinFunc(double x) { return std::sin(x); }
 
-template<class Eval, class T>
-T referenceHorner(const Eval &e, T x) {
-    // Reference: classical Horner with the same domain map as the evaluator.
-    // We re-implement the dispatch by reading coeffs (Horner order: highest
-    // first) and applying Horner directly. The domain map is already encoded
-    // into the coefficients (FusionMode) or applied per-eval; to make the
-    // reference independent we instantiate the Horner-kernel evaluator and
-    // call it.
-    return e(x);
-}
-
 TEST(ScalarKernel, FuncEvalDefaultIsHybrid) {
     using HybridEval = poly_eval::FuncEval<double(*)(double), 12, 1,
                                             poly_eval::FusionMode::Never>;
