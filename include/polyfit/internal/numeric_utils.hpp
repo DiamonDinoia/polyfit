@@ -1,9 +1,5 @@
 #pragma once
 
-#if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
-#include <bit>
-#endif
-
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -23,32 +19,6 @@ PF_ALWAYS_INLINE constexpr auto constEval(Fallback fallback, Runtime runtime) no
     PF_IF_CONSTEVAL { return fallback(); }
     return runtime();
 #endif
-}
-
-template<typename T> constexpr auto countr_zero(T x) noexcept {
-    static_assert(std::is_unsigned_v<T>, "countr_zero requires an unsigned integral type");
-#if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
-    return std::countr_zero(x);
-#else
-    constexpr int width = std::numeric_limits<T>::digits;
-    if (x == 0) {
-        return width;
-    }
-    int count = 0;
-    while ((x & T{1}) == T{0}) {
-        x >>= 1;
-        ++count;
-    }
-    return count;
-#endif
-}
-
-template<typename T> constexpr std::size_t getAlignment(const T *ptr) noexcept {
-    const auto address = reinterpret_cast<std::uintptr_t>(ptr);
-    if (address == 0) {
-        return 0;
-    }
-    return static_cast<std::size_t>(1) << countr_zero(address);
 }
 
 namespace constants {
