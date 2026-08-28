@@ -21,7 +21,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: [gcc-14, gcc-15, llvm-20, llvm-21]
+        # skip_xl drops the 4096-coefficient bench rows, as ci.yml already does
+        # for the same TUs: clang -O3 spends minutes and gigabytes per shape on
+        # them where gcc spends seconds, and one TU holding all three OOMs a
+        # 16 GiB runner. gcc keeps the rows, so the measurements still exist.
+        include:
+          - toolchain: gcc-14
+          - toolchain: gcc-15
+          - toolchain: llvm-20
+            skip_xl: true
+          - toolchain: llvm-21
+            skip_xl: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -42,6 +52,10 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          SKIP_XL_ARG=""
+          if [ "${{ matrix.skip_xl }}" = "true" ]; then
+            SKIP_XL_ARG="-DPOLYFIT_TESTS_SKIP_XL=ON"
+          fi
           cmake -S . -B build/bench \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -52,7 +66,8 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
-            -DPOLYFIT_XL_POOL_SIZE=2
+            -DPOLYFIT_XL_POOL_SIZE=2 \
+            ${SKIP_XL_ARG}
 
       - name: Build benchmarks
         run: |
