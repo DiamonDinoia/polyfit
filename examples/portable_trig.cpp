@@ -166,16 +166,6 @@ const char *feature_summary() noexcept {
 #endif
 }
 
-template<typename T>
-TimingResult run_portable_benchmark(std::string_view label, const std::vector<T> &angles, std::size_t passes) {
-    T checksum = T(0);
-    const double ns = benchmark_ns_per_call(
-        angles, passes,
-        [](T angle) { return polyfit_examples::portable_trig::sincos<T>(angle); },
-        checksum);
-    return TimingResult{label, ns, static_cast<double>(checksum)};
-}
-
 template<typename T, int TolDigits>
 TimingResult run_portable_benchmark(std::string_view label, const std::vector<T> &angles, std::size_t passes) {
     T checksum = T(0);
