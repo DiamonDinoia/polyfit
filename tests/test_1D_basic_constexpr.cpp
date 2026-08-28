@@ -1,4 +1,4 @@
-// test_1D_basic_constexpr.cpp — constexpr-fit tests (C++20 only API surface)
+// test_1D_basic_constexpr.cpp: constexpr-fit tests (C++20 only API surface)
 
 #include "test_1D_helpers.hpp"
 

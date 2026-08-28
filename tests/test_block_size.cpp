@@ -74,7 +74,7 @@ static_assert(optimal_block_size<16, kAvx2W, kAvx2R, EvalPolicy::Throughput>() =
 // NEON-fp64: SIMD_W = 2, NREG = 32
 static_assert(optimal_block_size<16, 2, 32, EvalPolicy::Throughput>() == 15, "");
 
-// Scalar: SIMD_W = 1, NREG anywhere — Throughput falls back to Latency.
+// Scalar: SIMD_W = 1, any NREG; Throughput falls back to Latency.
 static_assert(optimal_block_size<16, 1, 16, EvalPolicy::Throughput>()
                   == optimal_block_size<16, 1, 16, EvalPolicy::Latency>(),
               "");
@@ -85,8 +85,8 @@ static_assert(optimal_block_size<32, 1, 32, EvalPolicy::Throughput>()
 } // namespace
 
 TEST(OptimalBlockSize, RuntimeSanityWrapsConstexpr) {
-    // The values are consteval — just touch them so the unit-test binary
-    // would fail to link if they regressed past the static_asserts above.
+    // The static_asserts above guard these values at compile time. Repeat the
+    // key ones as runtime checks.
     constexpr size_t k8 = optimal_block_size<8, 8, 32, EvalPolicy::Throughput>();
     constexpr size_t k16 = optimal_block_size<16, 8, 32, EvalPolicy::Throughput>();
     EXPECT_EQ(k8, size_t(7));
@@ -113,9 +113,8 @@ TYPED_TEST_SUITE(HybridKTyped, FloatingTypes);
 namespace {
 template<size_t N, size_t K, typename T>
 void check_hybrid_K_matches_default(const std::vector<T> &c, T x) {
-    // Bit-exact equality is not generally promised because FMA grouping changes
-    // with K. The same `eps * N` tolerance the rest of the hybrid test suite
-    // uses is the binding criterion here.
+    // FMA grouping changes with K, so bit-exact equality is not promised. The
+    // `eps * N` tolerance of the rest of the hybrid suite is the binding criterion.
     T withK = poly_eval::detail::hybrid_impl_ct<N, T, T, T, K>(x, c.data());
     T naive = naive_horner_scalar(x, c.data(), N);
     EXPECT_NEAR(withK, naive, eps<T> * static_cast<T>(N))
@@ -152,7 +151,7 @@ TYPED_TEST(HybridKTyped, TransposedOverride_MatchesNaive) {
         std::vector<T> c = random_vector<T>(N);
         constexpr size_t Sz = poly_eval::hybrid_transposed_size<N, Batch, K>();
         std::vector<T> c_trans_storage(Sz + Batch::size, T(0));
-        // Align by hand (vector is heap-aligned but not necessarily SIMD-aligned).
+        // Align by hand; a vector is heap-aligned but not necessarily SIMD-aligned.
         const auto raw = reinterpret_cast<std::uintptr_t>(c_trans_storage.data());
         const auto algn = Batch::arch_type::alignment();
         const auto off = (algn - (raw % algn)) % algn;
@@ -177,7 +176,7 @@ TEST(HybridKTag, FitForwardsHybridK) {
     constexpr int N = 12;
     auto def = poly_eval::fit<N>(F, -1.0, 1.0);
     auto pinned = poly_eval::fit<N>(F, -1.0, 1.0, poly_eval::HybridK<3>{});
-    // Coefficients are basis-only — both fits compute the same monomial coeffs.
+    // Coefficients are basis-only, so both fits compute the same monomial coefficients.
     for (size_t i = 0; i < static_cast<size_t>(N); ++i) {
         EXPECT_EQ(def.coeffs()[i], pinned.coeffs()[i]);
     }

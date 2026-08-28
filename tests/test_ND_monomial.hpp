@@ -1,8 +1,8 @@
 #pragma once
 
-// One instantiation per translation unit: each monomial fit is a heavyweight
-// template instantiation (peak RSS of several GiB with sanitizers enabled, so
-// the DegrCart product TESTs live one per .cpp).
+// One fit instantiation per translation unit. A monomial fit peaks at several
+// GiB RSS under sanitizers, so the dimension/degree product TESTs live one per
+// .cpp file.
 
 #include <random>
 

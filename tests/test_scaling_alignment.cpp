@@ -34,7 +34,7 @@ TEST(HornerMany, ScalingPerPoly) {
         hi[i] = b[i] + a[i];
     }
 
-    // Evaluate at some x — apply per-poly domain mapping, then call horner per poly
+    // Evaluate at some x: apply per-poly domain mapping, then call `horner` per poly
     T x = 0.3;
     T out[M]{};
     for (size_t i = 0; i < M; ++i) {

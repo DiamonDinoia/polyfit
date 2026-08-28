@@ -15,27 +15,25 @@ using FuseNever = std::integral_constant<FusionMode, FusionMode::Never>;
 /// Single-point scalar evaluation kernel, selected at the `FuncEval` /
 /// `FuncEvalND` type level.
 ///
-/// - `Hybrid` (default): mixed Estrin/Horner — best when the evaluator's
-///                       single-point `operator()` is the ILP-limited hot path
-///                       (it provides its own parallelism).
-/// - `Horner`          : classical Horner chain — lowest latency / smallest
-///                       code; preferable when the caller already has ILP
-///                       (e.g. an outer unrolled loop over independent
-///                       evaluators).
+/// - `Hybrid` (default): mixed Estrin/Horner. Best when the single-point
+///   `operator()` of the evaluator is the ILP-limited hot path; the evaluator
+///   provides its own parallelism.
+/// - `Horner`          : the classical Horner chain. Lowest latency and
+///   smallest code; best when the caller already has ILP, for example an outer
+///   unrolled loop over independent evaluators.
 enum class ScalarKernel : std::uint8_t {
     Hybrid,
     Horner,
 };
 
-/// Policy hint used by `optimal_block_size<>` to pick the Hybrid block size.
+/// Policy hint for `optimal_block_size<>` picking the Hybrid block size.
 ///
-/// - `Latency`   : minimise the dependency chain through one evaluation —
-///                 right call when a single point is the bottleneck and the
-///                 caller cannot expose more ILP at a higher level.
-/// - `Throughput`: maximise per-call ILP when the caller already has wide
-///                 SIMD lanes (i.e. each lane is an independent point); the
-///                 chosen K degenerates to one long chain so the FMA pipes
-///                 stay full across lanes.
+/// - `Latency`   : minimise the dependency chain through one evaluation. The
+///   right call when a single point is the bottleneck and the caller cannot
+///   expose more ILP at a higher level.
+/// - `Throughput`: maximise per-call ILP when the caller already saturates wide
+///   SIMD lanes with independent points. K degenerates to one long chain so the
+///   FMA pipes stay full across lanes.
 /// - `Balanced`  : compromise between the two, clamped by register pressure.
 enum class EvalPolicy : std::uint8_t { Latency, Throughput, Balanced };
 
@@ -43,7 +41,7 @@ template<std::size_t N> struct Iters : std::integral_constant<std::size_t, N> {}
 template<std::size_t N> struct MaxCoeffs : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct EvalPts : std::integral_constant<std::size_t, N> {};
 /// Compile-time opt-in override for the Hybrid block size K. The default
-/// `HybridK<0>` keeps the heuristic in `hybrid_block_size()` — anything else
+/// `HybridK<0>` keeps the heuristic of `hybrid_block_size()`; any other value
 /// pins K for every Hybrid kernel instantiation downstream.
 template<std::size_t N> struct HybridK : std::integral_constant<std::size_t, N> {};
 
@@ -118,7 +116,7 @@ template<class... Tags> struct FitOptions {
     static constexpr std::size_t ITERS = tagValue<Iters, 1, Tags...>;
     static constexpr std::size_t MAX_NCOEFFS = tagValue<MaxCoeffs, 32, Tags...>;
     static constexpr std::size_t EVAL_POINTS = tagValue<EvalPts, 100, Tags...>;
-    /// 0 means "use the heuristic"; non-zero pins K through the Hybrid kernel.
+    /// 0 means "use the heuristic"; any other value pins K in the Hybrid kernel.
     static constexpr std::size_t HYBRID_K = tagValue<HybridK, 0, Tags...>;
     static constexpr FusionMode FUSION_MODE = fusionModeValue<Tags...>;
 };

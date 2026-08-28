@@ -1,7 +1,7 @@
 // test_constexpr.cpp
 // Static-assert coverage for compile-time evaluation paths:
 //   detail::math::{fma,abs,log10,sqrt} and FuncEval CT construction.
-// All key tests are static_assert — no runtime state needed.
+// All key tests are static_assert; no runtime state needed.
 
 #include <cmath>
 #include <gtest/gtest.h>

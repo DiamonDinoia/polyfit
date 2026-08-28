@@ -45,7 +45,7 @@ TEST(ScalarKernel, HornerAndHybridAgreeWithin1D) {
     HybridEv hyb(sinFunc, -1.0, 1.0);
     HornerEv hor(sinFunc, -1.0, 1.0);
 
-    // Coefficients are identical (kernel choice doesn't affect fit).
+    // Coefficients are identical; the kernel choice does not affect the fit.
     ASSERT_EQ(hyb.coeffs().size(), hor.coeffs().size());
     for (std::size_t i = 0; i < hyb.coeffs().size(); ++i) {
         ASSERT_EQ(hyb.coeffs()[i], hor.coeffs()[i]) << "i=" << i;
@@ -57,8 +57,8 @@ TEST(ScalarKernel, HornerAndHybridAgreeWithin1D) {
         const double ref = std::sin(x);
         EXPECT_NEAR(b, ref, tol<double>) << "Horner @x=" << x;
         EXPECT_NEAR(a, ref, tol<double>) << "Hybrid @x=" << x;
-        // Within a few ulps of each other; the same coeffs evaluated by two
-        // schemes only differ by accumulation order.
+        // Within a few ulps of each other; two schemes evaluating the same
+        // coefficients differ only by accumulation order.
         EXPECT_NEAR(a, b, tol<double>) << "Kernel disagreement @x=" << x;
     }
 }
@@ -80,9 +80,9 @@ TEST(ScalarKernel, HornerAndHybridAgreeWithinND) {
     HybridND hyb(&ndFunc, a, b);
     HornerND hor(&ndFunc, a, b);
 
-    // Approximation accuracy with 10 coeffs per axis over [-1,1] is limited
-    // by the fit, not the evaluator; use a loose tolerance for function-value
-    // comparison and a tight tolerance for kernel-vs-kernel agreement.
+    // With 10 coeffs per axis over [-1,1] the fit, not the evaluator, sets the
+    // accuracy. Use a loose tolerance for function-value comparison and a tight
+    // one for kernel-vs-kernel agreement.
     constexpr double fitTol = 1e-6;
     for (double x = -0.9; x <= 0.9; x += 0.3) {
         for (double y = -0.9; y <= 0.9; y += 0.3) {

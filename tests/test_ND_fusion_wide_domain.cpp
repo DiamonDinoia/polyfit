@@ -1,4 +1,4 @@
-// test_ND_fusion_wide_domain.cpp — FusionMode::Always accuracy off-centre.
+// test_ND_fusion_wide_domain.cpp: FusionMode::Always accuracy off-centre.
 
 #include <algorithm>
 #include <cmath>
@@ -13,8 +13,8 @@
 using namespace polyfit_test_nd_fusion;
 
 TEST(PolyEvalND, FusionAlwaysOnWideDomainStillMeetsTol) {
-    // Off-centre, non-unit domain — fusion must fold alpha/beta in and the
-    // forced Always path must keep within a modest tolerance of the exact
+    // Off-centre, non-unit domain. Fusion must fold alpha/beta in, and the
+    // forced Always path must stay within a modest tolerance of the exact
     // function on random interior points.
     auto f = [](const Arr2 &x) -> Out1 {
         return {std::exp(-x[0]) * std::cos(x[1])};

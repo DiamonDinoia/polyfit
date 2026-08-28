@@ -4,8 +4,8 @@
 Usage: analyze_bench.py <results-dir> <output-dir>
 
 Generates:
-  summary.md  — Markdown table: bench name × compiler → ns/op
-  summary.csv — CSV equivalent
+  summary.md: Markdown table of ns/op by bench name and compiler
+  summary.csv: CSV equivalent
 """
 import csv
 import json

@@ -1,4 +1,4 @@
-// bench_ND_misc.cpp — generic point, variadic and batch evaluation benchmarks.
+// bench_ND_misc.cpp: generic point, variadic and batch evaluation benchmarks.
 
 #include "bench_ND_shared.hpp"
 

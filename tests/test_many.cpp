@@ -162,7 +162,7 @@ TEST(FuncEvalManyTruncate, BasicTruncation) {
     auto group = makeGroup<4>();
     EXPECT_EQ(group.nCoeffs(), 16u);
 
-    // Truncate with a generous threshold — should reduce the coefficient count
+    // Truncate with a generous threshold; the count must not grow.
     group.truncate(1e-8);
     EXPECT_LE(group.nCoeffs(), 16u);
 
@@ -187,9 +187,9 @@ TEST(FuncEvalManyTruncate, PreservesAccuracy) {
     }
 }
 
-// Non-SIMD-multiple sizes should still work correctly with padding
+// Sizes that are not SIMD multiples must still work via padding.
 TEST(FuncEvalManySIMD, NonMultipleSizes) {
-    // Size 3 and 5 are not multiples of typical SIMD widths (2 or 4)
+    // Sizes 3 and 5 are not multiples of the typical SIMD widths (2 or 4).
     auto group3 = makeGroup<3>();
     auto group5 = makeGroup<5>();
 

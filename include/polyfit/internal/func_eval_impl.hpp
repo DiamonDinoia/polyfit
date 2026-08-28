@@ -49,8 +49,6 @@ PF_CXX20_CONSTEXPR void FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::initiali
     if constexpr (kStoresDomain) domain_ = dp;
 }
 
-// ---------- ND runtime init: same one-shot fusion gating as compile-time ----
-
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 constexpr typename FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::OutputType PF_ALWAYS_INLINE
 FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::operator()(const InputType pt) const noexcept {

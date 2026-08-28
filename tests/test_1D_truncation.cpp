@@ -1,4 +1,4 @@
-// test_1D_truncation.cpp — truncation, adaptive fit, and coefficient-order tests
+// test_1D_truncation.cpp: truncation, adaptive fit, and coefficient-order tests
 
 #include "test_1D_helpers.hpp"
 

@@ -90,8 +90,8 @@
 #define PF_STATIC_CONSTEXPR_LOCAL constexpr
 #endif
 
-// The eps-based constexpr fit uses a function parameter in an if-constexpr
-// condition, which is accepted on the supported GCC path but rejected by Clang.
+// The eps-based constexpr fit tests a function parameter in an if-constexpr
+// condition. GCC accepts it; Clang rejects it.
 #if PF_HAS_CXX20 && defined(__GNUC__) && !defined(__clang__)
 #define PF_HAS_CONSTEXPR_EPS_OVERLOAD 1
 #else
@@ -101,10 +101,9 @@
 #if PF_HAS_CXX20
 #define PF_IS_CONSTANT_EVALUATED() std::is_constant_evaluated()
 #elif defined(_MSC_VER)
-// Pre-C++20 MSVC accepts __builtin_is_constant_evaluated(), but the fallback
-// path is only used to emulate constexpr-aware branching. Returning false keeps
-// runtime code on the stable branch and avoids optimizer-sensitive behavior in
-// Release builds.
+// Pre-C++20 MSVC accepts `__builtin_is_constant_evaluated()` here; the `false`
+// fallback keeps runtime code on the stable branch and avoids
+// optimizer-sensitive behavior in Release builds.
 #define PF_IS_CONSTANT_EVALUATED() false
 #elif PF_HAS_BUILTIN(__builtin_is_constant_evaluated)
 #define PF_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()

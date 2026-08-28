@@ -32,7 +32,7 @@ def parse_nanobench_text(text: str) -> list[dict]:
         # parts[0] is empty (before first |), parts[-1] is empty (after last |)
         parts = [p for p in parts if p != ""]
 
-        # Header row: first cell starts with "ns/" (e.g. "ns/op", "ns/eval")
+        # Header row: first cell starts with "ns/" (for example "ns/op", "ns/eval")
         if parts[0].startswith("ns/"):
             header_seen = True
             continue
@@ -41,7 +41,7 @@ def parse_nanobench_text(text: str) -> list[dict]:
 
         # Data row: expect at least 9 fields
         # [ns/op, op/s, err%, ins/op, bra/op, miss%, total, benchmark]
-        # (some builds omit bra/op and miss% — handle both 7-col and 9-col)
+        # (some builds omit bra/op and miss%; handle both 7-col and 9-col)
         if len(parts) < 4:
             continue
 

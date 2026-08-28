@@ -1,4 +1,4 @@
-// test_hybrid_transposed.cpp — SIMD transposed-coefficient hybrid vs naive.
+// test_hybrid_transposed.cpp: SIMD transposed-coefficient hybrid vs naive.
 
 #include "test_hybrid_shared.hpp"
 

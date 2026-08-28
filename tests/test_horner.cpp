@@ -1,9 +1,9 @@
-// test_nd_horner_typed.cpp
+// test_horner.cpp
 // -----------------------------------------------------------------------------
-// Random-coefficient multivariate polynomial evaluation tests for both float
-// and double. Compares poly_eval::horner (run-time & compile-time) against a
-// Vandermonde baseline, and exercises horner_transposed in scalar and SIMD
-// modes, with both runtime and compile-time sizes.
+// Random-coefficient multivariate polynomial evaluation tests for float and
+// double. The suite compares `poly_eval::horner` (runtime and compile-time)
+// against a Vandermonde baseline and exercises `horner_transposed` in scalar
+// and SIMD modes, with runtime and compile-time sizes.
 // -----------------------------------------------------------------------------
 
 #include <array>
@@ -20,7 +20,6 @@
 
 using std::size_t;
 
-// templated tolerance ~100× machine epsilon
 template<typename T> constexpr T eps = std::numeric_limits<T>::epsilon() * T(100);
 
 // RNG helper
@@ -35,7 +34,7 @@ template<typename T> std::vector<T> random_vector(size_t n) {
     return v;
 }
 
-// build all multi-indices (n0,...,n_{Dim-1}), 0 ≤ ni < Deg
+// Build all multi-indices (n0,...,n_{Dim-1}), 0 <= ni < Deg.
 template<size_t Dim> auto multi_indices(size_t Deg) {
     size_t M = 1;
     for (size_t i = 0; i < Dim; ++i) M *= Deg;
@@ -77,7 +76,7 @@ std::array<T, Dim> vander_eval(const std::array<T, Dim> &x, const std::vector<T>
     return res;
 }
 
-// random coefficients [Deg]^Dim × Dim
+// random coefficients [Deg]^Dim x Dim
 template<typename T, size_t Dim> auto random_coeffs(size_t Deg) {
     size_t M = 1;
     for (size_t i = 0; i < Dim; ++i) M *= Deg;
@@ -186,8 +185,8 @@ TEST(HornerCustomValue, ScalarHorner_UsesOperatorFallback) {
     EXPECT_DOUBLE_EQ(actual.value, expected.value);
 }
 
-// Hybrid (mixed Estrin/Horner) tests live in test_hybrid.cpp — moved out of
-// this TU so MSVC stays under its C1202 template-instantiation-context limit.
+// Hybrid (mixed Estrin/Horner) tests live in the test_hybrid_*.cpp TUs so that
+// MSVC stays under its C1202 template-instantiation-context limit.
 
 // SIMD Horner runtime
 TYPED_TEST(HornerTyped, SIMDHorner_Runtime) {
@@ -287,7 +286,6 @@ TYPED_TEST(HornerTyped, HornerTransposed_SIMD_CompileTime) {
     }
 }
 
-// main test main
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

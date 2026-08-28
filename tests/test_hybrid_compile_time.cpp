@@ -1,4 +1,4 @@
-// test_hybrid_compile_time.cpp — compile-time hybrid degrees 1..32 vs naive.
+// test_hybrid_compile_time.cpp: compile-time hybrid degrees 1..32 vs naive.
 
 #include "test_hybrid_shared.hpp"
 

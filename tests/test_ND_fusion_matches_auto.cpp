@@ -1,4 +1,4 @@
-// test_ND_fusion_matches_auto.cpp — FusionMode::Always vs Auto agreement.
+// test_ND_fusion_matches_auto.cpp: FusionMode::Always vs Auto agreement.
 
 #include <random>
 

@@ -14,7 +14,7 @@ static_assert(poly_eval::detail::FitOptions<poly_eval::EvalPts<64>, poly_eval::M
 static_assert(poly_eval::detail::FitOptions<poly_eval::MaxCoeffs<8>, poly_eval::MaxCoeffs<16>>::VALID == false);
 static_assert(poly_eval::detail::FitOptions<poly_eval::FuseAuto, poly_eval::FuseNever>::VALID == false);
 
-// Helper to compute maximum relative error over random samples
+// Maximum relative error over random samples.
 template<typename TrueF, typename ApproxF, typename Domain>
 double computeMaxRelativeError(TrueF f_true, ApproxF f_approx, Domain low, Domain high, int num_samples) {
     // RNG seeded from GoogleTest's random seed for reproducibility

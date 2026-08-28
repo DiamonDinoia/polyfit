@@ -1,4 +1,4 @@
-// test_1D_accuracy.cpp — high-degree accuracy and wide-domain tests
+// test_1D_accuracy.cpp: high-degree accuracy and wide-domain tests
 
 #include "test_1D_helpers.hpp"
 

@@ -2,7 +2,7 @@
 
 // Shared helpers for the bench_ND translation units. Each ND fit is a
 // heavyweight template instantiation, so the benchmark groups live one per
-// .cpp; the runner main() lives in bench_ND.cpp.
+// .cpp file. The runner main() lives in bench_ND.cpp.
 
 #include <array>
 #include <cmath>

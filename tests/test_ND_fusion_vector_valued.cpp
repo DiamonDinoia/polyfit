@@ -1,4 +1,4 @@
-// test_ND_fusion_vector_valued.cpp — FusionMode::Always with multi-output f.
+// test_ND_fusion_vector_valued.cpp: FusionMode::Always with multi-output f.
 
 #include <algorithm>
 #include <cmath>

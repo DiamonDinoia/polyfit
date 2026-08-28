@@ -17,19 +17,17 @@ namespace poly_eval {
 template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
 PF_ALWAYS_INLINE constexpr CoeffType horner(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
 
-// Single-point evaluator using a mixed Estrin/Horner scheme.  Compile-time
-// degree gets a B independent FMA-chain core combined by an Estrin tree;
-// runtime degree dispatches to the per-degree compile-time instantiations
-// for N in [1, 32], falling back to serial Horner above that.
+// Mixed Estrin/Horner single-point evaluator. A compile-time degree evaluates
+// through B independent FMA chains combined by an Estrin tree. A runtime
+// coefficient count dispatches to per-count instantiations in [1, 32] and
+// falls back to serial Horner above.
 template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr CoeffType hybrid(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
 
-// SIMD variant of `hybrid` using a precomputed transposed coefficient buffer.
-// `Batch` is the xsimd batch type (e.g. `xsimd::batch<double>` for the native
-// width, or `xsimd::make_sized_batch_t<double, 4>` for an explicit AVX2 width).
-// Coefficient and width are derived from `Batch::value_type` / `Batch::size`.
-// The transposed buffer must be built via `hybrid_transpose_coeffs<NCOEFFS, Batch>`
-// (size returned by `hybrid_transposed_size<NCOEFFS, Batch>`) and aligned to
+// SIMD variant of `hybrid` over a precomputed transposed coefficient buffer.
+// `Batch` selects the width (`xsimd::make_sized_batch_t<double, 4>` pins an
+// explicit AVX2 width). Build the buffer with `hybrid_transpose_coeffs`,
+// size it with `hybrid_transposed_size`, and align it to
 // `Batch::arch_type::alignment()`.
 template<std::size_t NCOEFFS, typename Batch, typename InputType, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
@@ -78,11 +76,9 @@ PF_ALWAYS_INLINE constexpr auto coeffAt(const MdspanType &coeffs, const std::arr
     return coeffAtImpl<D, MdspanType>(coeffs, idx, std::make_index_sequence<D>{}, outputIndex);
 }
 
-/// Vector registers one `Batch` occupies.
-///
-/// xsimd sizes a batch to one register on every supported target, but a caller
-/// may pin a batch wider than the build target provides -- an AVX-512 batch in
-/// an AVX2 build -- and then each accumulator costs several registers.
+/// Vector registers one `Batch` occupies. A batch wider than the build target,
+/// for example an AVX-512 batch in an AVX2 build, costs several registers per
+/// accumulator.
 template<typename Batch>
 constexpr auto registers_per_batch() noexcept -> std::size_t {
     const std::size_t batch_bits = Batch::size * sizeof(typename Batch::value_type) * 8;
@@ -90,12 +86,9 @@ constexpr auto registers_per_batch() noexcept -> std::size_t {
     return (batch_bits + register_bits - 1) / register_bits;
 }
 
-/// Horner accumulators the vector register file holds at once.
-///
-/// One accumulator is `registers_per_batch<Batch>()` registers wide. The nest
-/// also keeps the `Dim` broadcast point vectors and one set of OUT_DIM
-/// coefficient broadcasts live across the whole evaluation, so those come off
-/// the file first. Exceed what is left and the nest spills.
+/// Horner accumulator chains the vector register file holds. The `Dim` point
+/// broadcasts and the OUT_DIM coefficient broadcasts stay live for the whole
+/// evaluation. The chains must fit in the remaining registers or the nest spills.
 template<std::size_t Dim, std::size_t OUT_DIM, typename Batch>
 constexpr auto affordable_chains() noexcept -> std::size_t {
     const std::size_t per_chain = registers_per_batch<Batch>();
@@ -105,33 +98,19 @@ constexpr auto affordable_chains() noexcept -> std::size_t {
     return (total - resident) / per_chain;
 }
 
-/// Independent Horner chains that keep the nest off its own critical path.
-///
-/// One chain stalls: the next FMA waits the full result latency with nothing to
-/// interleave. Two suffice here, because each Horner step also issues a
-/// coefficient broadcast and those loads fill the gap. Below the `ports *
-/// latency` occupancy bound of an isolated FMA chain, which this nest never
-/// reaches because the broadcasts share the same critical path.
+/// Independent Horner chains needed to cover FMA latency and keep the nest off
+/// its own critical path. Two suffice because the coefficient broadcast of each
+/// step fills the result-latency gap.
 constexpr std::size_t kMinChains = 2;
 
-/// Unroll factor for coefficient axis `Axis` of the ND Horner nest: 0 emits the
-/// axis whole, 1 keeps it rolled.
-///
-/// The leaf axis is a serial chain of one FMA per coefficient per output
-/// component, so it exposes OUT_DIM chains and nothing more. Every axis outside
-/// the leaf evaluates one whole sub-nest per iteration, and consecutive
-/// sub-nests are independent, so emitting such an axis whole multiplies the
-/// chains below it by its coefficient count. The walk starts at the leaf and
-/// moves outward, emitting an axis whole only while the chains below it are
-/// still short of `kMinChains`. Once they are not, every remaining axis stays
-/// rolled: a further copy of the sub-nest adds no parallelism and costs
-/// instruction cache, and on this nest the axes outside the leaf hold all but
-/// a few dozen of the instructions.
-///
-/// There is deliberately nothing between whole and rolled. A block count that
-/// does not divide the axis leaves a remainder, and `poet::dynamic_for` runs
-/// remainders through an outlined tail: correct, but reached once per iteration
-/// of every enclosing axis, so the call dominates the loop it replaces.
+/// Unroll factor for coefficient axis `Axis` of the ND Horner nest. A result of
+/// 0 emits the axis whole; 1 keeps it rolled. An axis emitted whole multiplies
+/// the independent chains below by its coefficient count. The walk starts at the
+/// leaf and emits axes whole only while the chains below stay under `kMinChains`.
+/// Once they do not, a whole axis adds no parallelism and costs instruction
+/// cache. Only 0 and 1 occur. A non-dividing block count would pay the outlined
+/// `poet::dynamic_for` tail once per enclosing iteration, and the call dominates
+/// the loop it replaces.
 template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM, typename Batch>
 constexpr auto axis_unroll() noexcept -> std::size_t {
     constexpr std::size_t affordable = affordable_chains<Dim, OUT_DIM, Batch>();
@@ -152,17 +131,12 @@ constexpr auto axis_unroll() noexcept -> std::size_t {
     return 1;
 }
 
-/// Walks the `NCOEFFS` (or `nCoeffsRt`) coefficients of one axis.
-///
-/// `Unroll == 0` emits the whole axis as straight-line code. Any other value
-/// emits blocks of `Unroll` iterations through `poet::dynamic_for`. `Unroll == 1`
-/// is a contract there: `dynamic_for` launders the trip count, so the axis stays
-/// rolled even when `NCOEFFS` makes it a compile-time constant.
-///
-/// A compile-time `NCOEFFS` splits as `Unroll * blocks + rem`. `dynamic_for`
-/// takes only the exact multiple, so its outlined remainder tail is provably
-/// unreachable and never emitted, and `static_for` emits the `rem` leftovers
-/// inline. A runtime count cannot be split, so it keeps the outlined tail.
+/// Walks the `NCOEFFS` (or `nCoeffsRt`) coefficients of one axis. `Unroll == 0`
+/// emits the axis whole. Other values block the axis by `Unroll` through
+/// `poet::dynamic_for`. `Unroll == 1` launders the trip count, so the axis stays
+/// rolled even for a compile-time `NCOEFFS`. A compile-time count splits as
+/// `Unroll * blocks + rem`, and `static_for` emits `rem` inline. A runtime count
+/// cannot split and keeps the outlined tail.
 template<std::size_t NCOEFFS, std::size_t Unroll = 0, class Step>
 PF_ALWAYS_INLINE constexpr void forEachCoeff(int nCoeffsRt, Step &&step) {
     const auto visit = [&](std::size_t k) PF_ALWAYS_INLINE_LAMBDA { step(k); };
@@ -249,19 +223,11 @@ PF_ALWAYS_INLINE OutT horner_nd_impl(SimdEvalTag<Arch>, const InVec &x, const Md
     return res;
 }
 
-// Across-points vectorized ND Horner: evaluates the same polynomial at B
-// independent points in lockstep, where B = Batch::size. Each batch lane
-// carries one point's intermediate accumulator; FMAs become packed instead
-// of scalar. Coefficients are scalar — broadcast to a batch on each step.
-// The accumulator is a per-output-component array of batches, so OUT_DIM
-// independent FMA chains run in lockstep.
-//
-// Implementation: the per-axis Horner is written as a generic
-// `Axis`-recursive helper using `poet::static_for` (via `forEachCoeff`)
-// at every level. Both helper and entry point carry `PF_FLATTEN` so GCC
-// is forced to inline every recursive instance — without it, deep
-// instantiations get outlined and the inner-axis FMAs degrade to real
-// `call` instructions instead of a single packed FMA stream.
+// Across-points vectorized ND Horner. B = `Batch::size` points evaluate in
+// lockstep, one lane per point. Coefficients broadcast to a batch per step.
+// The accumulator is one batch per output component, so OUT_DIM independent
+// FMA chains run in lockstep. `PF_FLATTEN` forces GCC to inline every recursive
+// instance; without it, the inner-axis FMAs become `call`s.
 template<std::size_t Axis, std::size_t Dim, std::size_t NCOEFFS, std::size_t OUT_DIM,
          typename Batch, typename Mdspan>
 PF_ALWAYS_INLINE PF_FLATTEN std::array<Batch, OUT_DIM>
@@ -317,8 +283,7 @@ template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename In
 PF_ALWAYS_INLINE constexpr EvalType horner_impl(const InputType x, const CoeffType *c_ptr,
                                                 const std::size_t c_size) noexcept {
     if constexpr (NCOEFFS != 0) {
-        // CT path: full unroll (N is known, serial chain)
-        // GCC false positive: deep static_for inlining confuses -Wmaybe-uninitialized
+        // GCC false positive: deep `static_for` trips -Wmaybe-uninitialized.
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
@@ -342,17 +307,15 @@ PF_ALWAYS_INLINE constexpr EvalType horner_impl(const InputType x, const CoeffTy
 //------------------------------------------------------------------------------
 // Mixed Estrin/Horner single-point evaluator
 //------------------------------------------------------------------------------
-//
-// Splits the NCOEFFS coefficients into B blocks of size K (K compile-time).
-// Each block is evaluated with a small independent Horner chain (length K),
-// producing B partial results r[0..B-1].  The block results are combined with
-// an Estrin tree using precomputed powers of x^K, dropping the critical path
-// from ~NCOEFFS dependent FMAs to ~K + ceil(log2(B)).  The first block is
-// the short one (size_first = NCOEFFS - (B-1)*K) so the geometric squaring
-// of the combine power stays clean for any NCOEFFS.
+
+// The evaluator splits NCOEFFS coefficients into B blocks of size K. Each block
+// is an independent Horner chain that produces one r[i]. An Estrin tree over a
+// precomputed x^K combines the blocks, so the critical path falls from
+// ~NCOEFFS to ~K + ceil(log2(B)) dependent FMAs. The first block is short so
+// the power squaring stays clean for any NCOEFFS.
 
 PF_CXX20_CONSTEVAL std::size_t hybrid_block_size(std::size_t n) noexcept {
-    if (n <= 4) return n; // single block — falls back to plain Horner
+    if (n <= 4) return n; // single block, plain Horner wins
     constexpr std::size_t kMinK = 2;
     constexpr std::size_t kMaxK = 8;
     const std::size_t target_b = poet::vector_register_count() / 2;
@@ -388,7 +351,7 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
 
         EvalType r[B];
 
-        // First block: kFirst coefficients (1..K, possibly less than K).
+        // First block: kFirst coefficients in [1, K].
         {
             EvalType acc = static_cast<EvalType>(c_ptr[0]);
             poet::static_for<1, kFirst>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
@@ -406,14 +369,14 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
             r[std::size_t(b)] = acc;
         });
 
-        // power = x^K, computed with K-1 multiplications, kept as InputType
-        // so the combine FMA matches Horner's (EvalType, InputType, EvalType)
-        // signature for both real and complex coefficients.
+        // power = x^K stays InputType so that the combine FMA keeps the
+        // (EvalType, InputType, EvalType) signature of Horner for complex
+        // coefficients.
         InputType power = x;
         poet::static_for<1, K>([&](auto) PF_ALWAYS_INLINE_LAMBDA { power = power * x; });
 
-        // Estrin combine: pair from the right; r[0] is carried when cur is odd.
-        // After each level the running power squares to give x^(2^l * K).
+        // The Estrin combine pairs from the right; odd sizes carry r[0].
+        // The running power squares each level to x^(2^l * K).
         constexpr std::size_t kLevels = hybrid_levels(B);
         poet::static_for<kLevels>([&](auto level) PF_ALWAYS_INLINE_LAMBDA {
             constexpr std::size_t cur = hybrid_size_at(B, std::size_t(level));
@@ -425,7 +388,7 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
                         detail::fma(r[2 * std::size_t(j)], power, r[2 * std::size_t(j) + 1]);
                 });
             } else {
-                // r[0] stays as-is (highest-power carry).
+                // r[0] carries through unchanged (highest power).
                 poet::static_for<1, new_size>([&](auto j) PF_ALWAYS_INLINE_LAMBDA {
                     r[std::size_t(j)] =
                         detail::fma(r[2 * std::size_t(j) - 1], power, r[2 * std::size_t(j)]);
@@ -437,12 +400,10 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl_ct(const InputType x, const Coef
     }
 }
 
-// Hybrid (Estrin-blocked Horner) variant of horner_nd_impl. At every axis
-// we gather the N inner-axis results into a small stack array and combine
-// them with the same Estrin tree as the 1D `hybrid_impl_ct`. This drops
-// the per-axis critical path from N dependent FMAs to ~K + log2(B), at the
-// cost of N×Dim stack OutT slots — fine for the compile-time NCOEFFS path
-// the ND evaluator uses. Runtime NCOEFFS falls back to plain horner.
+// Estrin-blocked variant of `horner_nd_impl`. Each axis collects the N
+// inner-axis results on the stack and combines them through `hybrid_impl_ct`.
+// The cost is N*Dim stack slots, which suits only compile-time NCOEFFS.
+// Runtime NCOEFFS falls back to plain Horner.
 template<std::size_t Level, std::size_t Dim, std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan,
          std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr OutT hybrid_nd_impl(ScalarEvalTag, const InVec &x, const Mdspan &coeffs,
@@ -492,14 +453,10 @@ struct hybrid_dispatch_functor {
     }
 };
 
-// Routes to the best implementation:
-//   - CT NCOEFFS         → `hybrid_impl_ct<NCOEFFS>` (full Estrin, fully inlined).
-//   - RT NCOEFFS, eval   → `poet::dispatch` to per-N CT `hybrid_impl_ct` for
-//                          c_size in [1, kHybridRuntimeDispatchMax]; else
-//                          `horner_impl<0>`.
-//   - RT NCOEFFS, consteval → `horner_impl<0>` (dispatch table isn't usable in
-//                          constant evaluation; the runtime fast path doesn't
-//                          matter there).
+// Routing of `hybrid_impl`:
+//   - compile-time NCOEFFS             -> `hybrid_impl_ct<NCOEFFS>`
+//   - runtime c_size in [1, this bound] -> `poet::dispatch` to per-N `hybrid_impl_ct`
+//   - runtime c_size above, or consteval -> `horner_impl<0>` (no dispatch table in constant evaluation)
 inline constexpr std::size_t kHybridRuntimeDispatchMax = 32;
 
 template<std::size_t NCOEFFS, typename EvalType, typename CoeffType, typename InputType,
@@ -526,16 +483,11 @@ PF_ALWAYS_INLINE constexpr EvalType hybrid_impl(const InputType x, const CoeffTy
 //------------------------------------------------------------------------------
 // hybrid_transposed: SIMD variant over a precomputed, transposed coeff buffer.
 //------------------------------------------------------------------------------
-// Layout invariant (G = ceil(B/W) batches of W lanes each, K steps):
-//
+
+// Layout invariant, G = ceil(B/W) batches of W lanes, K steps:
 //   c_trans[g * (K * W) + j * W + l] = padded[(g * W + l) * K + j]
-//
-// where `padded` is the standard-order coefficient array prepended with
-// (K - kFirst) zeros so block 0 has size K, plus zero-blocks at the high end
-// to round B up to a multiple of W (those lanes evaluate to 0 and are
-// discarded after the SIMD block phase).  The block phase issues one aligned
-// `vmovapd` + one `vfma*pd` per SIMD step — no FP01 µops on loads, so the
-// FMA-port budget is shared only with the FMAs themselves.
+// `padded` is the coefficient array with (K - kFirst) leading zeros so block 0
+// has size K, plus zero lanes rounding B up to a multiple of W.
 
 template<std::size_t NCOEFFS, typename Batch, std::size_t K_OVERRIDE = 0>
 PF_CXX20_CONSTEVAL std::size_t hybrid_transposed_size() noexcept {
@@ -561,8 +513,7 @@ PF_ALWAYS_INLINE constexpr void hybrid_transpose_coeffs(
     constexpr std::size_t kFirst = NCOEFFS - (B - 1) * K;
     constexpr std::size_t lead_zeros = K - kFirst;
 
-    // Plain runtime loop: one-shot setup at evaluator construction.
-    // `static_for` form blew MSVC's C1202 instantiation budget for N = 5..32.
+    // One-shot setup loop. `poet::static_for` trips MSVC C1202 for N in [5, 32].
     for (std::size_t g = 0; g < G; ++g) {
         for (std::size_t j = 0; j < K; ++j) {
             for (std::size_t l = 0; l < W; ++l) {
@@ -594,7 +545,7 @@ PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
 
     const Batch x_v(static_cast<CoeffType>(x));
 
-    // SIMD block phase: G batches × K steps, each step is 1 aligned load + 1 FMA-PD.
+    // Block phase: G batches, K steps of one aligned load + one FMA each.
     Batch acc[G];
     poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
         acc[std::size_t(g)] = Batch::load_aligned(c_trans + std::size_t(g) * (K * W));
@@ -607,9 +558,8 @@ PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
         });
     });
 
-    // Spill block accumulators to scalar storage, then run the scalar Estrin
-    // combine over the first B entries.  The padded high-end zeros are
-    // discarded — we never iterate beyond B in the combine.
+    // Spill accumulators, then run the scalar Estrin combine over the first B
+    // entries; the padded zero lanes never enter the combine.
     alignas(Batch::arch_type::alignment()) CoeffType r[kBpadded];
     poet::static_for<G>([&](auto g) PF_ALWAYS_INLINE_LAMBDA {
         acc[std::size_t(g)].store_aligned(r + std::size_t(g) * W);
@@ -785,7 +735,7 @@ PF_ALWAYS_INLINE constexpr void horner_many(const InputType xin, const OutputTyp
 }
 
 //------------------------------------------------------------------------------
-// horner_transposed — shared SIMD core + public dispatch
+// horner_transposed: shared SIMD core + public dispatch
 //------------------------------------------------------------------------------
 
 namespace detail {
@@ -892,7 +842,7 @@ PF_ALWAYS_INLINE constexpr OutT horner(const InVec &x, const Mdspan &coeffs, int
 }
 
 // ND hybrid front-end: Estrin-blocked Horner per axis. Falls back to plain
-// horner when NCOEFFS is runtime (0) or ≤ 4 (too small for an Estrin tree).
+// Horner when NCOEFFS is runtime (0) or <= 4 (too small for an Estrin tree).
 template<std::size_t NCOEFFS, typename OutT, typename InVec, typename Mdspan, std::size_t K_OVERRIDE = 0>
 PF_ALWAYS_INLINE constexpr OutT hybrid_nd(const InVec &x, const Mdspan &coeffs, int nCoeffsRt) {
     constexpr std::size_t Dim = Mdspan::rank() - 1;

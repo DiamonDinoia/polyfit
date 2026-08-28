@@ -1,4 +1,4 @@
-// test_eval_views.cpp — external-coefficient evaluation views.
+// test_eval_views.cpp: external-coefficient evaluation views.
 // `FuncEval` exposes its domain map (`domainInvSpan`/`domainSumEndpoints`/
 // `domainIsIdentity`) and `FuncEvalND` exposes `coeffsMdspan()`/`domainView()`;
 // the free `horner` / `horner_nd_batch*` entry points evaluate over those

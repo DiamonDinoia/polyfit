@@ -1,4 +1,4 @@
-// test_1D_basic_compile_time.cpp — compile-time coefficient count fitting tests
+// test_1D_basic_compile_time.cpp: compile-time coefficient count fitting tests
 
 #include "test_1D_helpers.hpp"
 

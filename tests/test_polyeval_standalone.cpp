@@ -1,4 +1,4 @@
-// Verifies that <polyfit/polyeval.hpp> is usable on its own — the
+// Verifies that <polyfit/polyeval.hpp> is usable on its own. The
 // evaluation-only API must not pull in fitting machinery, and `horner` /
 // `hybrid` must produce the documented results on user-supplied coefficients.
 

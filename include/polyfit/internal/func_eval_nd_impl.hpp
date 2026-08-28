@@ -29,9 +29,9 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::initialize(detail
     DomainParams dp;
     computeScaling(a, b, dp);
     buildCoeffs(static_cast<int>(NCOEFFS), f, dp);
-    // Only the Always mode applies fusion up front; Auto keeps the baseline
-    // eval-time mapFromDomain path so multi-panel fits don't pay the per-leaf
-    // fusion cost by default.
+    // Only the Always mode applies fusion up front. Auto keeps the baseline
+    // eval-time `mapFromDomain` path so multi-panel fits do not pay the
+    // per-leaf fusion cost by default.
     if constexpr (FUSION_MODE == FusionMode::Always) {
         fuseNDDomain(dp, static_cast<int>(NCOEFFS));
     }
@@ -127,9 +127,8 @@ FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::evalCanonical(const CanonicalInp
     if constexpr (SK == ScalarKernel::Horner) {
         return poly_eval::horner<NCOEFFS, SIMD, CanonicalOutput>(xm, coeffsMd, nCoeffsRt);
     } else {
-        // Hybrid per axis. hybrid_nd internally falls back to horner for
-        // runtime NCOEFFS or NCOEFFS ≤ 4 where Estrin has no critical-path
-        // budget to spend.
+        // Hybrid per axis. `hybrid_nd` falls back to Horner for runtime
+        // NCOEFFS or NCOEFFS <= 4, where the Estrin tree cannot shorten the chain.
         return poly_eval::hybrid_nd<NCOEFFS, CanonicalOutput, CanonicalInput, Mdspan, HK>(
             xm, coeffsMd, nCoeffsRt);
     }
@@ -137,7 +136,7 @@ FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::evalCanonical(const CanonicalInp
 PF_FAST_EVAL_END
 
 // The AoS, scatter-AoS, and SoA batch overloads forward to the eval-only
-// free functions in horner_nd_batch.hpp over the stored coefficient view.
+// free functions in `horner_nd_batch.hpp` over the stored coefficient view.
 // The scalar tail there re-selects the kernel from SK/HK, so behaviour
 // matches the member scalar path.
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
@@ -267,7 +266,7 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::buildCoeffs(int n
     std::array<int, DIM> extents{};
     extents.fill(nCoeffsPerAxis);
 
-    // sample f on Chebyshev grid
+    // Sample f on the Chebyshev grid
     forEachIndex<DIM>(extents, [&](const std::array<int, DIM> &idx) {
         CanonicalInput domainPoint{};
         for (std::size_t d = 0; d < DIM; ++d) domainPoint[d] = nodes[static_cast<std::size_t>(idx[d])];
@@ -393,8 +392,8 @@ constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::fuseNDDomain(Doma
     for (std::size_t axis = 0; axis < DIM; ++axis) {
         const auto alpha = Scalar(2) * static_cast<Scalar>(dp.invSpan[axis]);
         const auto beta = -static_cast<Scalar>(dp.sumEndpoints[axis]) * static_cast<Scalar>(dp.invSpan[axis]);
-        // Axis already maps to [-1,1] — fuseLinearMap(alpha=1, beta=0) is
-        // a numerical no-op; skip the ~n^2-per-fiber work.
+        // `fuseLinearMap(alpha=1, beta=0)` is a numerical no-op; when the axis
+        // already maps to [-1,1], skip its per-fiber work.
         if (alpha == Scalar(1) && beta == Scalar(0)) {
             dp.invSpan[axis] = Scalar(0.5);
             dp.sumEndpoints[axis] = Scalar(0);

@@ -1,4 +1,4 @@
-// test_ND_fusion_never.cpp — FusionMode::Never skips domain folding.
+// test_ND_fusion_never.cpp: FusionMode::Never skips domain folding.
 
 #include <algorithm>
 #include <cmath>

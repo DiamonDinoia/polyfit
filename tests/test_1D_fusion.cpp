@@ -1,4 +1,4 @@
-// test_1D_fusion.cpp — FuseNever/FuseAlways/tag-order tests
+// test_1D_fusion.cpp: FuseNever/FuseAlways/tag-order tests
 
 #include "test_1D_helpers.hpp"
 
@@ -76,7 +76,7 @@ TEST(PolyEval, FuseAlwaysDoesNotStoreDomainParams) {
     auto func = [](double x) { return x * x; };
     using FE_fused = decltype(poly_eval::fit<4>(func, -1.0, 1.0, poly_eval::FuseAlways{}));
     using FE_never = decltype(poly_eval::fit<4>(func, -1.0, 1.0, poly_eval::FuseNever{}));
-    // FuseAlways should not store invSpan, sumEndpoints, identityMap
+    // FuseAlways must not store invSpan, sumEndpoints, identityMap
     static_assert(sizeof(FE_fused) < sizeof(FE_never),
                   "FuseAlways evaluator should be smaller than FuseNever (no domain params stored)");
 }

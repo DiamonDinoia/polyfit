@@ -82,8 +82,9 @@ template<typename T> inline constexpr bool hasDataBase_v<T, std::void_t<decltype
 template<typename T> inline constexpr bool hasData_v = hasDataBase_v<remove_cvref_t<T>>;
 template<typename T> inline constexpr bool isDataBackedContainer_v = hasData_v<T> && hasSizeMethod_v<T>;
 
-// Detects constexpr .size() — requires default-constructibility. Types without
-// a default constructor fall back to tuple_size or are treated as non-fixed.
+// Detects a constexpr `.size()`. The detection expression default-constructs T,
+// so types without a default constructor fall back to `tuple_size` or count as
+// non-fixed.
 template<typename T, typename = void> struct StaticSizeExpr : std::false_type {};
 template<typename T>
 struct StaticSizeExpr<T, std::void_t<decltype(std::integral_constant<std::size_t, remove_cvref_t<T>{}.size()>{})>>

@@ -1,4 +1,4 @@
-// test_1D_basic_complex.cpp — runtime/compile-time complex<double> fitting tests
+// test_1D_basic_complex.cpp: runtime/compile-time complex<double> fitting tests
 
 #include "test_1D_helpers.hpp"
 

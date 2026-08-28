@@ -63,7 +63,7 @@ TEST(SpecialValues, NaNInputProducesNaN) {
     auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     const double nan_val = std::numeric_limits<double>::quiet_NaN();
     const double result = poly(nan_val);
-    // NaN propagation: evaluating at NaN should produce NaN
+    // NaN propagation: evaluating at NaN must produce NaN
     EXPECT_TRUE(std::isnan(result)) << "Expected NaN, got " << result;
 }
 
@@ -71,7 +71,7 @@ TEST(SpecialValues, InfinityInputProducesInfOrNaN) {
     auto poly = poly_eval::fit(cos_func, 8, -1.0, 1.0);
     const double inf_val = std::numeric_limits<double>::infinity();
     const double result = poly(inf_val);
-    // Evaluating at infinity should produce inf or NaN (not a finite wrong answer)
+    // Evaluating at infinity must produce inf or NaN (never a finite wrong answer)
     EXPECT_TRUE(std::isinf(result) || std::isnan(result)) << "Expected inf or NaN, got " << result;
 }
 

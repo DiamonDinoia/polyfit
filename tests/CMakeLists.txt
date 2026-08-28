@@ -77,10 +77,10 @@ function(polyfit_configure_benchmark_target target std)
 endfunction()
 
 # Ninja-only pools bounding the peak memory of parallel template-heavy TUs.
-# polyfit_xl: the 4096-coefficient-class TUs (12.3/7.8 GiB each at -O0,
-# ~1.5-5.5 GiB at -O3); keep at 1 unless the runner is big — benchmarks.yml
-# uses 2. polyfit_heavy: the remaining mid-weight TUs (several GiB each) run
-# four at a time. Other generators ignore JOB_POOL_COMPILE.
+# polyfit_xl covers the 4096-coefficient-class TUs (12.3/7.8 GiB each at -O0,
+# ~1.5-5.5 GiB at -O3); keep it at 1 unless the runner is large. benchmarks.yml
+# uses 2. polyfit_heavy covers the remaining mid-weight TUs (several GiB each)
+# and runs four at a time. Other generators ignore JOB_POOL_COMPILE.
 set(POLYFIT_XL_POOL_SIZE "1" CACHE STRING "Concurrent slots for the polyfit_xl job pool (raise only on >=32 GiB runners)")
 set_property(GLOBAL PROPERTY JOB_POOLS polyfit_xl=${POLYFIT_XL_POOL_SIZE} polyfit_heavy=4)
 

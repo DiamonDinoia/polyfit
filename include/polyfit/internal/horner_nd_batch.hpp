@@ -1,7 +1,7 @@
-// Across-points batch evaluation of ND polynomial coefficients that the
-// caller owns. Eval-only: no fitting machinery. The `FuncEvalND` AoS,
-// scatter-AoS and SoA batch overloads forward here; external coefficient
-// owners pass an mdspan plus a `domain_nd_view` to the same entry points.
+// Across-points batch evaluation of caller-owned ND polynomial coefficients,
+// with no fitting machinery. The `FuncEvalND` AoS, scatter-AoS and SoA batch
+// overloads forward here. External coefficient owners pass an mdspan plus a
+// `domain_nd_view` to the same entry points.
 #pragma once
 
 #include <array>
@@ -35,7 +35,7 @@ struct domain_nd_view {
 /**
  * @brief mdspan over an external Horner-order ND coefficient buffer.
  *
- * The extents match `FuncEvalND` storage: `NCOEFFS^DIM x OUT_DIM`,
+ * The extents match `FuncEvalND` storage, `NCOEFFS^DIM x OUT_DIM` with
  * `layout_right`. `NCOEFFS == 0` selects runtime extents built from
  * @p nCoeffsRt.
  */
@@ -89,8 +89,8 @@ PF_ALWAYS_INLINE constexpr auto horner_nd_view_scalar(const Mdspan &coeffs, int 
 // fronts. Each lane of `batch_t` carries one point's intermediate Horner
 // accumulator, so FMAs become packed. StoreBatch receives
 // (base, std::array<batch_t, OUT_DIM>); StoreScalar receives
-// (i, std::array<Scalar, OUT_DIM>). PF_FLATTEN forces inlining so the store
-// callback fuses into the tile loop and codegen does not outline.
+// (i, std::array<Scalar, OUT_DIM>). `PF_FLATTEN` forces inlining so the store
+// callback fuses into the tile loop.
 template<std::size_t NCOEFFS, std::size_t OUT_DIM, ScalarKernel SK, std::size_t HK, class Mdspan, class InScalar,
          std::size_t DIM, class StoreBatch, class StoreScalar>
 PF_FLATTEN constexpr void horner_nd_batch_impl(const Mdspan &coeffs, const domain_nd_view<InScalar, DIM> &dom,
@@ -107,9 +107,8 @@ PF_FLATTEN constexpr void horner_nd_batch_impl(const Mdspan &coeffs, const domai
     } else {
         constexpr std::size_t kAlign = batch_t::arch_type::alignment();
         // Independent Horner accumulator chains per outer iteration give the
-        // FMA-throughput-bound inner loop more ILP. Higher DIM/OUT_DIM grows
-        // accumulator register footprint per chain, so unrolling spills —
-        // hand-tuned: hank103 DIM=1 OUT_DIM=4 prefers U=1 over U=2.
+        // FMA-throughput-bound inner loop more ILP. A larger DIM or OUT_DIM
+        // grows the register footprint per chain, so unrolling spills.
         constexpr std::size_t U = (DIM <= 2 && OUT_DIM <= 2) ? 2 : 1;
 
         auto loadPointsAt = [&](std::size_t base) PF_ALWAYS_INLINE_LAMBDA {
@@ -131,9 +130,9 @@ PF_FLATTEN constexpr void horner_nd_batch_impl(const Mdspan &coeffs, const domai
         };
 
         std::size_t i = 0;
-        // Emitted only when U > 1: at U == 1 this loop has the same trip
-        // condition as the single-tile loop below, so it would duplicate the
-        // whole unrolled Horner nest for a loop that never runs.
+        // At U == 1 this loop shares the trip condition of the single-tile loop
+        // below and never runs. The U > 1 guard prevents emitting the unrolled
+        // Horner nest twice.
         if constexpr (U > 1) {
             for (; i + U * B <= count; i += U * B) {
                 std::array<std::array<batch_t, DIM>, U> x_vU;
@@ -164,7 +163,7 @@ PF_FLATTEN constexpr void horner_nd_batch_impl(const Mdspan &coeffs, const domai
  * @brief Contiguous AoS batch evaluation over external ND coefficients.
  *
  * @p coeffs is an mdspan in `FuncEvalND` layout (see `make_coeffs_mdspan`);
- * result for @p pts[k] lands in @p out[k].
+ * the result of @p pts[k] lands in @p out[k].
  *
  * @tparam Tag linkage anchor (here and on the two overloads below). An
  * internal-linkage Tag makes the specialization and everything it
@@ -184,10 +183,10 @@ constexpr void horner_nd_batch(const Mdspan &coeffs, const domain_nd_view<InScal
     detail::horner_nd_batch_impl<NCOEFFS, OUT_DIM, SK, HK>(
         coeffs, dom, pts, count,
         [&](std::size_t base, const std::array<batch_t, OUT_DIM> &res) PF_ALWAYS_INLINE_LAMBDA {
-            // SoA -> AoS shuffle on the output side: spill each per-component
+            // SoA -> AoS shuffle on the output side. Spill each per-component
             // batch to aligned scratch, then re-interleave into the caller's
-            // AoS buffer. Scalar stores beat xsimd transpose helpers at low
-            // OUT_DIM (transpose adds cross-lane shuffles for a tiny re-pack).
+            // AoS buffer. Scalar stores beat the xsimd transpose helpers at low
+            // OUT_DIM because a transpose adds cross-lane shuffles.
             alignas(batch_t::arch_type::alignment()) Scalar outbuf[OUT_DIM][B];
             poet::static_for<OUT_DIM>([&](auto d) { res[d].store_aligned(outbuf[d]); });
             for (std::size_t b = 0; b < B; ++b)
@@ -197,7 +196,7 @@ constexpr void horner_nd_batch(const Mdspan &coeffs, const domain_nd_view<InScal
 }
 
 /**
- * @brief Scatter-write AoS batch evaluation — result for @p pts[k] lands in @p out[perm[k]].
+ * @brief Scatter-write AoS batch evaluation. The result of @p pts[k] lands at @p out[perm[k]].
  */
 template<std::size_t NCOEFFS, std::size_t OUT_DIM, ScalarKernel SK = ScalarKernel::Horner, std::size_t HK = 0,
          class Tag = void, class Mdspan, class InScalar, std::size_t DIM>
@@ -222,7 +221,7 @@ constexpr void horner_nd_batch(const Mdspan &coeffs, const domain_nd_view<InScal
 }
 
 /**
- * @brief SoA-output batch evaluation — component @p d of point @p k lands in @p soa_out[d][k].
+ * @brief SoA-output batch evaluation. Component @p d of point @p k lands in @p soa_out[d][k].
  */
 template<std::size_t NCOEFFS, std::size_t OUT_DIM, ScalarKernel SK = ScalarKernel::Horner, std::size_t HK = 0,
          class Tag = void, class Mdspan, class InScalar, std::size_t DIM>
@@ -235,7 +234,7 @@ constexpr void horner_nd_batch_soa(const Mdspan &coeffs, const domain_nd_view<In
     detail::horner_nd_batch_impl<NCOEFFS, OUT_DIM, SK, HK>(
         coeffs, dom, pts, count,
         [&](std::size_t base, const std::array<batch_t, OUT_DIM> &res) PF_ALWAYS_INLINE_LAMBDA {
-            // Per-component stride-1 store — direct, no AoS shuffle.
+            // Per-component stride-1 store, no AoS shuffle.
             poet::static_for<OUT_DIM>([&](auto d) { res[d].store_unaligned(soa_out[d] + base); });
         },
         [&](std::size_t i, const std::array<Scalar, OUT_DIM> &r) PF_ALWAYS_INLINE_LAMBDA {

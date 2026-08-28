@@ -1,13 +1,12 @@
 #pragma once
 
-// Shared helpers for the hybrid Estrin/Horner evaluator tests. The suite
-// lives one-TYPED_TEST-per-TU because the compile-time `hybrid<D>` and
-// `hybrid_transposed<N>` paths each contain several layers of nested
-// `poet::static_for`, and instantiating them for D = 1..32 in a single TU both
-// trips MSVC's C1202 template-instantiation-context limit and inflates cc1plus
-// memory. The fixture and type list are at global scope: gtest macros paste
-// the names into identifiers, and the fixture type must be identical across
-// the TUs.
+// Shared helpers for the hybrid Estrin/Horner evaluator tests. The suite lives
+// one TYPED_TEST per TU because the compile-time `hybrid<D>` and
+// `hybrid_transposed<N>` paths nest several layers of `poet::static_for`, and
+// instantiating them for D = 1..32 in one TU trips MSVC C1202 and inflates
+// cc1plus memory. The fixture and the type list stay at global scope because
+// gtest macros paste the names into identifiers, and the fixture type must be
+// identical across the TUs.
 
 #include <array>
 #include <gtest/gtest.h>

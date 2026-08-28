@@ -1,7 +1,6 @@
-// test_scatter_and_soa.cpp — FuncEvalND scatter-write and SoA-output batch
-// overload tests. Both overloads share the existing evalCanonical kernel, so
-// the verification is bitwise-equality against the canonical contiguous-AoS
-// batch overload (out[k] = evalCanonical(pts[k])).
+// test_scatter_and_soa.cpp: FuncEvalND scatter-write and SoA-output batch
+// overload tests. Both overloads share the `evalCanonical` kernel, so the
+// verification is bitwise equality against the contiguous AoS overload.
 
 #include <array>
 #include <cstdint>
@@ -14,7 +13,7 @@
 
 namespace {
 
-// 1D input -> 2D output: f(x) = (x, x^2). Polynomial of degree 2 is fit exactly.
+// 1D input -> 2D output: f(x) = (x, x^2). A degree-2 polynomial is fit exactly.
 using In1 = std::array<double, 1>;
 using Out2 = std::array<double, 2>;
 
@@ -26,15 +25,15 @@ using Out1 = std::array<double, 1>;
 
 auto poly_1d_to_1d = [](const In1 &x) -> Out1 { return {x[0] * x[0] + 0.5 * x[0]}; };
 
-// Fixed evaluation points (10 of them). Chosen inside [-1, 1].
+// Fixed evaluation points inside [-1, 1].
 inline std::vector<In1> samplePts1D() {
     return {{-0.9}, {-0.7}, {-0.4}, {-0.1}, {0.0}, {0.15}, {0.3}, {0.55}, {0.8}, {0.95}};
 }
 
-// A non-identity permutation over [0, N). Built deterministically and asserted
-// to actually permute (no fixed-point reliance).
+// A non-identity permutation over [0, N), built deterministically and asserted
+// to permute.
 inline std::vector<std::uint32_t> makePerm(std::size_t n) {
-    // perm[k] = (k * 7 + 3) % n. For n = 10 this is bijective and non-trivial.
+    // perm[k] = (k * 7 + 3) % n, bijective and non-trivial for n = 10.
     std::vector<std::uint32_t> p(n);
     for (std::size_t k = 0; k < n; ++k) p[k] = static_cast<std::uint32_t>((k * 7 + 3) % n);
     return p;

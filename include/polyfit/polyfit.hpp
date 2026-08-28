@@ -1,22 +1,15 @@
 /**
  * @file polyfit.hpp
- * @brief Public header for the polynomial fitting API.
+ * @brief Public header for the full polynomial fitting API.
  *
- * Including this header gives you:
- *   - The full fitting API: `FuncEval`, `FuncEvalMany`, `FuncEvalND`, the free
- *     `fit()` overloads, `pack()`, plus the supporting type traits and tags.
- *   - All of the evaluation primitives also exposed by
- *     `polyfit/polyeval.hpp` (`horner`, `hybrid`, `horner_many`,
- *     `horner_transposed`, `hybrid_transposed*`).
+ * This header exposes the fitting API (`FuncEval`, `FuncEvalMany`,
+ * `FuncEvalND`, the free `fit()` overloads, `pack()`, plus the supporting type
+ * traits and tags) and everything in `polyfit/polyeval.hpp`. To evaluate
+ * already-known coefficients only, include `polyfit/polyeval.hpp` instead,
+ * which pulls in no fitting machinery.
  *
- * If you only need to evaluate already-known coefficients, prefer including
- * `polyfit/polyeval.hpp` directly — that header is intentionally lean and
- * pulls in no fitting machinery.
- *
- * The public class declarations live in this file; their out-of-class
- * definitions live under `internal/` split per-class
- * (`func_eval_impl.hpp`, `func_eval_many_impl.hpp`, `func_eval_nd_impl.hpp`,
- * `fit_free_impl.hpp`) and are aggregated by `internal/fast_eval_impl.hpp`.
+ * Class declarations live here. `internal/fast_eval_impl.hpp` aggregates the
+ * per-class out-of-class definitions under `internal/`.
  */
 
 #pragma once
@@ -45,8 +38,7 @@ template<typename... EvalTypes> class FuncEvalMany;
 /**
  * @brief Evaluator for a single polynomial fit of a callable.
  *
- * The evaluator stores coefficients in Horner order, from highest-order term to
- * constant term.
+ * The evaluator stores coefficients in Horner order, highest-order term first.
  */
 template<class Func, std::size_t NCOEFFS_CT, std::size_t ITERS_CT, FusionMode FUSION_MODE,
          ScalarKernel SCALAR_KERNEL, std::size_t HYBRID_K>
@@ -75,8 +67,8 @@ class FuncEval {
     FuncEval(FuncEval &&) noexcept = default;
     FuncEval &operator=(FuncEval &&) noexcept = default;
 
-    /// Single-point evaluation. The kernel (hybrid or classical Horner) is
-    /// fixed by the `SCALAR_KERNEL` template parameter.
+    /// Single-point evaluation. `SCALAR_KERNEL` selects the kernel (hybrid or
+    /// classical Horner).
     constexpr OutputType operator()(InputType pt) const noexcept;
 
     template<class V>
@@ -91,10 +83,8 @@ class FuncEval {
     PF_CXX20_CONSTEXPR void truncate(detail::value_type_or_t<OutputType> eps) noexcept;
 
     /**
-     * @brief Access coefficients in Horner order.
-     *
-     * The returned buffer stores coefficients from highest-order term to constant
-     * term so it can be passed directly to Horner-based evaluation helpers.
+     * @brief Access to the coefficients in Horner order, highest-order term
+     * first. The returned buffer feeds the Horner-based evaluation helpers.
      */
     [[nodiscard]] PF_CXX20_CONSTEXPR const OutputBuffer &coeffs() const noexcept;
     [[nodiscard]] constexpr std::size_t nCoeffs() const noexcept;
@@ -103,9 +93,9 @@ class FuncEval {
      * @brief Domain-map parameters for external evaluation of `coeffs()`.
      *
      * The map to the canonical domain is
-     * `fma(2, x, -domainSumEndpoints()) * domainInvSpan()`;
-     * `domainIsIdentity()` reports whether the map can be skipped (identity
-     * domain, or the map fused into the coefficients).
+     * `fma(2, x, -domainSumEndpoints()) * domainInvSpan()`. `domainIsIdentity()`
+     * reports whether the map can be skipped (identity domain, or the map fused
+     * into the coefficients).
      */
     constexpr InputType domainInvSpan() const noexcept {
         if constexpr (kStoresDomain) return domain_.invSpan;
@@ -207,23 +197,20 @@ template<typename... EvalTypes> class FuncEvalMany {
     void operator()(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out, std::size_t numPoints) const noexcept;
 
     /**
-     * @brief Recommended chunk granularity (in points) for evaluateChunk.
-     *
-     * Equals SIMD_WIDTH * optimalManyEvalUf<OutputType>() — the column-tiled
-     * batch path's block size, below which the multi-accumulator unroll
+     * @brief Recommended chunk granularity in points for `evaluateChunk`. The
+     * value is `SIMD_WIDTH * optimalManyEvalUf<OutputType>()`, the block size
+     * of the column-tiled batch path. Below this the multi-accumulator unroll
      * cannot run a full tile.
      */
     static constexpr std::size_t kChunkBlockSize = SIMD_WIDTH * detail::optimalManyEvalUf<OutputType>();
 
     /**
-     * @brief Chunked batch entry point for callers that drive their own
-     *        per-chunk post-processing (e.g. permuted scatter into a
-     *        destination buffer).
+     * @brief Chunked batch evaluation for callers that post-process each chunk,
+     *        for example a permuted scatter into a destination buffer.
      *
-     * Writes COUNT * chunkSize contiguous outputs into @p out, laid out
-     * as out[i*COUNT + j] = polynomial j evaluated at x[i]. Behaviour is
-     * identical to operator()(x, out, chunkSize); the separate name
-     * documents the intended usage pattern:
+     * Writes COUNT * chunkSize contiguous outputs into @p out, laid out as
+     * out[i*COUNT + j] = polynomial j at x[i]. Identical to
+     * operator()(x, out, chunkSize). The separate name marks the chunk-loop usage:
      *
      * @code
      *   std::array<OutputType, kChunkBlockSize * COUNT> scratch;
@@ -236,10 +223,7 @@ template<typename... EvalTypes> class FuncEvalMany {
      *   }
      * @endcode
      *
-     * The hot inner kernel is identical to the contiguous batch path,
-     * so per-chunk calls keep the multi-accumulator SIMD unroll. Any
-     * chunkSize is accepted; chunks of kChunkBlockSize or its multiples
-     * are optimal.
+     * Any chunkSize works; multiples of `kChunkBlockSize` are optimal.
      */
     void evaluateChunk(const InputType *PF_RESTRICT x, OutputType *PF_RESTRICT out,
                        std::size_t chunkSize) const noexcept;
@@ -340,42 +324,36 @@ class FuncEvalND {
     /**
      * @brief Contiguous AoS batch overload.
      *
-     * @param pts   pointer to @p count CanonicalInput values (AoS: an
-     *              interleaved buffer of `Scalar[DIM]` points).
-     * @param out   pointer to @p count CanonicalOutput values (AoS: an
-     *              interleaved buffer of `Scalar[OUT_DIM]` results).
+     * @param pts   @p count `CanonicalInput` points, AoS layout.
+     * @param out   @p count `CanonicalOutput` results, AoS layout.
      * @param count number of points.
      *
-     * Pick this when results land in a contiguous AoS destination. Supported
-     * for any `OUT_DIM >= 1`; the SIMD-across-points kernel collapses to a
-     * single Batch chain when `OUT_DIM == 1`.
+     * Supported for any `OUT_DIM >= 1`; at `OUT_DIM == 1` the SIMD-across-points
+     * kernel collapses to a single batch chain.
      */
     constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, std::size_t count) const noexcept;
     /**
-     * @brief Scatter-write AoS batch overload — stores result at @p out[@p perm[k]] instead of @p out[k].
+     * @brief Scatter-write AoS batch overload. The result of `pts[k]` lands at `out[perm[k]]`.
      *
-     * @param pts   pointer to @p count CanonicalInput values (AoS layout).
-     * @param out   pointer to AoS @p CanonicalOutput slots; result for input
-     *              @p pts[k] is written to @p out[perm[k]].
-     * @param perm  pointer to @p count destination indices.
+     * @param pts   @p count `CanonicalInput` points, AoS layout.
+     * @param out   AoS `CanonicalOutput` slots.
+     * @param perm  @p count destination indices.
      * @param count number of points.
      *
-     * Pick this when downstream wants permuted-AoS landings (e.g. permute-back
-     * tiles) without an intermediate buffer. Supported for any `OUT_DIM >= 1`.
+     * Permuted-AoS landings without an intermediate buffer. Supported for any
+     * `OUT_DIM >= 1`.
      */
     constexpr void operator()(const CanonicalInput *pts, CanonicalOutput *out, const std::uint32_t *perm,
                               std::size_t count) const noexcept;
     /**
-     * @brief SoA-output batch overload — one stride-1 buffer per output component.
+     * @brief SoA-output batch overload. Component d of point k lands at `soa_out[d][k]`.
      *
-     * @param pts     pointer to @p count CanonicalInput values (AoS layout).
-     * @param soa_out array of OUT_DIM pointers; element @p d of point @p k is
-     *                written to @p soa_out[d][k].
+     * @param pts     @p count `CanonicalInput` points, AoS layout.
+     * @param soa_out OUT_DIM stride-1 buffers, one per output component.
      * @param count   number of points.
      *
-     * Pick this when downstream consumes outputs per-component (one
-     * stride-1 array per output dim) — avoids the AoS shuffle on store.
-     * Supported for any `OUT_DIM >= 1`.
+     * Per-component consumers skip the AoS shuffle on store. Supported for any
+     * `OUT_DIM >= 1`.
      */
     constexpr void operator()(const CanonicalInput *pts, std::array<Scalar *, OUT_DIM> soa_out,
                               std::size_t count) const noexcept;
@@ -393,9 +371,8 @@ class FuncEvalND {
     [[nodiscard]] constexpr std::size_t nCoeffsPerAxis() const noexcept;
 
     /**
-     * @brief Access the coefficient at spatial index @p idx for output dimension @p k.
-     *
-     * Coefficients are in Horner order (highest-degree first along each axis).
+     * @brief Access the coefficient at spatial index @p idx for output
+     * dimension @p k, in Horner order along each axis (highest-degree first).
      */
     template<class IdxArray>
     [[nodiscard]] constexpr const Scalar &coeff(const IdxArray &idx, std::size_t k) const noexcept;
@@ -405,9 +382,9 @@ class FuncEvalND {
     /**
      * @brief View of the coefficient buffer for external evaluation.
      *
-     * Pass the view, together with `domainView()`, to
-     * `poly_eval::horner_nd_batch` / `horner_nd_batch_soa`. The view is
-     * invalidated by copy-assignment, move, and destruction of the evaluator.
+     * Pass the view with `domainView()` to `poly_eval::horner_nd_batch` /
+     * `horner_nd_batch_soa`. Copy-assignment, move and destruction of the
+     * evaluator invalidate the view.
      */
     [[nodiscard]] constexpr ConstMdspan coeffsMdspan() const noexcept;
 

@@ -1,15 +1,16 @@
 // bench_horner.cpp
 // -----------------------------------------------------------------------------
-// NanoBench suite for poly_eval public APIs with per-point timing (dynamic only):
-//   - Scalar Horner (runtime)
+// NanoBench suite for the poly_eval public APIs, with per-point timing:
+//   - scalar Horner (runtime count)
+//   - `hybrid` (runtime dispatch, compile-time degree, transposed SIMD)
 //   - SIMD Horner (runtime, aligned + unaligned)
-//   - horner_many (runtime)
-//   - horner_transposed scalar
+//   - `horner_many` (runtime)
+//   - `horner_transposed` scalar
 //   - ND Horner front-end (2D, 3D, 4D)
 //
-// Allocations and RNG are hoisted out of the timed region so measurements
-// reflect pure compute throughput.  A summary table at the end compares
-// measured GFLOPS against theoretical peak for the SIMD Horner benchmarks.
+// Allocations and RNG stay out of the timed region, so measurements reflect
+// pure compute throughput. A summary table at the end compares measured GFLOPS
+// against the theoretical peak of the SIMD Horner benchmarks.
 // -----------------------------------------------------------------------------
 
 #include "polyfit/polyfit.hpp"
@@ -41,7 +42,7 @@ int main() {
     constexpr size_t P = 4096;
     std::vector<size_t> nCoeffs1D = {8, 12, 16, 20, 24, 32};
 
-    // Track SIMD results for summary table
+    // Track SIMD results for the summary table.
     struct SimdRecord {
         size_t nCoeffs;
         double nsPerPoint;
@@ -284,23 +285,22 @@ int main() {
     // -------------------------------------------------------------------------
     // Peak throughput summary for SIMD Horner
     // -------------------------------------------------------------------------
-    // Assumes 2 FMA ports, each 256-bit (4 doubles), 2 FLOPS per FMA (mul+add).
-    // The cycle counter is TSC (base freq ~3 GHz) while the CPU turbos higher
-    // during AVX2 work, so we derive actual frequency from the ns/cyc ratio and
-    // compute efficiency at the true turbo frequency.
+    // The peak model assumes 2 FMA ports, 256-bit each (4 doubles), 2 FLOPS per
+    // FMA. The cycle counter is TSC at base frequency, but the CPU turbos higher
+    // during AVX2 work. The summary therefore estimates the turbo frequency and
+    // scores efficiency at that frequency.
     constexpr int fma_ports = 2;
 
-    // Estimate actual turbo frequency from the fastest (lowest-overhead) result
+    // First estimate: TSC frequency in cyc/ns, from the lowest-overhead result.
     double turbo_ghz = 0;
     for (auto const &record : simdRecords) {
         double freq = record.cyclesPerPoint / record.nsPerPoint;
         turbo_ghz = std::max(turbo_ghz, freq);
     }
-    // The TSC-based cycles undercount at turbo.  Scale to actual core cycles.
-    double tsc_ghz = turbo_ghz; // TSC freq ≈ cyc/ns
-    // Actual turbo is higher — estimate from wall-clock throughput of the
-    // tightest result (8 coefficients, aligned: nearly pure FMA, minimal overhead).
-    // At peak: vFMAs/pt = (nCoeffs-1)/simdSize, 2 ports → cyc/pt = vFMAs/2.
+    double tsc_ghz = turbo_ghz;
+    // TSC cycles undercount at turbo. Estimate the AVX2 turbo from the tightest
+    // result (8 coefficients, aligned, nearly pure FMA): at peak
+    // cyc/pt = (nCoeffs-1)/simdSize over 2 ports, so
     // actual_freq = theoretical_cyc / measured_ns.
     if (!simdRecords.empty()) {
         auto const &best = simdRecords.front();

@@ -1,8 +1,7 @@
-// Gate: this eval instantiation unrolls 8^3 = 512 tensor terms; with sanitizers
-// it needs far more memory and time than a 16 GiB CI runner allows (~15 MiB
-// per tensor coefficient under ASan+UBSan, superlinear in wall time). The
-// lighter mono TUs still cover the ND fit/eval machinery under sanitizers;
-// full-degree coverage remains in the non-sanitizer jobs.
+// Gate: under sanitizers this 8^3 = 512-term instantiation (about 15 MiB per
+// tensor coefficient, superlinear in wall time) exceeds the 16 GiB CI runners.
+// Lighter monomial TUs keep ND coverage under sanitizers; full degrees run in
+// the non-sanitizer jobs.
 #ifdef POLYFIT_TESTS_REDUCE_ND
 #include <gtest/gtest.h>
 TEST(Eval, In3Out3Deg8) { GTEST_SKIP() << "tensor size 512 exceeds the sanitizer build budget"; }

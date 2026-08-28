@@ -1,4 +1,4 @@
-// bench_ND_eval.cpp — single-point evaluation benchmarks for std::array points.
+// bench_ND_eval.cpp: single-point evaluation benchmarks for std::array points.
 
 #include "bench_ND_shared.hpp"
 

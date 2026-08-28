@@ -1,4 +1,4 @@
-// test_1D_basic_runtime.cpp — runtime coefficient count and runtime-eps fitting tests
+// test_1D_basic_runtime.cpp: runtime coefficient count and runtime-eps fitting tests
 
 #include "test_1D_helpers.hpp"
 

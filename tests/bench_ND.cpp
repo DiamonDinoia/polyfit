@@ -1,6 +1,6 @@
-// bench_ND.cpp — runner main(); benchmark groups live in bench_ND_build.cpp,
-// bench_ND_eval.cpp and bench_ND_misc.cpp (one heavyweight instantiation set
-// per translation unit).
+// bench_ND.cpp: runner main(). The benchmark groups live in bench_ND_build.cpp,
+// bench_ND_eval.cpp and bench_ND_misc.cpp, one heavyweight instantiation set
+// per translation unit.
 
 #include "bench_ND_shared.hpp"
 

@@ -1,4 +1,4 @@
-// bench_ND_build.cpp — fitting-time benchmarks for the ND evaluators.
+// bench_ND_build.cpp: fitting-time benchmarks for the ND evaluators.
 
 #include "bench_ND_shared.hpp"
 

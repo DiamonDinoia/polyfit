@@ -24,7 +24,7 @@ TEST(Utils, LinspaceArray) {
     EXPECT_NEAR(pts[0][1], -1.0, 1e-12);
     EXPECT_NEAR(pts[2][0], 1.0, 1e-12);
     EXPECT_NEAR(pts[2][1], 1.0, 1e-12);
-    // middle point should be midpoint
+    // The middle point must be the midpoint.
     EXPECT_NEAR(pts[1][0], 0.5, 1e-12);
     EXPECT_NEAR(pts[1][1], 0.0, 1e-12);
 }
