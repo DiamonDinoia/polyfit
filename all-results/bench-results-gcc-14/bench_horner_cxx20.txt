@@ -1,0 +1,117 @@
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|             ns/eval |              eval/s |    err% |     total | poly_eval Horner Suite
+|--------------------:|--------------------:|--------:|----------:|:-----------------------
+|                2.22 |      450,617,168.32 |    1.0% |      1.10 | `Dim=1, nCoeffs=8, SIMD=No, scalar-runtime`
+|                3.12 |      320,520,915.60 |    0.3% |      1.10 | `Dim=1, nCoeffs=8, SIMD=No, hybrid-runtime`
+|                2.05 |      488,634,357.93 |    0.7% |      1.10 | `Dim=1, nCoeffs=8, SIMD=No, hybrid-ct`
+|                1.45 |      689,266,311.68 |    0.2% |      1.09 | `Dim=1, nCoeffs=8, SIMD=Yes, hybrid-transposed`
+|                0.34 |    2,908,025,051.94 |    0.0% |      1.09 | `Dim=1, nCoeffs=8, SIMD=Yes, simd-aligned`
+|                0.36 |    2,776,305,602.26 |    0.1% |      1.09 | `Dim=1, nCoeffs=8, SIMD=Yes, simd-unaligned`
+|                3.87 |      258,729,123.17 |    0.3% |      1.10 | `Dim=1, nCoeffs=12, SIMD=No, scalar-runtime`
+|                3.85 |      259,610,088.91 |    0.2% |      1.10 | `Dim=1, nCoeffs=12, SIMD=No, hybrid-runtime`
+|                2.96 |      338,063,876.89 |    0.3% |      1.10 | `Dim=1, nCoeffs=12, SIMD=No, hybrid-ct`
+|                2.20 |      454,731,257.46 |    0.1% |      1.10 | `Dim=1, nCoeffs=12, SIMD=Yes, hybrid-transposed`
+|                0.49 |    2,045,036,941.98 |    0.0% |      1.10 | `Dim=1, nCoeffs=12, SIMD=Yes, simd-aligned`
+|                0.49 |    2,030,785,328.31 |    0.1% |      1.10 | `Dim=1, nCoeffs=12, SIMD=Yes, simd-unaligned`
+|                5.75 |      174,012,608.72 |    0.2% |      1.10 | `Dim=1, nCoeffs=16, SIMD=No, scalar-runtime`
+|                4.78 |      209,404,194.29 |    0.3% |      1.10 | `Dim=1, nCoeffs=16, SIMD=No, hybrid-runtime`
+|                3.76 |      266,073,445.16 |    0.6% |      1.10 | `Dim=1, nCoeffs=16, SIMD=No, hybrid-ct`
+|                2.79 |      358,328,857.58 |    0.0% |      1.10 | `Dim=1, nCoeffs=16, SIMD=Yes, hybrid-transposed`
+|                0.67 |    1,494,153,356.33 |    0.0% |      1.10 | `Dim=1, nCoeffs=16, SIMD=Yes, simd-aligned`
+|                0.66 |    1,509,934,365.44 |    0.0% |      1.10 | `Dim=1, nCoeffs=16, SIMD=Yes, simd-unaligned`
+|                7.87 |      127,009,092.63 |    0.1% |      1.10 | `Dim=1, nCoeffs=20, SIMD=No, scalar-runtime`
+|                5.25 |      190,529,644.52 |    0.5% |      1.10 | `Dim=1, nCoeffs=20, SIMD=No, hybrid-runtime`
+|                3.87 |      258,303,452.26 |    0.6% |      1.10 | `Dim=1, nCoeffs=20, SIMD=No, hybrid-ct`
+|                2.98 |      335,271,625.25 |    0.1% |      1.10 | `Dim=1, nCoeffs=20, SIMD=Yes, hybrid-transposed`
+|                0.87 |    1,155,041,736.60 |    0.0% |      1.10 | `Dim=1, nCoeffs=20, SIMD=Yes, simd-aligned`
+|                0.87 |    1,152,182,097.33 |    0.0% |      1.10 | `Dim=1, nCoeffs=20, SIMD=Yes, simd-unaligned`
+|               10.57 |       94,637,454.89 |    0.1% |      1.10 | `Dim=1, nCoeffs=24, SIMD=No, scalar-runtime`
+|                5.83 |      171,622,768.51 |    0.3% |      1.10 | `Dim=1, nCoeffs=24, SIMD=No, hybrid-runtime`
+|                4.57 |      218,596,600.86 |    0.5% |      1.11 | `Dim=1, nCoeffs=24, SIMD=No, hybrid-ct`
+|                3.25 |      307,895,384.25 |    0.0% |      1.10 | `Dim=1, nCoeffs=24, SIMD=Yes, hybrid-transposed`
+|                1.06 |      947,629,086.44 |    0.0% |      1.10 | `Dim=1, nCoeffs=24, SIMD=Yes, simd-aligned`
+|                1.05 |      949,260,077.44 |    0.0% |      1.10 | `Dim=1, nCoeffs=24, SIMD=Yes, simd-unaligned`
+|               16.49 |       60,637,217.23 |    0.0% |      1.10 | `Dim=1, nCoeffs=32, SIMD=No, scalar-runtime`
+|                7.07 |      141,403,995.27 |    0.4% |      1.10 | `Dim=1, nCoeffs=32, SIMD=No, hybrid-runtime`
+|                7.55 |      132,518,379.46 |    0.5% |      1.10 | `Dim=1, nCoeffs=32, SIMD=No, hybrid-ct`
+|                3.81 |      262,720,424.92 |    0.1% |      1.10 | `Dim=1, nCoeffs=32, SIMD=Yes, hybrid-transposed`
+|                1.44 |      695,683,695.34 |    0.0% |      1.10 | `Dim=1, nCoeffs=32, SIMD=Yes, simd-aligned`
+|                1.43 |      698,220,754.34 |    0.0% |      1.10 | `Dim=1, nCoeffs=32, SIMD=Yes, simd-unaligned`
+|                2.33 |      429,064,564.65 |    0.6% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=8, SIMD=No, many-runtime`
+|                2.57 |      388,982,511.66 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=8, SIMD=No, many-runtime`
+|                2.34 |      427,028,116.74 |    0.2% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=8, SIMD=No, many-runtime`
+|                2.25 |      443,582,291.65 |    0.3% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=8, SIMD=No, many-runtime`
+|                3.25 |      307,821,704.04 |    0.1% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=12, SIMD=No, many-runtime`
+|                3.84 |      260,319,151.18 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=12, SIMD=No, many-runtime`
+|                3.41 |      292,947,654.91 |    0.1% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=12, SIMD=No, many-runtime`
+|                3.31 |      302,053,609.90 |    0.1% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=12, SIMD=No, many-runtime`
+|                4.44 |      225,097,091.03 |    0.1% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=16, SIMD=No, many-runtime`
+|                5.31 |      188,334,207.07 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=16, SIMD=No, many-runtime`
+|                4.97 |      201,322,408.66 |    0.0% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=16, SIMD=No, many-runtime`
+|                4.81 |      208,066,977.27 |    0.2% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=16, SIMD=No, many-runtime`
+|                5.92 |      168,982,137.32 |    0.1% |      1.08 | `Dim=1, horner_many M=4, nCoeffs=20, SIMD=No, many-runtime`
+|                6.88 |      145,255,697.93 |    0.1% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=20, SIMD=No, many-runtime`
+|                6.51 |      153,536,842.84 |    0.2% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=20, SIMD=No, many-runtime`
+|                6.45 |      155,096,542.03 |    0.1% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=20, SIMD=No, many-runtime`
+|                7.56 |      132,222,394.52 |    0.1% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=24, SIMD=No, many-runtime`
+|                9.26 |      108,018,407.01 |    0.0% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=24, SIMD=No, many-runtime`
+|                8.33 |      120,057,685.13 |    0.0% |      1.10 | `Dim=1, horner_many M=12, nCoeffs=24, SIMD=No, many-runtime`
+|                8.24 |      121,387,925.44 |    0.1% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=24, SIMD=No, many-runtime`
+|               12.45 |       80,340,705.39 |    0.1% |      1.10 | `Dim=1, horner_many M=4, nCoeffs=32, SIMD=No, many-runtime`
+|               13.47 |       74,250,616.66 |    0.2% |      1.10 | `Dim=1, horner_many M=8, nCoeffs=32, SIMD=No, many-runtime`
+|               12.86 |       77,750,504.66 |    0.1% |      1.09 | `Dim=1, horner_many M=12, nCoeffs=32, SIMD=No, many-runtime`
+|               12.90 |       77,513,751.67 |    0.2% |      1.10 | `Dim=1, horner_many M=16, nCoeffs=32, SIMD=No, many-runtime`
+|                9.33 |      107,129,319.00 |    0.0% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=8`
+|                4.18 |      239,155,988.81 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=8`
+|                2.38 |      421,027,367.04 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=8`
+|                2.19 |      457,043,616.32 |    0.3% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=8`
+|               14.04 |       71,217,472.41 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=12`
+|                5.62 |      178,018,085.70 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=12`
+|                3.80 |      262,988,750.72 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=12`
+|                2.99 |      334,593,504.82 |    0.5% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=12`
+|               17.54 |       57,021,515.08 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=16`
+|                8.15 |      122,675,752.18 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=16`
+|                4.89 |      204,536,707.04 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=16`
+|                4.41 |      226,711,991.24 |    0.3% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=16`
+|               23.33 |       42,861,194.05 |    0.0% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=20`
+|               10.52 |       95,032,886.13 |    0.2% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=20`
+|                6.79 |      147,213,209.71 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=20`
+|                5.04 |      198,394,955.39 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=20`
+|               26.22 |       38,134,207.03 |    0.0% |      1.10 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=24`
+|               12.99 |       76,979,066.91 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=24`
+|                7.93 |      126,099,824.03 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=24`
+|                6.96 |      143,589,336.73 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=24`
+|               37.38 |       26,752,241.66 |    0.1% |      1.09 | `Dim=1, horner_transposed_scalar M=4, nCoeffs=32`
+|               17.71 |       56,479,873.37 |    0.2% |      1.09 | `Dim=1, horner_transposed_scalar M=8, nCoeffs=32`
+|               21.20 |       47,180,025.27 |    0.1% |      1.10 | `Dim=1, horner_transposed_scalar M=12, nCoeffs=32`
+|                8.72 |      114,727,557.49 |    0.1% |      1.09 | `Dim=1, horner_transposed_scalar M=16, nCoeffs=32`
+|                8.62 |      116,060,306.20 |    1.0% |      1.11 | `Dim=2, nCoeffs=4, SIMD=No, ND2D`
+|               27.84 |       35,922,006.97 |    0.1% |      1.10 | `Dim=2, nCoeffs=8, SIMD=No, ND2D`
+|              132.61 |        7,540,782.92 |    0.0% |      1.10 | `Dim=2, nCoeffs=16, SIMD=No, ND2D`
+|              337.73 |        2,960,928.57 |    0.0% |      1.10 | `Dim=2, nCoeffs=24, SIMD=No, ND2D`
+|               35.97 |       27,799,326.91 |    1.0% |      1.10 | `Dim=3, nCoeffs=4, SIMD=No, ND3D`
+|              229.98 |        4,348,212.58 |    0.2% |      1.10 | `Dim=3, nCoeffs=8, SIMD=No, ND3D`
+|            2,097.51 |          476,754.82 |    0.6% |      1.10 | `Dim=3, nCoeffs=16, SIMD=No, ND3D`
+|              151.21 |        6,613,531.40 |    0.9% |      1.10 | `Dim=4, nCoeffs=4, SIMD=No, ND4D`
+|            1,881.09 |          531,608.06 |    0.1% |      1.09 | `Dim=4, nCoeffs=8, SIMD=No, ND4D`
+
+SIMD Horner peak throughput (4-wide AVX2, 2 FMA ports, 4096 pts)
+TSC base: 0.00 GHz | Est. AVX2 turbo: 2.54 GHz | HW DP peak: 40.7 GFLOPS
+benchmark      ns/pt    GFLOPS  % HW peak
+----------- -------- --------- ----------
+N=8  aln     0.344      40.7     100.0%
+N=8  uln     0.360      38.9      95.5%
+N=12 aln     0.489      45.0     110.5%
+N=12 uln     0.492      44.7     109.7%
+N=16 aln     0.669      44.8     110.1%
+N=16 uln     0.662      45.3     111.3%
+N=20 aln     0.866      43.9     107.8%
+N=20 uln     0.868      43.8     107.5%
+N=24 aln     1.055      43.6     107.1%
+N=24 uln     1.053      43.7     107.3%
+N=32 aln     1.437      43.1     105.9%
+N=32 uln     1.432      43.3     106.3%

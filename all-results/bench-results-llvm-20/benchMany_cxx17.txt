@@ -1,0 +1,44 @@
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|             ns/eval |              eval/s |    err% |     total | poly_eval grouped-function throughput
+|--------------------:|--------------------:|--------:|----------:|:--------------------------------------
+|                5.25 |      190,380,885.89 |    0.5% |      0.24 | `1 funcs`
+|                5.09 |      196,597,788.03 |    0.2% |      0.24 | `1 funcs (non-many)`
+|                5.26 |      189,954,325.22 |    0.3% |      0.24 | `2 funcs`
+|               10.07 |       99,288,568.57 |    0.2% |      0.24 | `2 funcs (non-many)`
+|                5.06 |      197,519,915.01 |    0.6% |      0.24 | `3 funcs`
+|               13.46 |       74,267,257.47 |    0.5% |      0.23 | `3 funcs (non-many)`
+|                5.26 |      190,042,130.24 |    0.5% |      0.24 | `4 funcs`
+|               19.30 |       51,822,941.06 |    0.2% |      0.24 | `4 funcs (non-many)`
+|                7.88 |      126,848,266.49 |    0.8% |      0.24 | `5 funcs`
+|               23.56 |       42,447,659.27 |    0.1% |      0.24 | `5 funcs (non-many)`
+|                8.02 |      124,625,401.34 |    0.8% |      0.24 | `6 funcs`
+|               28.44 |       35,165,272.31 |    0.2% |      0.24 | `6 funcs (non-many)`
+|                8.15 |      122,679,621.63 |    0.4% |      0.24 | `7 funcs`
+|               32.96 |       30,341,834.22 |    0.2% |      0.24 | `7 funcs (non-many)`
+|                8.04 |      124,346,279.70 |    0.5% |      0.24 | `8 funcs`
+|               36.36 |       27,506,487.53 |    0.3% |      0.24 | `8 funcs (non-many)`
+|               12.76 |       78,361,008.98 |    0.6% |      0.24 | `9 funcs`
+|               40.58 |       24,644,673.77 |    0.2% |      0.24 | `9 funcs (non-many)`
+|               12.71 |       78,698,224.36 |    0.5% |      0.24 | `10 funcs`
+|               44.59 |       22,428,074.25 |    0.1% |      0.24 | `10 funcs (non-many)`
+|               11.25 |       88,873,827.38 |    1.2% |      0.24 | `11 funcs`
+|               48.63 |       20,564,032.71 |    0.2% |      0.24 | `11 funcs (non-many)`
+|               13.24 |       75,545,808.12 |    0.5% |      0.23 | `12 funcs`
+|               52.87 |       18,914,438.52 |    0.2% |      0.24 | `12 funcs (non-many)`
+|               20.66 |       48,392,711.94 |   14.2% |      0.25 | :wavy_dash: `13 funcs` (Unstable with ~1,082.5 iters. Increase `minEpochIterations` to e.g. 10825)
+|               57.09 |       17,517,075.09 |    0.1% |      0.24 | `13 funcs (non-many)`
+|               21.21 |       47,153,017.77 |    0.7% |      0.24 | `14 funcs`
+|               61.32 |       16,309,153.16 |    0.2% |      0.24 | `14 funcs (non-many)`
+|               21.16 |       47,264,993.21 |    3.1% |      0.24 | `15 funcs`
+|               68.98 |       14,496,574.32 |    0.1% |      0.24 | `15 funcs (non-many)`
+|               14.45 |       69,198,042.45 |    0.4% |      0.23 | `16 funcs`
+|               78.62 |       12,718,600.95 |    1.7% |      0.24 | `16 funcs (non-many)`
+|                8.09 |      123,542,187.83 |    0.6% |      0.24 | `8 funcs (mixed domains)`
+|               35.72 |       27,998,408.74 |    0.1% |      0.24 | `8 funcs (mixed domains, non-many)`
+|               14.76 |       67,746,960.67 |    0.7% |      0.23 | `16 funcs (mixed domains)`
+|               69.84 |       14,318,362.96 |    0.2% |      0.24 | `16 funcs (mixed domains, non-many)`
+|               25.77 |       38,798,258.77 |    0.2% |      0.24 | `8 funcs (complex outputs, bulk)`

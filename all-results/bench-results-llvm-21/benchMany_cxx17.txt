@@ -1,0 +1,50 @@
+Warning, results might be unstable:
+* CPU frequency scaling enabled: CPU 0 between 800.0 and 2,600.0 MHz
+* Turbo is enabled, CPU frequency will fluctuate
+
+Recommendations
+* Use 'pyperf system tune' before benchmarking. See https://github.com/psf/pyperf
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|             ns/eval |              eval/s |    err% |     total | poly_eval grouped-function throughput
+|--------------------:|--------------------:|--------:|----------:|:--------------------------------------
+|                3.42 |      292,617,379.39 |    0.1% |      0.24 | `1 funcs`
+|                2.75 |      363,846,019.47 |    0.2% |      0.24 | `1 funcs (non-many)`
+|                3.44 |      290,724,142.19 |    0.0% |      0.24 | `2 funcs`
+|                5.52 |      181,058,698.49 |    0.1% |      0.24 | `2 funcs (non-many)`
+|                3.41 |      293,427,686.89 |    0.0% |      0.24 | `3 funcs`
+|                7.82 |      127,908,964.28 |    0.4% |      0.24 | `3 funcs (non-many)`
+|                3.42 |      292,043,579.77 |    0.0% |      0.24 | `4 funcs`
+|               10.59 |       94,435,668.50 |    0.4% |      0.24 | `4 funcs (non-many)`
+|                5.45 |      183,632,367.87 |    0.1% |      0.24 | `5 funcs`
+|               13.30 |       75,187,655.24 |    0.4% |      0.23 | `5 funcs (non-many)`
+|                5.45 |      183,434,483.45 |    0.1% |      0.24 | `6 funcs`
+|               16.58 |       60,314,681.15 |    0.8% |      0.24 | `6 funcs (non-many)`
+|                7.34 |      136,172,892.41 |    0.0% |      0.24 | `7 funcs`
+|               18.38 |       54,396,406.33 |    0.6% |      0.24 | `7 funcs (non-many)`
+|                7.11 |      140,716,355.06 |    0.1% |      0.24 | `8 funcs`
+|               20.61 |       48,517,167.91 |    0.1% |      0.24 | `8 funcs (non-many)`
+|                7.79 |      128,345,832.44 |    0.2% |      0.24 | `9 funcs`
+|               22.91 |       43,651,672.60 |    0.1% |      0.24 | `9 funcs (non-many)`
+|               20.02 |       49,947,243.91 |    0.1% |      0.24 | `10 funcs`
+|               25.34 |       39,464,145.45 |    0.1% |      0.24 | `10 funcs (non-many)`
+|                7.89 |      126,755,756.27 |    0.1% |      0.24 | `11 funcs`
+|               27.80 |       35,968,548.16 |    0.1% |      0.24 | `11 funcs (non-many)`
+|                7.66 |      130,477,239.49 |    0.1% |      0.24 | `12 funcs`
+|               30.11 |       33,211,059.87 |    0.1% |      0.24 | `12 funcs (non-many)`
+|                9.88 |      101,186,149.22 |    0.3% |      0.24 | `13 funcs`
+|               33.11 |       30,200,413.84 |    0.1% |      0.24 | `13 funcs (non-many)`
+|                9.50 |      105,275,698.89 |    0.1% |      0.24 | `14 funcs`
+|               36.28 |       27,560,644.01 |    1.1% |      0.24 | `14 funcs (non-many)`
+|               11.52 |       86,840,344.64 |    0.6% |      0.24 | `15 funcs`
+|               42.69 |       23,424,602.87 |    0.7% |      0.24 | `15 funcs (non-many)`
+|               11.81 |       84,676,334.41 |    1.3% |      0.24 | `16 funcs`
+|               46.23 |       21,631,543.78 |    0.2% |      0.24 | `16 funcs (non-many)`
+|                6.26 |      159,756,499.75 |    0.2% |      0.24 | `8 funcs (mixed domains)`
+|               23.01 |       43,462,307.05 |    0.6% |      0.24 | `8 funcs (mixed domains, non-many)`
+|               11.45 |       87,302,305.21 |    0.0% |      0.24 | `16 funcs (mixed domains)`
+|               45.15 |       22,148,060.34 |    0.2% |      0.24 | `16 funcs (mixed domains, non-many)`
+|               22.25 |       44,934,737.75 |    0.2% |      0.24 | `8 funcs (complex outputs, bulk)`

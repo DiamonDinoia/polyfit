@@ -1,0 +1,32 @@
+Warning, results might be unstable:
+* CPU frequency scaling enabled: CPU 0 between 800.0 and 2,600.0 MHz
+* Turbo is enabled, CPU frequency will fluctuate
+
+Recommendations
+* Use 'pyperf system tune' before benchmarking. See https://github.com/psf/pyperf
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|            ns/build |             build/s |    err% |     total | fitting time
+|--------------------:|--------------------:|--------:|----------:|:-------------
+|           40,591.84 |           24,635.49 |    0.0% |      0.12 | `F:ℝ²→ℝ², D=16 build`
+|           57,493.32 |           17,393.33 |    0.1% |      0.12 | `F:ℝ²→ℝ³, D=16 build`
+|          187,727.03 |            5,326.88 |    0.0% |      0.12 | `F:ℝ³→ℝ³, D=8 build`
+|          248,788.22 |            4,019.48 |    0.1% |      0.12 | `F:ℝ³→ℝ⁴, D=8 build`
+
+|             ns/eval |              eval/s |    err% |     total | throughput (single x)
+|--------------------:|--------------------:|--------:|----------:|:----------------------
+|               41.95 |       23,837,045.76 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16`
+|               89.65 |       11,153,985.80 |    0.1% |      0.24 | `F:ℝ²→ℝ³, D=16`
+|              205.40 |        4,868,461.18 |    0.0% |      0.24 | `F:ℝ³→ℝ³, D=8`
+|              138.89 |        7,199,715.79 |    0.2% |      0.23 | `F:ℝ³→ℝ⁴, D=8`
+|               42.23 |       23,681,241.05 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 generic point`
+|               42.30 |       23,643,252.47 |    0.3% |      0.24 | `F:ℝ²→ℝ², D=16 canonical point`
+|               41.95 |       23,838,213.72 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 array`
+|               41.96 |       23,832,461.01 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 variadic`
+|           44,185.06 |           22,632.09 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 manual loop`
+|           20,468.28 |           48,856.09 |    0.0% |      0.24 | `F:ℝ²→ℝ², D=16 canonical batch`
+|           44,246.38 |           22,600.72 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 generic loop`
+|           42,688.64 |           23,425.44 |    0.1% |      0.24 | `F:ℝ²→ℝ², D=16 container batch`

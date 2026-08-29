@@ -1,0 +1,33 @@
+Warning, results might be unstable:
+* CPU frequency scaling enabled: CPU 0 between 800.0 and 2,300.0 MHz
+* Turbo is enabled, CPU frequency will fluctuate
+
+Recommendations
+* Use 'pyperf system tune' before benchmarking. See https://github.com/psf/pyperf
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|               ns/op |                op/s |    err% |     total | benchmark
+|--------------------:|--------------------:|--------:|----------:|:----------
+|              332.12 |        3,010,930.51 |    0.2% |      0.12 | `float constexpr fit`
+|              802.00 |        1,246,876.96 |    0.2% |      0.12 | `float coefficient-count fit`
+|            1,720.56 |          581,207.26 |    0.4% |      0.12 | `float eps fit`
+|                1.41 |      709,591,178.70 |    0.1% |      0.12 | `float eval`
+|                0.25 |    3,925,638,635.90 |    0.8% |      0.12 | `float eval_many`
+|              364.93 |        2,740,283.49 |    0.0% |      0.12 | `double constexpr fit`
+|              914.37 |        1,093,653.56 |    0.5% |      0.12 | `double coefficient-count fit`
+|            1,757.73 |          568,914.49 |    0.2% |      0.12 | `double eps fit`
+|                1.41 |      710,030,740.58 |    0.0% |      0.12 | `double eval`
+|                0.50 |    2,016,802,345.54 |    0.7% |      0.12 | `double eval_many`
+|              464.20 |        2,154,264.67 |    0.1% |      0.12 | `complex<double> constexpr fit`
+|            1,047.60 |          954,567.33 |    0.0% |      0.12 | `complex<double> coefficient-count fit`
+|            1,998.61 |          500,347.88 |    0.2% |      0.12 | `complex<double> eps fit`
+|                1.90 |      525,864,013.23 |    0.8% |      0.12 | `complex<double> eval`
+|                0.83 |    1,198,868,267.07 |    0.2% |      0.12 | `complex<double> eval_many`
+|              450.06 |        2,221,933.21 |    0.0% |      0.12 | `complex<float> constexpr fit`
+|            1,084.73 |          921,892.18 |    0.1% |      0.12 | `complex<float> coefficient-count fit`
+|            7,769.98 |          128,700.45 |    0.1% |      0.12 | `complex<float> eps fit`
+|                2.80 |      357,663,011.14 |    0.1% |      0.12 | `complex<float> eval`
+|                0.46 |    2,192,991,774.02 |    0.0% |      0.12 | `complex<float> eval_many`
