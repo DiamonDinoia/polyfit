@@ -53,13 +53,14 @@ include(${CPM_DOWNLOAD_LOCATION})
 # -----------------------------------------
 
 # Skip the fetch when a parent project already supplies the target. Safe only
-# because the whole stack pins xsimd 14.3.0 and poet v0.0.1; a divergent pin
-# would be silently discarded here.
+# because the whole stack pins one xsimd commit and poet v0.0.1; a divergent pin
+# would be silently discarded here. The xsimd fork carries the double -> int64
+# fast_cast and the u32 -> i64 gather kernels proposed upstream.
 if (NOT TARGET xsimd)
     CPMAddPackage(
             NAME xsimd
-            GITHUB_REPOSITORY xtensor-stack/xsimd
-            GIT_TAG 14.3.0
+            GITHUB_REPOSITORY DiamonDinoia/xsimd
+            GIT_TAG 97fe96888c792be8abef8c66ed0ca46ec4c8d8f9
             OPTIONS
             "XSIMD_BUILD_TESTS OFF"
             "XSIMD_BUILD_BENCHMARKS OFF"
