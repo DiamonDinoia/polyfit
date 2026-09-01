@@ -20,3 +20,20 @@ TEST(PolyEval, CompileTimeDegreeDoubleRandom) {
     poly(xs.data(), ys.data(), xs.size());
     batch_verify<double>(double_func, xs, ys, eps);
 }
+
+// horner on an xsimd batch returns a batch; every lane equals the scalar Horner result.
+TEST(PolyEval, HornerBatchInputMatchesScalar) {
+    using B = xsimd::batch<double>;
+    constexpr std::array<double, 5> c{1.0, -2.0, 0.5, 3.0, -1.0};
+    alignas(B) std::array<double, B::size> xs{};
+    for (std::size_t i = 0; i < B::size; ++i) xs[i] = -1.0 + 2.0 * double(i) / double(B::size);
+    const auto x = B::load_aligned(xs.data());
+    const auto fixed = poly_eval::horner<5>(x, c.data());
+    const auto dynamic = poly_eval::horner(x, c.data(), c.size());
+    static_assert(std::is_same_v<decltype(fixed), const B>);
+    static_assert(std::is_same_v<decltype(dynamic), const B>);
+    for (std::size_t i = 0; i < B::size; ++i) {
+        EXPECT_EQ(fixed.get(i), poly_eval::horner<5>(xs[i], c.data()));
+        EXPECT_EQ(dynamic.get(i), poly_eval::horner(xs[i], c.data(), c.size()));
+    }
+}

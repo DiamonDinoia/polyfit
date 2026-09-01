@@ -7,7 +7,8 @@ There are two independent public headers; include whichever matches your need.
 - `#include <polyfit/polyeval.hpp>` — **evaluation only**. Pure Horner / mixed
   Estrin–Horner evaluators (`poly_eval::horner`, `hybrid`, `horner_many`,
   `horner_transposed`, `hybrid_transposed*`) operating on coefficients you
-  already have. No fitting machinery is pulled in.
+  already have. No fitting machinery is pulled in. `horner` also accepts an
+  `xsimd::batch` as `x` and then returns a batch, one Horner evaluation per lane.
 - `#include <polyfit/polyfit.hpp>` — **fitting + evaluation**. Adds the
   `FuncEval` / `FuncEvalMany` / `FuncEvalND` classes, the free `fit()`
   overloads, and `pack()`. Re-exports everything from `polyeval.hpp`, so this

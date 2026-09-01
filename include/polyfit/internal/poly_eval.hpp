@@ -13,9 +13,16 @@
 
 namespace poly_eval {
 
-// Evaluate one polynomial at one point. Coefficients are in Horner order.
+namespace detail {
+// Accumulator of horner(x, c): the coefficient type, or the batch type when x is an xsimd batch.
+template<typename InputType, typename CoeffType>
+using horner_eval_t = std::conditional_t<isXsimdBatch_v<InputType>, InputType, CoeffType>;
+} // namespace detail
+
+// Evaluate one polynomial at one point or one batch of points. Coefficients are in Horner order.
 template<std::size_t NCOEFFS = 0, typename CoeffType, typename InputType>
-PF_ALWAYS_INLINE constexpr CoeffType horner(InputType xin, const CoeffType *c_ptr, std::size_t c_size = 0) noexcept;
+PF_ALWAYS_INLINE constexpr detail::horner_eval_t<InputType, CoeffType> horner(InputType xin, const CoeffType *c_ptr,
+                                                                              std::size_t c_size = 0) noexcept;
 
 // Mixed Estrin/Horner single-point evaluator. A compile-time degree evaluates
 // through B independent FMA chains combined by an Estrin tree. A runtime
@@ -594,8 +601,9 @@ PF_ALWAYS_INLINE typename Batch::value_type hybrid_transposed(
 namespace poly_eval {
 
 template<std::size_t NCOEFFS, typename CoeffType, typename InputType>
-PF_ALWAYS_INLINE constexpr CoeffType horner(const InputType x, const CoeffType *c_ptr, const std::size_t c_size) noexcept {
-    return detail::horner_impl<NCOEFFS, CoeffType>(x, c_ptr, c_size);
+PF_ALWAYS_INLINE constexpr detail::horner_eval_t<InputType, CoeffType> horner(const InputType x, const CoeffType *c_ptr,
+                                                                              const std::size_t c_size) noexcept {
+    return detail::horner_impl<NCOEFFS, detail::horner_eval_t<InputType, CoeffType>>(x, c_ptr, c_size);
 }
 
 template<std::size_t NCOEFFS, typename CoeffType, typename InputType, std::size_t K_OVERRIDE>
