@@ -1,4 +1,3 @@
-#pragma once
 
 #undef PF_ALWAYS_INLINE
 #undef PF_FLATTEN
