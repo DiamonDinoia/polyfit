@@ -60,7 +60,7 @@ if (NOT TARGET xsimd)
     CPMAddPackage(
             NAME xsimd
             GITHUB_REPOSITORY DiamonDinoia/xsimd
-            GIT_TAG 97fe96888c792be8abef8c66ed0ca46ec4c8d8f9
+            GIT_TAG 6351cd2e85fe45c06c69aa61e7e161445a42c8a0
             OPTIONS
             "XSIMD_BUILD_TESTS OFF"
             "XSIMD_BUILD_BENCHMARKS OFF"
