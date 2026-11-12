@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 
+file(STRINGS include/polyfit/version.hpp _polyfit_version REGEX "POLYFIT_VERSION_STRING")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _polyfit_version "${_polyfit_version}")
 project(polyfit
-        VERSION 0.0.6
+        VERSION ${_polyfit_version}
         DESCRIPTION "A fast polynomial fitting evaluation library"
         LANGUAGES CXX
 )

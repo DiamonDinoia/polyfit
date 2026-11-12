@@ -25,6 +25,7 @@
 #endif
 
 #include "internal/mdspan.hpp"
+#include "version.hpp"
 
 #include "internal/api_types.hpp"
 #include "internal/macros.hpp"
