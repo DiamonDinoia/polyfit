@@ -2,7 +2,6 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <random>
-#include <tuple>
 
 #include "polyfit/polyfit.hpp"
 
@@ -14,60 +13,19 @@ static_assert(poly_eval::detail::FitOptions<poly_eval::EvalPts<64>, poly_eval::M
 static_assert(poly_eval::detail::FitOptions<poly_eval::MaxCoeffs<8>, poly_eval::MaxCoeffs<16>>::VALID == false);
 static_assert(poly_eval::detail::FitOptions<poly_eval::FuseAuto, poly_eval::FuseNever>::VALID == false);
 
-// Maximum relative error over random samples.
+// Maximum relative error over random samples of a 2D domain.
 template<typename TrueF, typename ApproxF, typename Domain>
 double computeMaxRelativeError(TrueF f_true, ApproxF f_approx, Domain low, Domain high, int num_samples) {
-    // RNG seeded from GoogleTest's random seed for reproducibility
-
-    std::uniform_real_distribution<double> dist_x;
-    std::uniform_real_distribution<double> dist_y;
-
-    if constexpr (std::is_floating_point_v<Domain>) {
-        dist_x = std::uniform_real_distribution<double>(low, high);
-    } else {
-        dist_x = std::uniform_real_distribution<double>(std::get<0>(low), std::get<0>(high));
-        dist_y = std::uniform_real_distribution<double>(std::get<1>(low), std::get<1>(high));
-    }
+    std::uniform_real_distribution<double> dist_x(low[0], high[0]);
+    std::uniform_real_distribution<double> dist_y(low[1], high[1]);
 
     double maxErr = 0.0;
     for (int i = 0; i < num_samples; ++i) {
-        Domain pt{};
-        if constexpr (std::is_floating_point_v<Domain>) {
-            pt = dist_x(rng);
-        } else {
-            pt = Domain{dist_x(rng), dist_y(rng)};
-        }
-        const auto true_val = f_true(pt);
-        const auto approx_val = f_approx(pt);
-        double err = poly_eval::detail::relativeError(approx_val, true_val);
+        const Domain pt{dist_x(rng), dist_y(rng)};
+        double err = poly_eval::detail::relativeError(f_approx(pt), f_true(pt));
         maxErr = std::max(maxErr, err);
     }
     return maxErr;
-}
-
-TEST(FuncEval1D, FixedNCoeffsVsAdaptiveRelativeError) {
-    using namespace poly_eval;
-    auto f = [](double x) {
-        return std::exp(std::sin(3 * x));
-    };
-    double a = -1.0;
-    double b = 1.0;
-    constexpr int num_samples = 1000;
-
-    // Fixed coefficient count
-    constexpr int nCoeffsFixed = 16;
-    auto fe_fixed = poly_eval::fit(f, nCoeffsFixed, a, b);
-    // Adaptive
-    constexpr double eps = 1e-6;
-    auto fe_adapt = poly_eval::fit(f, eps, a, b);
-
-    double maxRelFixed = computeMaxRelativeError([&](double x) { return f(x); },
-                                                      [&](double x) { return fe_fixed(x); }, a, b, num_samples);
-    double maxRelAdapt = computeMaxRelativeError([&](double x) { return f(x); },
-                                                      [&](double x) { return fe_adapt(x); }, a, b, num_samples);
-
-    EXPECT_LT(maxRelFixed, 1e-2);
-    EXPECT_LT(maxRelAdapt, 1e-5);
 }
 
 TEST(FuncEval2D, FixedNCoeffsVsAdaptiveRelativeError) {

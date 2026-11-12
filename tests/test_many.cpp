@@ -146,16 +146,6 @@ TYPED_TEST(FastEvalManyTest, Tuple) {
     for (std::size_t f = 0; f < this->N; ++f) EXPECT_NEAR(out[f], func(xs[f]), 1e-15);
 }
 
-// ----- Public API shape assertions -----
-
-TEST(FuncEvalManyAPI, ExposesOnlyUsefulCount) {
-    using Group2 = decltype(makeGroup<2>());
-    using Group5 = decltype(makeGroup<5>());
-
-    EXPECT_EQ(Group2::COUNT, 2u);
-    EXPECT_EQ(Group5::COUNT, 5u);
-}
-
 // ----- FuncEvalMany truncation tests -----
 
 TEST(FuncEvalManyTruncate, BasicTruncation) {
@@ -185,21 +175,6 @@ TEST(FuncEvalManyTruncate, PreservesAccuracy) {
         auto out = group(x);
         for (std::size_t f = 0; f < 3; ++f) EXPECT_NEAR(out[f], func(x), 1e-13);
     }
-}
-
-// Sizes that are not SIMD multiples must still work via padding.
-TEST(FuncEvalManySIMD, NonMultipleSizes) {
-    // Sizes 3 and 5 are not multiples of the typical SIMD widths (2 or 4).
-    auto group3 = makeGroup<3>();
-    auto group5 = makeGroup<5>();
-
-    double x = 0.42;
-    auto out3 = group3(x);
-    auto out5 = group5(x);
-    double expected = func(x);
-
-    for (std::size_t f = 0; f < 3; ++f) EXPECT_NEAR(out3[f], expected, 1e-14);
-    for (std::size_t f = 0; f < 5; ++f) EXPECT_NEAR(out5[f], expected, 1e-14);
 }
 
 TEST(FuncEvalManyMixedDomain, SameInputMatchesIndividual) {

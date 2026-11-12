@@ -22,7 +22,9 @@ TEST(PolyEval, TruncateLowDegreeFunc) {
 }
 
 TEST(PolyEval, TruncatePreservesConstant) {
-    auto constantFunc = [](double x) { (void)x; return 42.0; };
+    auto constantFunc = []([[maybe_unused]] double x) {
+        return 42.0;
+    };
     auto poly = poly_eval::fit(constantFunc, 16, -1.0, 1.0);
     poly.truncate(1e-10);
     EXPECT_EQ(poly.coeffs().size(), 1u);

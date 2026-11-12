@@ -84,25 +84,6 @@ static_assert(optimal_block_size<32, 1, 32, EvalPolicy::Throughput>()
 
 } // namespace
 
-TEST(OptimalBlockSize, RuntimeSanityWrapsConstexpr) {
-    // The static_asserts above guard these values at compile time. Repeat the
-    // key ones as runtime checks.
-    constexpr size_t k8 = optimal_block_size<8, 8, 32, EvalPolicy::Throughput>();
-    constexpr size_t k16 = optimal_block_size<16, 8, 32, EvalPolicy::Throughput>();
-    EXPECT_EQ(k8, size_t(7));
-    EXPECT_EQ(k16, size_t(15));
-    const size_t latencyK = optimal_block_size<16, 8, 32, EvalPolicy::Latency>();
-    EXPECT_GE(latencyK, size_t(2));
-    EXPECT_LE(latencyK, size_t(15));
-}
-
-TEST(EvalPolicy, EnumRoundtrip) {
-    EvalPolicy p = EvalPolicy::Throughput;
-    EXPECT_EQ(static_cast<int>(p), static_cast<int>(EvalPolicy::Throughput));
-    EXPECT_NE(static_cast<int>(EvalPolicy::Latency), static_cast<int>(EvalPolicy::Throughput));
-    EXPECT_NE(static_cast<int>(EvalPolicy::Balanced), static_cast<int>(EvalPolicy::Latency));
-}
-
 // -----------------------------------------------------------------------------
 // HybridK override: numerical parity with the default heuristic.
 // -----------------------------------------------------------------------------

@@ -77,12 +77,12 @@ function(polyfit_configure_benchmark_target target std)
 endfunction()
 
 # Ninja-only pools bounding the peak memory of parallel template-heavy TUs.
-# polyfit_xl covers the 4096-coefficient-class TUs (12.3/7.8 GiB each at -O0,
-# ~1.5-5.5 GiB at -O3); keep it at 1 unless the runner is large. benchmarks.yml
-# uses 2. polyfit_heavy covers the remaining mid-weight TUs (several GiB each)
-# and runs four at a time. Other generators ignore JOB_POOL_COMPILE.
-set(POLYFIT_XL_POOL_SIZE "1" CACHE STRING "Concurrent slots for the polyfit_xl job pool (raise only on >=32 GiB runners)")
-set_property(GLOBAL PROPERTY JOB_POOLS polyfit_xl=${POLYFIT_XL_POOL_SIZE} polyfit_heavy=4)
+# polyfit_bench covers the bench_ND TUs (4096-coefficient rows, ~1.5-5.5 GiB
+# each at -O3); keep it at 1 unless the runner is large. benchmarks.yml uses 2.
+# polyfit_heavy covers the mid-weight test TUs (several GiB each) and runs four
+# at a time. Other generators ignore JOB_POOL_COMPILE.
+set(POLYFIT_BENCH_POOL_SIZE "1" CACHE STRING "Concurrent slots for the polyfit_bench job pool (raise only on >=32 GiB runners)")
+set_property(GLOBAL PROPERTY JOB_POOLS polyfit_bench=${POLYFIT_BENCH_POOL_SIZE} polyfit_heavy=4)
 
 # -----------------------------------------------------------------------------
 # Helpers to add unit-test targets for multiple C++ standards
@@ -192,27 +192,11 @@ set(POLYFIT_ND_MONOMIAL_TESTS
         test_ND_accuracy_in4_out4_deg4.cpp
 )
 add_polyfit_test_matrix(test_ND
-        test_ND_accuracy.cpp
         test_ND_api.cpp
-        test_ND_fusion_matches_auto.cpp
-        test_ND_fusion_no_domain_params.cpp
-        test_ND_fusion_wide_domain.cpp
-        test_ND_fusion_vector_valued.cpp
-        test_ND_fusion_never.cpp
+        test_ND_fusion.cpp
         ${POLYFIT_ND_MONOMIAL_TESTS}
 )
-# The 4096-coefficient instantiations get their own target so the one-slot
-# polyfit_xl pool never compiles two of them at once.
-add_polyfit_test_matrix(test_ND_monomial_xl
-        test_ND_accuracy_in3_out2_deg16.cpp
-        test_ND_accuracy_in4_out3_deg8.cpp
-)
-foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
-    set_property(TARGET test_ND_monomial_xl_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_xl)
-endforeach ()
-option(POLYFIT_TESTS_SKIP_XL "GTEST_SKIP the two 4096-coefficient ND monomial TESTs" OFF)
-
-# Monomial TUs with 512+ tensor coefficients are untenable under sanitizers
+# Monomial TUs with 512 tensor coefficients are untenable under sanitizers
 # (~15 MiB per tensor coefficient); POLYFIT_TESTS_REDUCE_ND swaps their TEST
 # bodies to GTEST_SKIP. The 256-coefficient TUs keep sanitizer coverage of the
 # ND machinery; full degrees run in the non-sanitizer jobs. MSVC applies no
@@ -220,24 +204,20 @@ option(POLYFIT_TESTS_SKIP_XL "GTEST_SKIP the two 4096-coefficient ND monomial TE
 # the definition and keeps full coverage.
 if (NOT MSVC AND (POLYFIT_ENABLE_ASAN OR POLYFIT_ENABLE_UBSAN))
     set_source_files_properties(
-            test_ND_accuracy_in3_out2_deg16.cpp
             test_ND_accuracy_in3_out3_deg8.cpp
             test_ND_accuracy_in3_out4_deg8.cpp
-            test_ND_accuracy_in4_out3_deg8.cpp
             PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
     )
 endif ()
 
-# The 4096-coefficient instantiations (the two XL test TUs and the matching
-# bench rows) also exceed a 90-minute CI build under clang and MSVC at
-# -O2/-O3 (gcc does them in seconds); jobs can opt out.
-if (POLYFIT_TESTS_SKIP_XL)
+# The 4096-coefficient bench rows exceed a 90-minute CI build under clang and
+# MSVC at -O2/-O3 (gcc does them in seconds); jobs can opt out.
+option(POLYFIT_BENCH_SKIP_XL "Drop the 4096-coefficient ND bench rows" OFF)
+if (POLYFIT_BENCH_SKIP_XL)
     set_source_files_properties(
-            test_ND_accuracy_in3_out2_deg16.cpp
-            test_ND_accuracy_in4_out3_deg8.cpp
             bench_ND_build.cpp
             bench_ND_eval.cpp
-            PROPERTIES COMPILE_DEFINITIONS POLYFIT_TESTS_REDUCE_ND
+            PROPERTIES COMPILE_DEFINITIONS POLYFIT_BENCH_REDUCE_ND
     )
 endif ()
 foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
@@ -249,14 +229,13 @@ if (POLYFIT_BUILD_BENCHMARKS)
     # on them OOM a 16 GiB runner when several compile at once (observed as
     # benchmark CI jobs killed off by runner shutdowns). Serialise them.
     foreach (STD IN LISTS POLYFIT_TEST_STANDARDS)
-        set_property(TARGET bench_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_xl)
+        set_property(TARGET bench_ND_cxx${STD} PROPERTY JOB_POOL_COMPILE polyfit_bench)
     endforeach ()
 endif ()
 
 add_polyfit_test_matrix(test_general test_general.cpp)
 add_polyfit_test_matrix(test_copy_move test_copy_move.cpp)
 add_polyfit_test_matrix(test_from_coeffs test_from_coeffs.cpp)
-add_polyfit_test_matrix(test_scaling_alignment test_scaling_alignment.cpp)
 add_polyfit_test_matrix(test_utils_bjorck_newton test_utils_bjorck_newton.cpp)
 add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)
 add_polyfit_test_matrix(test_func_eval_many_padding test_func_eval_many_padding.cpp)

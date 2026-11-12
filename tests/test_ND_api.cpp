@@ -2,12 +2,13 @@
 
 #include "test_ND_shared.hpp"
 
-TEST(Eval, GenericFixedSizeContainerFitAndEval) {
-    const auto approx = makeFixedApprox2();
-    const Fixed2 x{{0.25, -0.5}};
-    const auto y = approx(x);
-    EXPECT_NEAR(y[0], std::cos(0.25) + std::sin(-0.5), 1e-8);
-    EXPECT_NEAR(y[1], 0.25 * -0.5, 1e-8);
+TEST(Eval, RuntimeNCoeffsRejectsNonPositive) {
+    using In = std::array<double, 2>;
+    using Out = std::array<double, 2>;
+    const In a{-1.0, -1.0};
+    const In b{1.0, 1.0};
+    EXPECT_THROW((void)poly_eval::fit(sumCos<In, Out>, 0, a, b), std::invalid_argument);
+    EXPECT_THROW((void)poly_eval::fit(sumCos<In, Out>, -2, a, b), std::invalid_argument);
 }
 
 TEST(Eval, NdCanonicalConvenienceApisMatchReference) {

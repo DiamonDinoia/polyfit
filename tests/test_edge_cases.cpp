@@ -82,3 +82,16 @@ TEST(SpecialValues, NaNBatchInputProducesNaN) {
     poly(&nan_val, &out, 1);
     EXPECT_TRUE(std::isnan(out)) << "Expected NaN in batch output, got " << out;
 }
+
+// A 1-element offset makes the input pointer misaligned against the output
+// pointer; the batch kernel must take its unaligned path.
+TEST(EdgeCases, BatchEvalMisalignedPointers) {
+    auto fe = poly_eval::fit([](double x) { return std::sin(x) + 0.25 * x; }, 8, -1.0, 1.0);
+
+    constexpr std::size_t P = 65;
+    std::vector<double> pts(P + 2), out(P + 2);
+    for (std::size_t i = 0; i < P + 2; ++i) pts[i] = -1.0 + 2.0 * (double(i) / double(P + 1));
+
+    fe(pts.data() + 1, out.data(), P);
+    for (std::size_t i = 0; i < P; ++i) EXPECT_NEAR(out[i], fe(pts[i + 1]), 1e-12);
+}

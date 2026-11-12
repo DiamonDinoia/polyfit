@@ -11,9 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 # The heaviest test TUs (one ND monomial instantiation each) peak at several
-# GiB; two 4096-coefficient outliers carry their own test_ND_xl target with a
-# one-slot Ninja pool. 3 parallel jobs plus the pools keep the 16 GiB runner
-# safe.
+# GiB. 3 parallel jobs plus the Ninja pools keep the 16 GiB runner safe.
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 3
 
@@ -49,26 +47,24 @@ jobs:
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "20"}
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "23"}
           - {os: ubuntu-24.04, toolchain: gcc-14,  build_type: Release, test_standards: "26"}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "17", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "20", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "23", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "26", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "17", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "20", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "23", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "26", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "17", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "20", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23", skip_xl: true}
-          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26", skip_xl: true}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm,    build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm-18, build_type: Release, test_standards: "26"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "17"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "20"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23"}
+          - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26"}
           # macOS
-          # apple-clang Debug + all XL TUs consistently cold-builds in 18-19 min;
-          # XL code paths are already covered by the Linux gcc/llvm Debug matrix.
-          - {os: macos-14,     toolchain: apple-clang, build_type: Debug, skip_xl: true}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17", skip_xl: true}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20", skip_xl: true}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23", skip_xl: true}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26", skip_xl: true}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23"}
+          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26"}
           # Windows — C++26 disabled on MSVC. MSVC Release is dropped: cl at
           # /O2 needs several times the per-TU time of the Linux toolchains
           # and no per-standard/tests-only split fits the 90-minute job cap;
@@ -109,10 +105,6 @@ jobs:
           if [ -n "${{ matrix.test_standards }}" ]; then
             TEST_STANDARDS_ARG="-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
           fi
-          SKIP_XL_ARG=""
-          if [ "${{ matrix.skip_xl }}" = "true" ]; then
-            SKIP_XL_ARG="-DPOLYFIT_TESTS_SKIP_XL=ON"
-          fi
           LAUNCHER_ARG=""
           if [ "$RUNNER_OS" != "Windows" ]; then
             LAUNCHER_ARG="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
@@ -126,7 +118,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=${SANITIZERS} \
-            ${TEST_STANDARDS_ARG} ${SKIP_XL_ARG} ${LAUNCHER_ARG}
+            ${TEST_STANDARDS_ARG} ${LAUNCHER_ARG}
 
       - name: Build
         if: ${{ !matrix.multi_config }}
@@ -144,10 +136,6 @@ jobs:
           if ("${{ matrix.test_standards }}" -ne "") {
             $TEST_STANDARDS_ARG = "-DPOLYFIT_TEST_STANDARDS=${{ matrix.test_standards }}"
           }
-          $SKIP_XL_ARG = ""
-          if ("${{ matrix.skip_xl }}" -eq "true") {
-            $SKIP_XL_ARG = "-DPOLYFIT_TESTS_SKIP_XL=ON"
-          }
           $TESTS_ONLY_ARGS = @()
           if ("${{ matrix.tests_only }}" -eq "true") {
             $TESTS_ONLY_ARGS = @("-DPOLYFIT_BUILD_BENCHMARKS=OFF", "-DPOLYFIT_BUILD_EXAMPLES=OFF")
@@ -159,7 +147,7 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=ON `
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON `
             -DPOLYFIT_ENABLE_SANITIZERS=OFF `
-            $TEST_STANDARDS_ARG $SKIP_XL_ARG $TESTS_ONLY_ARGS
+            $TEST_STANDARDS_ARG $TESTS_ONLY_ARGS
 
       - name: Build (multi-config)
         if: matrix.multi_config
@@ -242,7 +230,6 @@ jobs:
             -DPOLYFIT_STRICT_WARNINGS=OFF \
             -DPOLYFIT_WARNINGS_AS_ERRORS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
-            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMEMORYCHECK_COMMAND:FILEPATH="${valgrind_bin}" \
             -DMEMORYCHECK_COMMAND_OPTIONS:STRING="--leak-check=full --show-leak-kinds=definite,possible --errors-for-leak-kinds=definite --error-exitcode=1 --track-origins=yes --undef-value-errors=yes" \
@@ -293,9 +280,8 @@ jobs:
           CC: clang
           CXX: clang++
         run: |
-          # C++17 only + skip_xl: the per-standard Release clang builds (and
-          # the XL opt-out) are already covered by the llvm matrix jobs; the
-          # full 4-standard sweep with serialized xl TUs was the CI tail.
+          # C++17 only: the per-standard Release clang builds are already
+          # covered by the llvm matrix jobs.
           cmake -S . -B build/analyze \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -304,7 +290,6 @@ jobs:
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_BUILD_BENCHMARKS=OFF \
             -DPOLYFIT_TEST_STANDARDS=17 \
-            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DPOLYFIT_STRICT_WARNINGS=ON \
             -DPOLYFIT_WARNINGS_AS_ERRORS=ON \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
@@ -367,7 +352,6 @@ jobs:
             -DPOLYFIT_BUILD_EXAMPLES=OFF \
             -DPOLYFIT_BUILD_BENCHMARKS=OFF \
             -DPOLYFIT_ENABLE_SANITIZERS=OFF \
-            -DPOLYFIT_TESTS_SKIP_XL=ON \
             -DPOLYFIT_ENABLE_COVERAGE=ON
 
       - name: Build coverage target
