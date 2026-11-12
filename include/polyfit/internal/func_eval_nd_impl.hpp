@@ -22,6 +22,24 @@ constexpr FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::FuncEvalND(Func f, int
 }
 
 template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
+FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::FuncEvalND(FromCoeffs, ConstMdspan coeffs,
+                                                           const domain_nd_view<InputScalar, DIM> &dom)
+    : coeffsFlat(), coeffsMd{coeffsFlat.data(), coeffs.extents()} {
+    if constexpr (!IS_STATIC) {
+        coeffsFlat.resize(storageRequired(static_cast<int>(coeffs.extent(0))));
+        coeffsMd = Mdspan{coeffsFlat.data(), coeffs.extents()};
+    }
+    // Both views are layout_right over the same extents, so the flat copy
+    // keeps every coefficient at its index.
+    std::copy_n(coeffs.data_handle(), coeffs.mapping().required_span_size(), coeffsFlat.data());
+    if constexpr (kStoresDomain) {
+        domain_.invSpan = dom.inv_span;
+        domain_.sumEndpoints = dom.sum_endpoints;
+        domain_.identityDomain = dom.identity;
+    }
+}
+
+template<class Func, std::size_t NCOEFFS, FusionMode FUSION_MODE, ScalarKernel SK, std::size_t HK>
 constexpr void FuncEvalND<Func, NCOEFFS, FUSION_MODE, SK, HK>::initialize(detail::CompileTimeCountTag, Func f, const InputType &a,
                                                                   const InputType &b) {
     static_assert(NCOEFFS > 0, "Compile-time coefficient count must be positive");

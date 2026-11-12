@@ -255,6 +255,7 @@ endif ()
 
 add_polyfit_test_matrix(test_general test_general.cpp)
 add_polyfit_test_matrix(test_copy_move test_copy_move.cpp)
+add_polyfit_test_matrix(test_from_coeffs test_from_coeffs.cpp)
 add_polyfit_test_matrix(test_scaling_alignment test_scaling_alignment.cpp)
 add_polyfit_test_matrix(test_utils_bjorck_newton test_utils_bjorck_newton.cpp)
 add_polyfit_test_matrix(test_utils_linspace test_utils_linspace.cpp)

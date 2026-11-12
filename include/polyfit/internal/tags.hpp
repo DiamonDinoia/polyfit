@@ -37,6 +37,12 @@ enum class ScalarKernel : std::uint8_t {
 /// - `Balanced`  : compromise between the two, clamped by register pressure.
 enum class EvalPolicy : std::uint8_t { Latency, Throughput, Balanced };
 
+/// Tag for the `FuncEval` / `FuncEvalND` constructors that rebuild an
+/// evaluator from the stored state of a fitted one (coefficients plus domain
+/// map) without calling the fitted function. Used to load a saved fit.
+struct FromCoeffs {};
+inline constexpr FromCoeffs fromCoeffs{};
+
 template<std::size_t N> struct Iters : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct MaxCoeffs : std::integral_constant<std::size_t, N> {};
 template<std::size_t N> struct EvalPts : std::integral_constant<std::size_t, N> {};

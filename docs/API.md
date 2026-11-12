@@ -249,6 +249,10 @@ Useful members:
 - `coeffs()` returns coefficients in Horner order
 - `nCoeffs()` returns the active coefficient count
 - `truncate(eps)` removes leading small coefficients for runtime-sized fits
+- `domainInvSpan()` and `domainSumEndpoints()` return the stored domain map
+- `FuncEval(poly_eval::fromCoeffs, coeffs, invSpan, sumEndpoints)` rebuilds an
+  evaluator from `coeffs()`, `domainInvSpan()` and `domainSumEndpoints()`. It does
+  not call the function. Use it to load a saved fit.
 
 Useful constants:
 
@@ -269,6 +273,10 @@ Useful members:
 - `operator()(span_pts, span_out)` evaluates a batch through `std::span` when available
 - `operator()(points, out)` evaluates batches stored in `data()`-backed outer containers
 - `nCoeffsPerAxis()` returns the active coefficient count used on each axis
+- `coeffsMdspan()` and `domainView()` return the coefficients and the domain map
+- `FuncEvalND(poly_eval::fromCoeffs, coeffsMdspan, domainView)` rebuilds an
+  evaluator from `coeffsMdspan()` and `domainView()`. It copies the coefficients
+  and does not call the function.
 
 Input/output model:
 

@@ -27,6 +27,15 @@ PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::FuncEval(Func
 }
 
 template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
+PF_CXX20_CONSTEXPR FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::FuncEval(FromCoeffs, const OutputBuffer &coeffs,
+                                                                            const InputType invSpan,
+                                                                            const InputType sumEndpoints)
+    : coeffsBuf(coeffs) {
+    if constexpr (kStoresDomain)
+        domain_ = DomainParams{invSpan, sumEndpoints, polyfit::internal::helpers::isIdMap(invSpan, sumEndpoints)};
+}
+
+template<class Func, std::size_t NCOEFFS, std::size_t ITERS, FusionMode FUSION, ScalarKernel SK, std::size_t HK>
 PF_CXX20_CONSTEXPR void
 FuncEval<Func, NCOEFFS, ITERS, FUSION, SK, HK>::initialize(detail::CompileTimeCountTag, Func F, const InputType a,
                                                    const InputType b, const InputType *pts, DomainParams &dp) {

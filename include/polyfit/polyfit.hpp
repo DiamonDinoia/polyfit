@@ -62,6 +62,10 @@ class FuncEval {
 
     PF_CXX20_CONSTEXPR FuncEval(Func F, int nCoeffs, InputType a, InputType b, const InputType *pts = nullptr);
 
+    /// Rebuild from `coeffs()`, `domainInvSpan()` and `domainSumEndpoints()`
+    /// of a fitted evaluator. Does not call `Func`.
+    PF_CXX20_CONSTEXPR FuncEval(FromCoeffs, const OutputBuffer &coeffs, InputType invSpan, InputType sumEndpoints);
+
     FuncEval(const FuncEval &) = default;
     FuncEval &operator=(const FuncEval &) = default;
     FuncEval(FuncEval &&) noexcept = default;
@@ -313,6 +317,12 @@ class FuncEvalND {
 
     constexpr FuncEvalND(Func f, int nCoeffsPerAxis, const InputType &a, const InputType &b);
 
+    using ConstMdspan = stdex::mdspan<const Scalar, Extents, stdex::layout_right>;
+
+    /// Rebuild from `coeffsMdspan()` and `domainView()` of a fitted evaluator.
+    /// Copies the coefficients. Does not call `Func`.
+    FuncEvalND(FromCoeffs, ConstMdspan coeffs, const domain_nd_view<InputScalar, DIM> &dom);
+
     template<bool SIMD = true>
     PF_FLATTEN constexpr OutputType operator()(const InputType &x) const;
     template<bool SIMD = true, class Point,
@@ -376,8 +386,6 @@ class FuncEvalND {
      */
     template<class IdxArray>
     [[nodiscard]] constexpr const Scalar &coeff(const IdxArray &idx, std::size_t k) const noexcept;
-
-    using ConstMdspan = stdex::mdspan<const Scalar, Extents, stdex::layout_right>;
 
     /**
      * @brief View of the coefficient buffer for external evaluation.
