@@ -1,0 +1,145 @@
+{
+  "title": "bench1D_cxx17",
+  "rows": [
+    {
+      "name": "float constexpr fit",
+      "ns_per_op": 360.99,
+      "ops_per_sec": 2770171.14,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "float coefficient-count fit",
+      "ns_per_op": 878.89,
+      "ops_per_sec": 1137805.22,
+      "err_pct": 0.3,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "float eps fit",
+      "ns_per_op": 2005.85,
+      "ops_per_sec": 498542.99,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "float eval",
+      "ns_per_op": 1.5,
+      "ops_per_sec": 667412540.15,
+      "err_pct": 2.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "float eval_many",
+      "ns_per_op": 0.18,
+      "ops_per_sec": 5522512270.26,
+      "err_pct": 0.0,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "double constexpr fit",
+      "ns_per_op": 405.79,
+      "ops_per_sec": 2464335.98,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "double coefficient-count fit",
+      "ns_per_op": 957.46,
+      "ops_per_sec": 1044431.79,
+      "err_pct": 0.6,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "double eps fit",
+      "ns_per_op": 2088.59,
+      "ops_per_sec": 478792.89,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "double eval",
+      "ns_per_op": 1.47,
+      "ops_per_sec": 678194201.85,
+      "err_pct": 1.0,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "double eval_many",
+      "ns_per_op": 0.42,
+      "ops_per_sec": 2400012491.22,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<double> constexpr fit",
+      "ns_per_op": 489.69,
+      "ops_per_sec": 2042127.39,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<double> coefficient-count fit",
+      "ns_per_op": 1108.65,
+      "ops_per_sec": 901998.17,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<double> eps fit",
+      "ns_per_op": 2273.63,
+      "ops_per_sec": 439825.05,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<double> eval",
+      "ns_per_op": 2.07,
+      "ops_per_sec": 483134481.07,
+      "err_pct": 0.7,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<double> eval_many",
+      "ns_per_op": 0.95,
+      "ops_per_sec": 1049721575.62,
+      "err_pct": 0.2,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<float> constexpr fit",
+      "ns_per_op": 502.84,
+      "ops_per_sec": 1988685.69,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<float> coefficient-count fit",
+      "ns_per_op": 1127.66,
+      "ops_per_sec": 886791.14,
+      "err_pct": 0.3,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<float> eps fit",
+      "ns_per_op": 7977.72,
+      "ops_per_sec": 125349.05,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<float> eval",
+      "ns_per_op": 2.75,
+      "ops_per_sec": 364235319.36,
+      "err_pct": 0.8,
+      "ins_per_op": 0.12
+    },
+    {
+      "name": "complex<float> eval_many",
+      "ns_per_op": 0.53,
+      "ops_per_sec": 1870989373.94,
+      "err_pct": 0.1,
+      "ins_per_op": 0.12
+    }
+  ]
+}

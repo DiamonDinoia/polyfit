@@ -1,0 +1,27 @@
+Note: perf_event_open failed, so the ins/op, cyc/op, IPC, bra/op and miss% columns are missing.
+This is usually a container or VM without virtualized performance counters, or
+/proc/sys/kernel/perf_event_paranoid being too restrictive.
+
+
+|               ns/op |                op/s |    err% |     total | benchmark
+|--------------------:|--------------------:|--------:|----------:|:----------
+|              454.18 |        2,201,791.86 |    0.1% |      0.12 | `float constexpr fit`
+|              691.81 |        1,445,479.98 |    0.3% |      0.12 | `float coefficient-count fit`
+|            1,522.06 |          657,003.48 |    0.1% |      0.12 | `float eps fit`
+|                1.35 |      742,442,314.51 |    0.1% |      0.12 | `float eval`
+|                0.11 |    8,734,934,970.34 |    0.1% |      0.12 | `float eval_many`
+|              473.35 |        2,112,622.52 |    0.2% |      0.12 | `double constexpr fit`
+|              741.06 |        1,349,419.52 |    0.1% |      0.12 | `double coefficient-count fit`
+|            1,493.81 |          669,430.96 |    0.2% |      0.12 | `double eps fit`
+|                1.35 |      742,091,188.24 |    0.2% |      0.12 | `double eval`
+|                0.23 |    4,377,180,063.89 |    0.1% |      0.12 | `double eval_many`
+|              438.18 |        2,282,192.10 |    0.2% |      0.12 | `complex<double> constexpr fit`
+|              976.29 |        1,024,291.04 |    0.3% |      0.12 | `complex<double> coefficient-count fit`
+|            1,758.86 |          568,550.95 |    0.2% |      0.12 | `complex<double> eps fit`
+|                1.38 |      722,261,004.67 |    0.4% |      0.12 | `complex<double> eval`
+|                0.86 |    1,160,166,837.60 |    0.2% |      0.12 | `complex<double> eval_many`
+|              637.44 |        1,568,771.59 |    0.1% |      0.12 | `complex<float> constexpr fit`
+|            1,169.55 |          855,030.54 |    0.2% |      0.12 | `complex<float> coefficient-count fit`
+|            1,871.57 |          534,310.15 |    0.2% |      0.12 | `complex<float> eps fit`
+|                2.13 |      469,175,641.63 |    0.3% |      0.12 | `complex<float> eval`
+|                0.45 |    2,230,910,353.00 |    0.1% |      0.12 | `complex<float> eval_many`

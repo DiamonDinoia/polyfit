@@ -1,0 +1,264 @@
+{
+  "title": "benchMany_cxx17",
+  "rows": [
+    {
+      "name": "1 funcs",
+      "ns_per_op": 7.11,
+      "ops_per_sec": 140636317.44,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "1 funcs (non-many)",
+      "ns_per_op": 5.15,
+      "ops_per_sec": 194273514.82,
+      "err_pct": 1.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "2 funcs",
+      "ns_per_op": 7.4,
+      "ops_per_sec": 135070437.56,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "2 funcs (non-many)",
+      "ns_per_op": 9.83,
+      "ops_per_sec": 101778416.73,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "3 funcs",
+      "ns_per_op": 7.72,
+      "ops_per_sec": 129534435.39,
+      "err_pct": 0.5,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "3 funcs (non-many)",
+      "ns_per_op": 15.92,
+      "ops_per_sec": 62832405.26,
+      "err_pct": 0.1,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "4 funcs",
+      "ns_per_op": 7.96,
+      "ops_per_sec": 125656200.62,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "4 funcs (non-many)",
+      "ns_per_op": 19.24,
+      "ops_per_sec": 51961901.97,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "5 funcs",
+      "ns_per_op": 12.37,
+      "ops_per_sec": 80873108.33,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "5 funcs (non-many)",
+      "ns_per_op": 22.24,
+      "ops_per_sec": 44957391.72,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "6 funcs",
+      "ns_per_op": 12.24,
+      "ops_per_sec": 81705873.47,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "6 funcs (non-many)",
+      "ns_per_op": 32.72,
+      "ops_per_sec": 30562416.47,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "7 funcs",
+      "ns_per_op": 13.02,
+      "ops_per_sec": 76801743.79,
+      "err_pct": 0.4,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "7 funcs (non-many)",
+      "ns_per_op": 32.31,
+      "ops_per_sec": 30945454.99,
+      "err_pct": 0.4,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "8 funcs",
+      "ns_per_op": 13.25,
+      "ops_per_sec": 75487808.89,
+      "err_pct": 4.4,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "8 funcs (non-many)",
+      "ns_per_op": 36.19,
+      "ops_per_sec": 27633449.02,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "9 funcs",
+      "ns_per_op": 15.83,
+      "ops_per_sec": 63161763.03,
+      "err_pct": 0.8,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "9 funcs (non-many)",
+      "ns_per_op": 45.84,
+      "ops_per_sec": 21816001.85,
+      "err_pct": 0.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "10 funcs",
+      "ns_per_op": 16.31,
+      "ops_per_sec": 61310916.48,
+      "err_pct": 0.3,
+      "ins_per_op": 0.23
+    },
+    {
+      "name": "10 funcs (non-many)",
+      "ns_per_op": 44.95,
+      "ops_per_sec": 22248969.06,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "11 funcs",
+      "ns_per_op": 16.62,
+      "ops_per_sec": 60163253.93,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "11 funcs (non-many)",
+      "ns_per_op": 56.98,
+      "ops_per_sec": 17549896.7,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "12 funcs",
+      "ns_per_op": 16.02,
+      "ops_per_sec": 62412515.09,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "12 funcs (non-many)",
+      "ns_per_op": 62.8,
+      "ops_per_sec": 15922834.99,
+      "err_pct": 0.3,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "13 funcs",
+      "ns_per_op": 19.3,
+      "ops_per_sec": 51819448.48,
+      "err_pct": 0.8,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "13 funcs (non-many)",
+      "ns_per_op": 55.83,
+      "ops_per_sec": 17911458.12,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "14 funcs",
+      "ns_per_op": 18.99,
+      "ops_per_sec": 52653706.09,
+      "err_pct": 1.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "14 funcs (non-many)",
+      "ns_per_op": 72.31,
+      "ops_per_sec": 13829636.94,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "15 funcs",
+      "ns_per_op": 19.12,
+      "ops_per_sec": 52299568.98,
+      "err_pct": 1.1,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "15 funcs (non-many)",
+      "ns_per_op": 76.02,
+      "ops_per_sec": 13154480.23,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "16 funcs",
+      "ns_per_op": 19.1,
+      "ops_per_sec": 52367678.96,
+      "err_pct": 1.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "16 funcs (non-many)",
+      "ns_per_op": 68.62,
+      "ops_per_sec": 14572841.59,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "8 funcs (mixed domains)",
+      "ns_per_op": 12.2,
+      "ops_per_sec": 81962231.5,
+      "err_pct": 0.6,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "8 funcs (mixed domains, non-many)",
+      "ns_per_op": 36.45,
+      "ops_per_sec": 27434899.09,
+      "err_pct": 0.5,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "16 funcs (mixed domains)",
+      "ns_per_op": 18.66,
+      "ops_per_sec": 53599248.18,
+      "err_pct": 0.8,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "16 funcs (mixed domains, non-many)",
+      "ns_per_op": 68.72,
+      "ops_per_sec": 14550782.94,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    },
+    {
+      "name": "8 funcs (complex outputs, bulk)",
+      "ns_per_op": 39.91,
+      "ops_per_sec": 25058407.56,
+      "err_pct": 0.2,
+      "ins_per_op": 0.24
+    }
+  ]
+}
