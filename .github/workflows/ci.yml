@@ -60,11 +60,11 @@ jobs:
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "23"}
           - {os: ubuntu-24.04, toolchain: llvm-21, build_type: Release, test_standards: "26"}
           # macOS
-          - {os: macos-14,     toolchain: apple-clang, build_type: Debug}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "17"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "20"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "23"}
-          - {os: macos-14,     toolchain: apple-clang, build_type: Release, test_standards: "26"}
+          - {os: macos-15,     toolchain: apple-clang, build_type: Debug}
+          - {os: macos-15,     toolchain: apple-clang, build_type: Release, test_standards: "17"}
+          - {os: macos-15,     toolchain: apple-clang, build_type: Release, test_standards: "20"}
+          - {os: macos-15,     toolchain: apple-clang, build_type: Release, test_standards: "23"}
+          - {os: macos-15,     toolchain: apple-clang, build_type: Release, test_standards: "26"}
           # Windows — C++26 disabled on MSVC. MSVC Release is dropped: cl at
           # /O2 needs several times the per-TU time of the Linux toolchains
           # and no per-standard/tests-only split fits the 90-minute job cap;
